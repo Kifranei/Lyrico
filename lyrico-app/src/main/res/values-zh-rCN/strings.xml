@@ -288,4 +288,10 @@
     <string name="import_success">配置导入成功</string>
     <string name="import_failed">配置导入失败: %1$s</string>
     <string name="import_failed_format">无效的配置文件格式</string>
+
+
+    <!-- 选择播放器 -->
+    <string name="choose_player">选择播放器</string>
+    <string name="no_player_found">未找到可用播放器</string>
+    <string name="unknown_error">发生未知错误: %1$s</string>
 </resources>

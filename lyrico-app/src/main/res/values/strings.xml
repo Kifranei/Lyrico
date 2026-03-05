@@ -280,4 +280,10 @@
     <string name="import_success">Configuration imported successfully.</string>
     <string name="import_failed">Import failed: %1$s</string>
     <string name="import_failed_format">Invalid configuration file format.</string>
+
+
+    <!-- Choose player -->
+    <string name="choose_player">Choose Player</string>
+    <string name="no_player_found">No available player found</string>
+    <string name="unknown_error">An unknown error occurred: %1$s</string>
 </resources>
