@@ -1157,12 +1157,6 @@ fun SongDetailBottomSheetContent(context: Context, song: SongEntity) {
                 else null
             )
         }
-        item {
-            SongDetailItem(
-                label = "文件URI",
-                value = song.uri
-            )
-        }
 
     }
 }
