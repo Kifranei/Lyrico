@@ -18,13 +18,14 @@ import com.lonx.lyrico.data.model.dao.BatchMatchHistoryDao
         BatchMatchHistory::class,
         BatchMatchRecordEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 4, to = 5),
         AutoMigration(from = 5, to = 6),
-        AutoMigration(from = 6, to = 7)
+        AutoMigration(from = 6, to = 7),
+        AutoMigration(from = 7, to = 8)
     ]
 )
 abstract class LyricoDatabase : RoomDatabase() {

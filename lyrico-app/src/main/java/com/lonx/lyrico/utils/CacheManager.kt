@@ -1,17 +1,12 @@
 package com.lonx.lyrico.utils
 
-import android.annotation.SuppressLint
 import android.content.Context
-import androidx.annotation.StringRes
 import coil.annotation.ExperimentalCoilApi
 import coil.imageLoader
-import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.CacheCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import kotlin.math.log10
-import kotlin.math.pow
 
 object CacheManager {
 
@@ -143,17 +138,3 @@ fun File.getFolderSize(): Long {
     return this.walkTopDown().filter { it.isFile }.map { it.length() }.sum()
 }
 
-/**
- * 格式化字节大小
- */
-@SuppressLint("DefaultLocale")
-fun Long.formatSize(): String {
-    if (this <= 0) return "0 B"
-    val units = arrayOf("B", "KB", "MB", "GB")
-    val digitGroups = (log10(this.toDouble()) / log10(1024.0)).toInt()
-    return String.format(
-        "%.1f %s",
-        this / 1024.0.pow(digitGroups.toDouble()),
-        units[digitGroups]
-    )
-}

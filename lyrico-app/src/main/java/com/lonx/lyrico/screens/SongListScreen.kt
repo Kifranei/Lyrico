@@ -2,8 +2,10 @@ package com.lonx.lyrico.screens
 
 import android.annotation.SuppressLint
 import android.content.ContentUris
+import android.content.Context
 import android.content.Intent
 import android.provider.MediaStore
+import android.text.format.Formatter
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -131,7 +133,7 @@ fun SongListScreen(
     val context = LocalContext.current
     val sectionIndexMap = remember(songs, sortInfo) {
         val map = mutableMapOf<String, Int>()
-        if (sortInfo.sortBy == SortBy.TITLE || sortInfo.sortBy == SortBy.ARTISTS) {
+        if (sortInfo.sortBy.supportsIndex) {
             songs.forEachIndexed { index, song ->
                 val key =
                     if (sortInfo.sortBy == SortBy.ARTISTS) song.artistGroupKey else song.titleGroupKey
@@ -253,13 +255,7 @@ fun SongListScreen(
                                     expanded = sortOrderDropdownExpanded,
                                     onDismissRequest = { sortOrderDropdownExpanded = false }
                                 ) {
-                                    val sortTypes = listOf(
-                                        SortBy.TITLE,
-                                        SortBy.ARTISTS,
-                                        SortBy.DATE_MODIFIED,
-                                        SortBy.DATE_ADDED
-                                    )
-
+                                    val sortTypes = SortBy.entries.toList()
                                     sortTypes.forEach { type ->
                                         val isSelected = sortInfo.sortBy == type
                                         PopupMenuItem(
@@ -416,7 +412,7 @@ fun SongListScreen(
                     tonalElevation = 0.dp,
                     contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
                 ) {
-                    SongDetailBottomSheetContent(song = song)
+                    SongDetailBottomSheetContent(context = context, song = song)
                 }
             }
 
@@ -1039,7 +1035,7 @@ fun SongMenuBottomSheetContent(
 
 @SuppressLint("DefaultLocale")
 @Composable
-fun SongDetailBottomSheetContent(song: SongEntity) {
+fun SongDetailBottomSheetContent(context: Context, song: SongEntity) {
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
 
     LazyColumn(
@@ -1151,6 +1147,14 @@ fun SongDetailBottomSheetContent(song: SongEntity) {
             SongDetailItem(
                 label = stringResource(R.string.label_file_path),
                 value = song.filePath
+            )
+        }
+        item {
+            SongDetailItem(
+                label = stringResource(R.string.label_file_size),
+                value = if (song.fileSize > 0)
+                    Formatter.formatFileSize(context, song.fileSize)
+                else null
             )
         }
         item {

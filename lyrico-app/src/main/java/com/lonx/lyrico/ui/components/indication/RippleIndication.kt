@@ -144,7 +144,7 @@ class RippleIndication(private val color: Color) : IndicationNodeFactory {
             // 2. 绘制 Ripple (如果有透明度则绘制)
             if (rippleAlpha.value > 0f) {
                 // 计算最大半径（扩散到覆盖整个组件的最远角）
-                // 只有在第一次 measure 或者 size 变化时才需要计算，但在 draw 中计算开销也很小
+                // 只有在第一次 measure 或者 fileSize 变化时才需要计算，但在 draw 中计算开销也很小
                 if (targetRadius == 0f || rippleRadiusProgress.value == 0f) {
                     targetRadius = getRippleTargetRadius(size, pressPosition)
                 }

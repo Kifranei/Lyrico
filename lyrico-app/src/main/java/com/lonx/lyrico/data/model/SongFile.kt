@@ -9,5 +9,6 @@ data class SongFile(
     val fileName: String,
     val lastModified: Long,
     val dateAdded: Long,
-    val duration: Long = 0
+    val duration: Long = 0,
+    val fileSize: Long = 0
 )

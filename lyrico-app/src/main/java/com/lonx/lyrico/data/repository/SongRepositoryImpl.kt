@@ -232,6 +232,7 @@ class SongRepositoryImpl(
                 filePath = songFile.filePath,
                 fileName = songFile.fileName,
                 title = audioData.title,
+                fileSize = songFile.fileSize,
                 artist = audioData.artist,
                 album = audioData.album,
                 genre = audioData.genre,
@@ -407,6 +408,7 @@ class SongRepositoryImpl(
             SortBy.ARTISTS -> if (order == SortOrder.ASC) songDao.getAllSongsOrderByArtistAsc() else songDao.getAllSongsOrderByArtistDesc()
             SortBy.DATE_MODIFIED -> if (order == SortOrder.ASC) songDao.getAllSongsOrderByDateModifiedAsc() else songDao.getAllSongsOrderByDateModifiedDesc()
             SortBy.DATE_ADDED -> if (order == SortOrder.ASC) songDao.getAllSongsOrderByDateAddedAsc() else songDao.getAllSongsOrderByDateAddedDesc()
+            SortBy.FILE_SIZE -> if (order == SortOrder.ASC) songDao.getAllSongsOrderByFileSizeAsc() else songDao.getAllSongsOrderByFileSizeDesc()
         }
     }
 

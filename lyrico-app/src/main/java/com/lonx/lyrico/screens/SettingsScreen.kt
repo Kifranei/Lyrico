@@ -1,6 +1,7 @@
 package com.lonx.lyrico.screens
 
 import android.annotation.SuppressLint
+import android.text.format.Formatter
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,7 +24,6 @@ import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.ArtistSeparator
 import com.lonx.lyrico.data.model.LyricFormat
 import com.lonx.lyrico.data.model.ThemeMode
-import com.lonx.lyrico.utils.formatSize
 import com.lonx.lyrico.viewmodel.FolderManagerViewModel
 import com.lonx.lyrico.viewmodel.SettingsEvent
 import com.lonx.lyrico.viewmodel.SettingsViewModel
@@ -124,7 +124,7 @@ fun SettingsScreen(
                     context.getString(
                         R.string.cache_item,
                         context.getString(category.labelRes),
-                        size.formatSize()
+                        Formatter.formatFileSize(context, size)
                     )
                 }
                 .joinToString(separator = "\n")
@@ -137,7 +137,7 @@ fun SettingsScreen(
                 append(
                     context.getString(
                         R.string.cache_total,
-                        settingsUiState.totalCacheSize.formatSize()
+                        Formatter.formatFileSize(context, settingsUiState.totalCacheSize)
                     )
                 )
             }
@@ -354,7 +354,7 @@ fun SettingsScreen(
                 )
                 val sub = stringResource(
                     R.string.cache_size_label,
-                    settingsUiState.totalCacheSize.formatSize()
+                    Formatter.formatFileSize(context, settingsUiState.totalCacheSize)
                 )
                 Item(
                     text = stringResource(R.string.clear_cache),

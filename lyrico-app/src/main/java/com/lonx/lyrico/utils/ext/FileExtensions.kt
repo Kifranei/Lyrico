@@ -13,7 +13,7 @@ fun File.getFolderSize(): Long {
     } else {
         total += length()
     }
-    Log.d("File", "Total size: $total")
+    Log.d("File", "Total fileSize: $total")
     return total
 }
 fun File.deleteRecursivelySafe() {

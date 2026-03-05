@@ -251,6 +251,7 @@
     <string name="label_lyrics">歌词</string>
 
     <!-- 封面编辑 -->
+    <string name="label_file_size">文件大小</string>
     <string name="status_modified">已修改</string>
     <string name="cd_cover">封面</string>
     <string name="cd_play">播放</string>

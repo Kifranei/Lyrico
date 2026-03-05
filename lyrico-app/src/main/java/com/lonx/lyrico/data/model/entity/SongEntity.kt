@@ -27,6 +27,7 @@ import androidx.room.PrimaryKey
  * @property mediaId MediaStore 中的音频 ID（对应 _ID，可用于快速构建 contentUri）
  * @property filePath 文件的绝对路径（仅用于展示或兼容旧数据，不保证可写）
  * @property fileName 文件名（不含路径）
+ * @property fileSize 文件大小（字节）
  * @property folderId 所属文件夹 ID（用于分组展示）
  *
  * —— 标签元数据（Tag Metadata） ——
@@ -92,6 +93,8 @@ data class SongEntity(
 
     val filePath: String,
     val fileName: String,
+    @ColumnInfo(defaultValue = "0")
+    val fileSize: Long = 0,
 
     val title: String? = null,
     val artist: String? = null,

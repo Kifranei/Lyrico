@@ -22,7 +22,7 @@ class AudioCoverFetcher(
         val retriever = MediaMetadataRetriever()
         retriever.setDataSource(contentResolver.openFileDescriptor(uri, "r")?.fileDescriptor)
         val picture = retriever.embeddedPicture ?: return null
-        Log.d("AudioCoverFetcher", "picture size: ${picture.size}")
+        Log.d("AudioCoverFetcher", "picture fileSize: ${picture.size}")
         retriever.release()
         val buffer = Buffer().apply { write(picture) }
         val imageSource = ImageSource(buffer, options.fileSystem)

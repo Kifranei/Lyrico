@@ -31,7 +31,8 @@ class MusicScanner(
              MediaStore.Audio.Media.DATE_MODIFIED,
              MediaStore.Audio.Media.DATE_ADDED,
              MediaStore.Audio.Media.DATA,
-             MediaStore.Audio.Media.DURATION
+             MediaStore.Audio.Media.DURATION,
+             MediaStore.Audio.Media.SIZE
          )
 
          val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
@@ -50,6 +51,7 @@ class MusicScanner(
              val addedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
              val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
              val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+             val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
 
              while (cursor.moveToNext()) {
                  val filePath = cursor.getString(dataCol)
@@ -65,7 +67,8 @@ class MusicScanner(
                          fileName = cursor.getString(nameCol),
                          lastModified = cursor.getLong(modifiedCol) * 1000L,
                          dateAdded = cursor.getLong(addedCol) * 1000L,
-                         duration = cursor.getLong(durationCol)
+                         duration = cursor.getLong(durationCol),
+                         fileSize = cursor.getLong(sizeCol)
                      )
                  )
              }

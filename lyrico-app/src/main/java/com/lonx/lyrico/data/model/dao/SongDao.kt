@@ -197,4 +197,21 @@ interface SongDao {
         ORDER BY s.fileAdded DESC
     """)
     fun getAllSongsOrderByDateAddedDesc(): Flow<List<SongEntity>>
+
+    @Query("""
+    SELECT s.* FROM songs AS s
+    INNER JOIN folders AS f ON s.folderId = f.id
+    WHERE f.isIgnored = 0
+    ORDER BY s.fileSize ASC
+""")
+    fun getAllSongsOrderByFileSizeAsc(): Flow<List<SongEntity>>
+
+    @Query("""
+    SELECT s.* FROM songs AS s
+    INNER JOIN folders AS f ON s.folderId = f.id
+    WHERE f.isIgnored = 0
+    ORDER BY s.fileSize DESC
+""")
+    fun getAllSongsOrderByFileSizeDesc(): Flow<List<SongEntity>>
+
 }
