@@ -1,18 +1,21 @@
 #!/bin/bash
-set -e  # 遇到错误立即退出
+set -e
 
-# 获取脚本所在目录的绝对路径
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKING_DIR=${1:-$SCRIPT_DIR}
-NDK_PATH=${2:-"D:/Android/Sdk/ndk/27.0.12077973"}
+
+# 获取NDK路径：参数优先，其次环境变量ANDROID_NDK_HOME
+NDK_PATH=${2:-${ANDROID_NDK_HOME:-""}}
+if [ -z "$NDK_PATH" ]; then
+    echo "Error: NDK path not specified and ANDROID_NDK_HOME is not set."
+    exit 1
+fi
 
 echo "Working directory is at $WORKING_DIR"
 echo "NDK path is at $NDK_PATH"
 
-# 切换到工作目录
 cd "$WORKING_DIR"
 
-# 设置路径
 TAGLIB_SRC_DIR="${WORKING_DIR}/taglib"
 TAGLIB_DST_DIR="${WORKING_DIR}/taglib/build"
 TAGLIB_PKG_DIR="${WORKING_DIR}/taglib/pkg"
@@ -23,11 +26,8 @@ echo "Taglib build is at $TAGLIB_DST_DIR"
 echo "Taglib package is at $TAGLIB_PKG_DIR"
 echo "NDK toolchain is at $NDK_TOOLCHAIN"
 
-# 检查必要的路径
-if [ ! -d "$TAGLIB_SRC_DIR" ]; then
-    echo "Error: Taglib source directory not found at $TAGLIB_SRC_DIR"
-    exit 1
-fi
+[ -d "$TAGLIB_SRC_DIR" ] || { echo "Error: Taglib source directory not found"; exit 1; }
+[ -f "$NDK_TOOLCHAIN" ] || { echo "Error: NDK toolchain not found"; exit 1; }
 
 if [ ! -f "$NDK_TOOLCHAIN" ]; then
     echo "Error: NDK toolchain not found at $NDK_TOOLCHAIN"
