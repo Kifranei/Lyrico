@@ -25,6 +25,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -229,12 +235,12 @@ fun SearchResultsScreen(
                             ) { result ->
                                 SearchResultItem(
                                     song = result,
-                                    onPreviewClick = {
-                                        viewModel.loadLyrics(result)
+                                    onPreviewClick = { offset ->
+                                        viewModel.loadLyrics(result, offset)
                                     },
-                                    onApplyClick = {
+                                    onApplyClick = { offset ->
                                         scope.launch {
-                                            val lyrics = viewModel.fetchLyrics(result)
+                                            val lyrics = viewModel.fetchLyrics(result, offset) // 关键：传入 offset
                                             if (lyrics != null) {
                                                 resultNavigator.navigateBack(
                                                     LyricsSearchResult(
@@ -256,9 +262,10 @@ fun SearchResultsScreen(
                                             }
                                         }
                                     },
-                                    onApplyLyricsOnlyClick = {
+                                    // 3. 仅应用歌词时传入 offset
+                                    onApplyLyricsOnlyClick = { offset ->
                                         scope.launch {
-                                            val lyrics = viewModel.fetchLyrics(result)
+                                            val lyrics = viewModel.fetchLyrics(result, offset) // 关键：传入 offset
                                             if (lyrics != null) {
                                                 resultNavigator.navigateBack(
                                                     LyricsSearchResult(
@@ -433,12 +440,14 @@ private fun LyricsBottomSheetContent(
 @Composable
 fun SearchResultItem(
     song: SongSearchResult,
-    onPreviewClick: () -> Unit,
-    onApplyClick: () -> Unit,
-    onApplyLyricsOnlyClick: () -> Unit
+    onPreviewClick: (Long) -> Unit,
+    onApplyClick: (Long) -> Unit,
+    onApplyLyricsOnlyClick: (Long) -> Unit
 ) {
     val context = LocalContext.current
 
+    var offset by remember { mutableLongStateOf(0L) } // 偏移量（毫秒）
+    var isOffsetVisible by remember { mutableStateOf(false) } // 是否展开调节面板
     // 原图尺寸状态
     var imageSize by remember(song.picUrl) {
         mutableStateOf<Pair<Int, Int>?>(null)
@@ -465,7 +474,10 @@ fun SearchResultItem(
 
     Column(modifier = Modifier
         .fillMaxWidth()
-        .clickable(onClick = onPreviewClick)) {
+        .clickable(onClick = {
+            onPreviewClick(offset)
+        })
+    ) {
 
         Row(
             modifier = Modifier
@@ -524,82 +536,138 @@ fun SearchResultItem(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = song.title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = SaltTheme.colors.text,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = song.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = SaltTheme.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = song.artist, fontSize = 13.sp, color = SaltTheme.colors.subText, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Text(
-                    text = song.artist,
-                    fontSize = 13.sp,
-                    color = SaltTheme.colors.subText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                val meta = listOfNotNull(
-                    song.album.takeIf { it.isNotBlank() },
-                    song.date.takeIf { it.isNotBlank() },
-                    song.trackerNumber.takeIf { it.isNotBlank() }?.let { "T$it" }
-                ).joinToString(" - ")
-
-                if (meta.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(2.dp))
+                // 显示当前偏移量提醒
+                if (offset != 0L) {
                     Text(
-                        text = meta,
+                        text = "Offset: ${if (offset > 0) "+" else ""}${offset}ms",
                         fontSize = 11.sp,
-                        color = SaltTheme.colors.subText.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        color = SaltTheme.colors.highlight,
+                        fontWeight = FontWeight.Medium
                     )
+                } else {
+                    val meta = listOfNotNull(song.album.takeIf { it.isNotBlank() }, song.date.takeIf { it.isNotBlank() }).joinToString(" • ")
+                    if (meta.isNotEmpty()) {
+                        Text(text = meta, fontSize = 11.sp, color = SaltTheme.colors.subText.copy(alpha = 0.7f), maxLines = 1)
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                // 主操作：应用全部
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                // 主按钮：应用 (传递 offset)
                 Button(
-                    onClick = onApplyClick,
-                    modifier = Modifier.height(32.dp),
+                    onClick = { onApplyClick(offset) },
                     contentPadding = PaddingValues(horizontal = 12.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = SaltTheme.colors.highlight,
-                        contentColor = Color.White
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = SaltTheme.colors.highlight)
                 ) {
-                    Text(text = stringResource(R.string.apply_action), fontSize = 12.sp)
+                    Text(text = stringResource(R.string.apply_action), color = SaltTheme.colors.onHighlight, fontSize = 12.sp)
                 }
 
-                TextButton(
-                    onClick = onApplyLyricsOnlyClick,
-                    modifier = Modifier.height(30.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.apply_lyrics_only_action),
-                        fontSize = 11.sp,
-                        color = SaltTheme.colors.subText
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 调节 Offset 的开关图标
+                    IconButton(
+                        onClick = { isOffsetVisible = !isOffsetVisible },
+                        modifier = Modifier.size(30.dp),
+                        colors = IconButtonColors(
+                            containerColor = SaltTheme.colors.subBackground,
+                            contentColor = SaltTheme.colors.subText,
+                            disabledContainerColor = SaltTheme.colors.subBackground,
+                            disabledContentColor = SaltTheme.colors.subText
+                        )
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_timer_24dp),
+                            contentDescription = "Adjust Offset",
+                            tint = if (isOffsetVisible) SaltTheme.colors.highlight else SaltTheme.colors.subText,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    // 仅歌词按钮
+                    TextButton(
+                        onClick = { onApplyLyricsOnlyClick(offset) },
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Text(text = stringResource(R.string.apply_lyrics_only_action), fontSize = 11.sp, color = SaltTheme.colors.subText)
+                    }
+
                 }
             }
         }
-
+        AnimatedVisibility(
+            visible = isOffsetVisible,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            OffsetAdjustPanel(
+                currentOffset = offset,
+                onOffsetChange = { offset = it },
+                onReset = { offset = 0L }
+            )
+        }
         ItemDivider()
+    }
+}
+@Composable
+fun OffsetAdjustPanel(
+    currentOffset: Long,
+    onOffsetChange: (Long) -> Unit,
+    onReset: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+            .background(SaltTheme.colors.subBackground, RoundedCornerShape(8.dp))
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        // 减少单位
+        OffsetStepButton("-500") { onOffsetChange(currentOffset - 500) }
+        OffsetStepButton("-100") { onOffsetChange(currentOffset - 100) }
+
+        // 数值显示 & 重置
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .widthIn(min = 80.dp)
+                .clickable { onReset() }
+        ) {
+            Text(
+                text = "${if (currentOffset > 0) "+" else ""}${currentOffset}ms",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = SaltTheme.colors.highlight
+            )
+            Text(text = "点击重置", fontSize = 9.sp, color = SaltTheme.colors.subText)
+        }
+
+        // 增加单位
+        OffsetStepButton("+100") { onOffsetChange(currentOffset + 100) }
+        OffsetStepButton("+500") { onOffsetChange(currentOffset + 500) }
+    }
+}
+
+@Composable
+fun OffsetStepButton(text: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = SaltTheme.colors.background,
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(1.dp, SaltTheme.colors.subText.copy(alpha = 0.2f))
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = SaltTheme.colors.text
+        )
     }
 }

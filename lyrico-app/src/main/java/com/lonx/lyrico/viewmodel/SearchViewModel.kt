@@ -199,7 +199,7 @@ class SearchViewModel(
      * 加载指定歌曲的歌词
      * 同一时间只允许一个歌词加载任务
      */
-    fun loadLyrics(song: SongSearchResult) {
+    fun loadLyrics(song: SongSearchResult,offset: Long = 0L) {
         lyricsJob?.cancel()
 
         lyricsJob = viewModelScope.launch {
@@ -213,7 +213,7 @@ class SearchViewModel(
             }
 
             try {
-                val lyrics = loadFormattedLyrics(song)
+                val lyrics = loadFormattedLyrics(song, offset)
 
                 _uiState.update {
                     it.copy(
@@ -241,8 +241,8 @@ class SearchViewModel(
     /**
      * 直接获取歌词 (用于列表页"应用"按钮)
      */
-    suspend fun fetchLyrics(song: SongSearchResult): String? {
-        return loadFormattedLyrics(song)
+    suspend fun fetchLyrics(song: SongSearchResult, offset: Long = 0L): String? {
+        return loadFormattedLyrics(song, offset)
     }
 
     /**
@@ -260,7 +260,8 @@ class SearchViewModel(
      * 加载并格式化歌词内容
      */
     private suspend fun loadFormattedLyrics(
-        song: SongSearchResult
+        song: SongSearchResult,
+        offset: Long = 0L
     ): String? {
         val sourceImpl = findSource(song.source) ?: return null
         val lyricsResult = sourceImpl.getLyrics(song) ?: return null
@@ -269,7 +270,8 @@ class SearchViewModel(
 
         return LyricsUtils.formatLrcResult(
             result = lyricsResult,
-            config = config
+            config = config,
+            offset = offset
         )
 
     }

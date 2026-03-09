@@ -10,22 +10,30 @@ import kotlin.math.abs
 object LyricsUtils {
     @SuppressLint("DefaultLocale")
     private fun formatTimestamp(millis: Long): String {
-        val totalSeconds = millis / 1000
+        val safeMillis = millis.coerceAtLeast(0L)
+        val totalSeconds = safeMillis / 1000
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
-        val ms = millis % 1000
+        val ms = safeMillis % 1000
         return String.format("%02d:%02d.%03d", minutes, seconds, ms)
     }
 
+    /**
+     * 计算应用偏移量，保证结果大于等于 0
+     */
+    private fun applyOffset(time: Long, offset: Long): Long {
+        return (time + offset).coerceAtLeast(0L)
+    }
+
     private fun isBlankOrPlaceholder(line: LyricsLine): Boolean {
-        // 将所有单词拼接成一行文本
         val text = line.words.joinToString("") { it.text }.trim()
         return text.isEmpty() || text.matches(Regex("^[\\s/]*$"))
     }
 
     fun formatLrcResult(
         result: LyricsResult,
-        config: LyricRenderConfig
+        config: LyricRenderConfig,
+        offset: Long = 0L,
     ): String {
         val builder = StringBuilder()
 
@@ -41,6 +49,7 @@ object LyricsUtils {
             if (config.removeEmptyLines && isBlankOrPlaceholder(line)) {
                 return@forEach
             }
+
             val matchedTranslation = if (config.showTranslation) {
                 val match = matchingSubLine(line, translatedMap)
                 if (config.removeEmptyLines && match != null && isBlankOrPlaceholder(match)) null else match
@@ -55,62 +64,71 @@ object LyricsUtils {
 
             if (!skipOriginal) {
                 when (config.format) {
-                    LyricFormat.ENHANCED_LRC -> appendEnhancedLine(builder, line)
-                    LyricFormat.PLAIN_LRC -> appendLineByLine(builder, line)
-                    LyricFormat.VERBATIM_LRC -> appendWordByWord(builder, line)
+                    LyricFormat.ENHANCED_LRC -> appendEnhancedLine(builder, line, offset)
+                    LyricFormat.PLAIN_LRC -> appendLineByLine(builder, line, offset)
+                    LyricFormat.VERBATIM_LRC -> appendWordByWord(builder, line, offset)
                 }
                 builder.append('\n')
             }
 
             if (matchedRoman != null && !skipOriginal) {
-                builder.append(formatPlainLine(matchedRoman)).append('\n')
+                builder.append(formatPlainLine(matchedRoman, offset)).append('\n')
             }
 
             if (matchedTranslation != null) {
-                builder.append(formatPlainLine(matchedTranslation)).append('\n')
+                builder.append(formatPlainLine(matchedTranslation, offset)).append('\n')
             }
         }
         return builder.toString().trim()
     }
 
-    private fun appendEnhancedLine(builder: StringBuilder, line: LyricsLine) {
+    private fun appendEnhancedLine(builder: StringBuilder, line: LyricsLine, offset: Long) {
         if (line.words.isEmpty()) return
 
-        builder.append("[${formatTimestamp(line.start)}] ")
+        // 行开始时间应用 offset
+        builder.append("[${formatTimestamp(applyOffset(line.start, offset))}] ")
 
         line.words.forEach { word ->
-            builder.append("<${formatTimestamp(word.start)}>")
+            // 每个词的开始时间应用 offset
+            builder.append("<${formatTimestamp(applyOffset(word.start, offset))}>")
             builder.append(word.text)
         }
 
+        // 行结束时间应用 offset
         val lastEnd = line.words.last().end
-        builder.append(" <${formatTimestamp(lastEnd)}>")
+        builder.append(" <${formatTimestamp(applyOffset(lastEnd, offset))}>")
     }
 
-    private fun appendLineByLine(builder: StringBuilder, line: LyricsLine) {
+    private fun appendLineByLine(builder: StringBuilder, line: LyricsLine, offset: Long) {
         val lineText = line.words.joinToString("") { it.text }
         val endTime = line.words.lastOrNull()?.end
 
+        // 应用 offset
+        val startTimeFormatted = formatTimestamp(applyOffset(line.start, offset))
+
         if (endTime != null) {
-            builder.append("[${formatTimestamp(line.start)}]$lineText[${formatTimestamp(endTime)}]")
+            val endTimeFormatted = formatTimestamp(applyOffset(endTime, offset))
+            builder.append("[$startTimeFormatted]$lineText[$endTimeFormatted]")
         } else {
-            builder.append("[${formatTimestamp(line.start)}]$lineText")
+            builder.append("[$startTimeFormatted]$lineText")
         }
     }
 
-    private fun appendWordByWord(builder: StringBuilder, line: LyricsLine) {
+    private fun appendWordByWord(builder: StringBuilder, line: LyricsLine, offset: Long) {
         line.words.forEachIndexed { index, word ->
+            val startFormatted = formatTimestamp(applyOffset(word.start, offset))
             if (index == line.words.lastIndex) {
-                builder.append("[${formatTimestamp(word.start)}]${word.text}[${formatTimestamp(word.end)}]")
+                val endFormatted = formatTimestamp(applyOffset(word.end, offset))
+                builder.append("[$startFormatted]${word.text}[$endFormatted]")
             } else {
-                builder.append("[${formatTimestamp(word.start)}]${word.text}")
+                builder.append("[$startFormatted]${word.text}")
             }
         }
     }
 
-    private fun formatPlainLine(line: LyricsLine): String {
-        return "[${formatTimestamp(line.start)}]" +
-                line.words.joinToString(" ") { it.text }
+    private fun formatPlainLine(line: LyricsLine, offset: Long): String {
+        val startFormatted = formatTimestamp(applyOffset(line.start, offset))
+        return "[$startFormatted]" + line.words.joinToString(" ") { it.text }
     }
 
     private fun matchingSubLine(
