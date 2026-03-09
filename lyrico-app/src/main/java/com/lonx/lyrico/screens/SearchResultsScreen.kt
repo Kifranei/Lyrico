@@ -25,6 +25,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.widget.Toast
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.launch
 import coil3.SingletonImageLoader
@@ -96,7 +98,11 @@ fun SearchResultsScreen(
                     value = uiState.searchKeyword,
                     onValueChange = viewModel::onKeywordChanged,
                     placeholder = stringResource(id = R.string.search_lyrics_placeholder),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    onSearch = {
+                        viewModel.performSearch()
+                        keyboardController?.hide()
+                    }
                 )
 
                 Spacer(modifier = Modifier.width(12.dp))
@@ -433,98 +439,105 @@ fun SearchResultItem(
 ) {
     val context = LocalContext.current
 
-    // 原图尺寸（metadata）
+    // 原图尺寸状态
     var imageSize by remember(song.picUrl) {
         mutableStateOf<Pair<Int, Int>?>(null)
     }
 
-    /**
-     * 只读取图片头信息，不参与 UI，不解码大图
-     */
     LaunchedEffect(song.picUrl) {
         if (song.picUrl.isNotBlank()) {
             val imageLoader = SingletonImageLoader.get(context)
-
             val request = ImageRequest.Builder(context)
                 .data(song.picUrl)
-                .size(Size.ORIGINAL)        // 读取原始尺寸
-                .allowHardware(false)       // 确保可读取尺寸
+                .size(Size.ORIGINAL)
+                .allowHardware(false)
                 .build()
 
             val result = imageLoader.execute(request)
-
             if (result is SuccessResult) {
                 val image = result.image
-                val w = image.width
-                val h = image.height
-
-                if (w > 0 && h > 0) {
-                    imageSize = w to h
+                if (image.width > 0 && image.height > 0) {
+                    imageSize = image.width to image.height
                 }
             }
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier
+        .fillMaxWidth()
+        .clickable(onClick = onPreviewClick)) {
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.CenterVertically
         ) {
 
-            /* 左侧：封面 + 原图尺寸 */
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-
-                Box(
-                    modifier = Modifier
-                        .size(76.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(LyricoColors.coverPlaceholder)
-                ) {
-                    AsyncImage(
-                        model = song.picUrl,
-                        contentDescription = song.title,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        placeholder = rememberTintedPainter(
-                            painter = painterResource(R.drawable.ic_album_24dp),
-                            tint = LyricoColors.coverPlaceholderIcon
-                        ),
-                        error = rememberTintedPainter(
-                            painter = painterResource(R.drawable.ic_album_24dp),
-                            tint = LyricoColors.coverPlaceholderIcon
-                        )
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(LyricoColors.coverPlaceholder)
+            ) {
+                AsyncImage(
+                    model = song.picUrl,
+                    contentDescription = song.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    placeholder = rememberTintedPainter(
+                        painter = painterResource(R.drawable.ic_album_24dp),
+                        tint = LyricoColors.coverPlaceholderIcon
+                    ),
+                    error = rememberTintedPainter(
+                        painter = painterResource(R.drawable.ic_album_24dp),
+                        tint = LyricoColors.coverPlaceholderIcon
                     )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
+                )
 
                 imageSize?.let { (w, h) ->
-                    Text(
-                        text = "${w}×${h}",
-                        fontSize = 11.sp,
-                        color = SaltTheme.colors.subText
-                    )
+                    val isDark = SaltTheme.configs.isDarkTheme
+                    val gradientColor = if (isDark) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.6f)
+                    val textColor = if (isDark) Color.Black else Color.White
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(Color.Transparent, gradientColor),
+                                )
+                            )
+                            .padding(top = 8.dp, bottom = 2.dp)
+                    ) {
+                        Text(
+                            text = "${w}×${h}",
+                            color = textColor,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            /* 中间：歌曲信息 */
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalArrangement = Arrangement.Center
             ) {
                 Text(
                     text = song.title,
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.Bold,
                     color = SaltTheme.colors.text,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Text(
                     text = song.artist,
@@ -534,74 +547,53 @@ fun SearchResultItem(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                if (song.album.isNotBlank()) {
+                val meta = listOfNotNull(
+                    song.album.takeIf { it.isNotBlank() },
+                    song.date.takeIf { it.isNotBlank() },
+                    song.trackerNumber.takeIf { it.isNotBlank() }?.let { "T$it" }
+                ).joinToString(" - ")
+
+                if (meta.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = song.album,
-                        fontSize = 13.sp,
-                        color = SaltTheme.colors.subText,
+                        text = meta,
+                        fontSize = 11.sp,
+                        color = SaltTheme.colors.subText.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                if (song.date.isNotBlank()) {
-                    Text(
-                        text = song.date,
-                        fontSize = 12.sp,
-                        color = SaltTheme.colors.subText
-                    )
-                }
-
-                if (song.trackerNumber.isNotBlank()) {
-                    Text(
-                        text = "Track ${song.trackerNumber}",
-                        fontSize = 12.sp,
-                        color = SaltTheme.colors.subText
                     )
                 }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            /* 右侧：操作 */
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-
-                TextButton(
-                    onClick = onPreviewClick,
-                    modifier = Modifier.height(34.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.preview_action),
-                        fontSize = 13.sp,
-                        color = SaltTheme.colors.highlight
-                    )
-                }
-
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // 主操作：应用全部
                 Button(
                     onClick = onApplyClick,
-                    modifier = Modifier.height(34.dp),
+                    modifier = Modifier.height(32.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = SaltTheme.colors.highlight.copy(alpha = 0.12f),
-                        contentColor = SaltTheme.colors.highlight
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(0.dp)
+                        containerColor = SaltTheme.colors.highlight,
+                        contentColor = Color.White
+                    )
                 ) {
-                    Text(stringResource(R.string.apply_action), fontSize = 13.sp)
+                    Text(text = stringResource(R.string.apply_action), fontSize = 12.sp)
                 }
 
                 TextButton(
                     onClick = onApplyLyricsOnlyClick,
-                    modifier = Modifier.height(34.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp),
+                    modifier = Modifier.height(30.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
                         text = stringResource(R.string.apply_lyrics_only_action),
-                        fontSize = 13.sp,
+                        fontSize = 11.sp,
                         color = SaltTheme.colors.subText
                     )
                 }

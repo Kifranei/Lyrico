@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,11 +22,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lonx.lyrico.R
@@ -38,13 +41,19 @@ import com.moriafly.salt.ui.SaltTheme
  * @param onValueChange 文字改变时的回调
  * @param placeholder 占位提示文字
  * @param modifier 外部修饰符
+ * @param keyboardType 键盘类型
+ * @param imeAction 回车键类型
+ * @param onSearch 回车键回调
  */
 @Composable
 fun SearchBar(
     modifier: Modifier = Modifier,
     value: String,
     onValueChange: (String) -> Unit,
-    placeholder: String = "搜索"
+    placeholder: String = "搜索",
+    keyboardType: KeyboardType = KeyboardType.Text,
+    imeAction: ImeAction = ImeAction.Search,
+    onSearch: (() -> Unit)? = null
 ) {
     BasicTextField(
         value = value,
@@ -57,6 +66,13 @@ fun SearchBar(
             fontWeight = FontWeight.Bold
         ),
         cursorBrush = SolidColor(SaltTheme.colors.highlight),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = keyboardType,
+            imeAction = imeAction
+        ),
+        keyboardActions = KeyboardActions(
+            onAny = { onSearch?.invoke() },
+        ),
         modifier = modifier
             .height(36.dp)
             .background(SaltTheme.colors.subBackground, CircleShape)
@@ -64,9 +80,9 @@ fun SearchBar(
         decorationBox = { innerTextField ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 8.dp) // 内部左右边距
+                modifier = Modifier.padding(horizontal = 8.dp)
             ) {
-                // 1. 左侧搜索图标
+                // 左侧搜索图标
                 Icon(
                     painter = painterResource(R.drawable.ic_search_24dp),
                     contentDescription = "Search",
@@ -76,12 +92,11 @@ fun SearchBar(
 
                 Spacer(modifier = Modifier.width(6.dp))
 
-                // 2. 中间输入区域 + 占位符
+                // 中间输入区域 + 占位符
                 Box(
                     modifier = Modifier.weight(1f),
                     contentAlignment = Alignment.CenterStart
                 ) {
-                    // 占位符：没有文字时显示
                     if (value.isEmpty()) {
                         Text(
                             text = placeholder,
@@ -93,11 +108,10 @@ fun SearchBar(
                             maxLines = 1
                         )
                     }
-                    // 实际输入框
                     innerTextField()
                 }
 
-                // 3. 右侧清除按钮：有文字时显示
+                // 右侧清除按钮
                 if (value.isNotEmpty()) {
                     Icon(
                         painter = painterResource(R.drawable.ic_clear_24dp),
@@ -106,10 +120,10 @@ fun SearchBar(
                         modifier = Modifier
                             .size(20.dp)
                             .clickable(
-                                indication = null, // 无水波纹
+                                indication = null,
                                 interactionSource = remember { MutableInteractionSource() }
                             ) {
-                                onValueChange("") // 清空逻辑
+                                onValueChange("")
                             }
                     )
                 }
