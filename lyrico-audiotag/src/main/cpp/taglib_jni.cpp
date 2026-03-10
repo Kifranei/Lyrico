@@ -35,137 +35,13 @@
 #include "taglib/vorbisfile.h"
 #include "taglib/wavfile.h"
 #include "taglib/tpropertymap.h"
+#include "FdIOStream.h"
 #include <taglib/id3v2tag.h>
 #include <taglib/attachedpictureframe.h>
 #include <taglib/flacpicture.h>
 #include <taglib/xiphcomment.h>
 
-const size_t IO_BUFFER_SIZE = 256 * 1024;
 
-class FdIOStream : public TagLib::IOStream {
-public:
-    explicit FdIOStream(int fd)
-            : m_fd(dup(fd)), m_position(0), m_size(0) {
-        if (m_fd == -1) throw std::runtime_error("dup failed");
-        struct stat st{};
-        if (fstat(m_fd, &st) == 0) m_size = st.st_size;
-    }
-
-    ~FdIOStream() override {
-        if (m_fd != -1) close(m_fd);
-    }
-
-    [[nodiscard]] TagLib::FileName name() const override { return "fd_stream"; }
-
-    TagLib::ByteVector readBlock(size_t length) override {
-        TagLib::ByteVector data((unsigned int)length);
-        ssize_t bytes = pread(m_fd, data.data(), length, m_position);
-        if (bytes <= 0) return {};
-        m_position += bytes;
-        data.resize(bytes);
-        return data;
-    }
-
-    void writeBlock(const TagLib::ByteVector &data) override {
-        ssize_t written = pwrite(m_fd, data.data(), data.size(), m_position);
-        if (written > 0) m_position += written;
-        if (m_position > m_size) m_size = m_position;
-    }
-
-    // 分块移动数据，防止大尺寸 WAV 文件导致 OOM
-    void insert(const TagLib::ByteVector &data, TagLib::offset_t start, size_t replace) override {
-        TagLib::offset_t tailStart = start + replace;
-        TagLib::offset_t tailSize = m_size - tailStart;
-        TagLib::offset_t dataSize = data.size();
-
-        if (dataSize > replace) {
-            // 需要扩容文件：从后往前分块移动，防止覆盖未读取的数据
-            TagLib::offset_t shiftAmount = dataSize - replace;
-            TagLib::offset_t readPos = tailStart + tailSize;
-            std::vector<char> buffer(IO_BUFFER_SIZE);
-
-            TagLib::offset_t bytesToMove = tailSize;
-            while (bytesToMove > 0) {
-                size_t chunk = std::min((size_t)bytesToMove, IO_BUFFER_SIZE);
-                readPos -= chunk;
-                pread(m_fd, buffer.data(), chunk, readPos);
-                pwrite(m_fd, buffer.data(), chunk, readPos + shiftAmount);
-                bytesToMove -= chunk;
-            }
-        } else if (dataSize < replace) {
-            // 需要缩减文件：从前往后分块移动
-            TagLib::offset_t shiftAmount = replace - dataSize;
-            TagLib::offset_t readPos = tailStart;
-            std::vector<char> buffer(IO_BUFFER_SIZE);
-
-            TagLib::offset_t bytesToMove = tailSize;
-            while (bytesToMove > 0) {
-                size_t chunk = std::min((size_t)bytesToMove, IO_BUFFER_SIZE);
-                pread(m_fd, buffer.data(), chunk, readPos);
-                pwrite(m_fd, buffer.data(), chunk, readPos - shiftAmount);
-                readPos += chunk;
-                bytesToMove -= chunk;
-            }
-        }
-
-        // 写入新数据
-        if (dataSize > 0) {
-            pwrite(m_fd, data.data(), dataSize, start);
-        }
-
-        m_size = start + dataSize + tailSize;
-        ftruncate(m_fd, m_size);
-    }
-
-    // 分块移动数据，防止 OOM
-    void removeBlock(TagLib::offset_t start, size_t length) override {
-        TagLib::offset_t tailStart = start + length;
-        TagLib::offset_t tailSize = m_size - tailStart;
-
-        std::vector<char> buffer(IO_BUFFER_SIZE);
-        TagLib::offset_t readPos = tailStart;
-        TagLib::offset_t writePos = start;
-
-        TagLib::offset_t bytesToMove = tailSize;
-        while (bytesToMove > 0) {
-            size_t chunk = std::min((size_t)bytesToMove, IO_BUFFER_SIZE);
-            pread(m_fd, buffer.data(), chunk, readPos);
-            pwrite(m_fd, buffer.data(), chunk, writePos);
-            readPos += chunk;
-            writePos += chunk;
-            bytesToMove -= chunk;
-        }
-
-        m_size -= length;
-        ftruncate(m_fd, m_size);
-    }
-
-    [[nodiscard]] bool readOnly() const override { return false; }
-    [[nodiscard]] bool isOpen() const override { return m_fd != -1; }
-
-    void seek(TagLib::offset_t offset, TagLib::IOStream::Position p) override {
-        switch (p) {
-            case Beginning: m_position = offset; break;
-            case Current: m_position += offset; break;
-            case End: m_position = m_size + offset; break;
-        }
-        if (m_position < 0) m_position = 0;
-        if (m_position > m_size) m_position = m_size;
-    }
-
-    [[nodiscard]] TagLib::offset_t tell() const override { return m_position; }
-    TagLib::offset_t length() override { return m_size; }
-    void truncate(TagLib::offset_t length) override {
-        ftruncate(m_fd, length);
-        m_size = length;
-        if (m_position > m_size) m_position = m_size;
-    }
-
-private:
-    int m_fd;
-    TagLib::offset_t m_position;
-    TagLib::offset_t m_size;
-};
 bool parseMpeg(const std::string &name, TagLib::MPEG::File *mpegFile,
                JMetadataBuilder &jBuilder) {
 

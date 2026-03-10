@@ -30,6 +30,7 @@ set_target_properties(taglib PROPERTIES
 add_library(${PROJECT_NAME} SHARED
     taglib_jni.cpp
     JTagMap.cpp
+    FdIOStream.cpp
     JMetadataBuilder.cpp
     JClassRef.cpp
     JObjectRef.cpp

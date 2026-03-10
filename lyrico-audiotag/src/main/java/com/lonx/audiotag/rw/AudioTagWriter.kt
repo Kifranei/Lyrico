@@ -23,6 +23,7 @@ object AudioTagWriter {
 
             val finalMap = HashMap<String, MutableList<String>>()
 
+            Log.d(TAG, "Reading properties: $updates")
             if (preserveOldTags) {
                 (TagLibJNI.read(fd) as? MetadataResult.Success)
                     ?.metadata

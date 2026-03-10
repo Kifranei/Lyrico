@@ -38,7 +38,7 @@ object AudioTagReader {
             try {
                 val fd = FdUtils.getNativeFd(pfd)
                 val result = TagLibJNI.readPicture(fd)
-                    return@withContext result
+                return@withContext result
 
             } catch (e: Exception) {
                 Log.e(TAG, "Read error", e)
@@ -55,6 +55,7 @@ object AudioTagReader {
             putAll(metadata.id3v2)
         }
 
+        Log.d(TAG, "Reading tags: $props")
         fun getFirst(vararg keys: String): String? =
             keys.asSequence()
                 .mapNotNull { props[it]?.firstOrNull()?.trim() }
