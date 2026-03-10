@@ -292,4 +292,5 @@
 
     <string name="show_scroll_top_button">Quick back to top</string>
     <string name="show_scroll_top_button_hint">Shows a floating button when scrolling</string>
+    <string name="action_reset">Reset</string>
 </resources>

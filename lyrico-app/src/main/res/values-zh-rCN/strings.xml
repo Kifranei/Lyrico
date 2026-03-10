@@ -300,4 +300,5 @@
 
     <string name="show_scroll_top_button">快速回到顶部</string>
     <string name="show_scroll_top_button_hint">列表滚动时显示浮动按钮</string>
+    <string name="action_reset">点击重置</string>
 </resources>

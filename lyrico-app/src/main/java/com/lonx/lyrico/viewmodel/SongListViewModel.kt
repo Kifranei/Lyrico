@@ -403,7 +403,7 @@ class SongListViewModel(
                 album = newAlbum,
                 genre = newGenre,
                 date = newDate,
-                trackerNumber = newTrack,
+                trackNumber = newTrack,
                 lyrics = newLyricsResolved,
                 picUrl = picUrl
             )

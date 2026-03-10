@@ -11,7 +11,7 @@ data class AudioTagData(
     val albumArtist: String? = null,
     val genre: String? = null,
     val date: String? = null,
-    val trackerNumber: String? = null,
+    val trackNumber: String? = null,
     val discNumber: Int? = null,
 
     val composer: String? = null,

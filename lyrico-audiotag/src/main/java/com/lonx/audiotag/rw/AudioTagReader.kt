@@ -23,12 +23,7 @@ object AudioTagReader {
                 val fd = FdUtils.getNativeFd(pfd)
 
                 val result = TagLibJNI.read(fd)
-
-
-                val metadata = when (result) {
-                    is MetadataResult.Success -> result.metadata
-                    else -> null
-                } ?: return@withContext AudioTagData()
+                val metadata = (result as? MetadataResult.Success)?.metadata ?: return@withContext AudioTagData()
 
                 buildAudioTagData(metadata, readPictures)
 
@@ -55,72 +50,58 @@ object AudioTagReader {
     private fun buildAudioTagData(metadata: Metadata, readPictures: Boolean): AudioTagData {
         // 合并所有 tag map
         val props = LinkedHashMap<String, List<String>>().apply {
-            putAll(metadata.id3v2)
             putAll(metadata.xiph)
             putAll(metadata.mp4)
+            putAll(metadata.id3v2)
         }
 
-        Log.d(TAG, "Reading metadata: $props")
+        fun getFirst(vararg keys: String): String? =
+            keys.asSequence()
+                .mapNotNull { props[it]?.firstOrNull()?.trim() }
+                .firstOrNull { it.isNotEmpty() }
 
-        // Helper 函数，取第一个非空字符串
-        fun firstOf(vararg keys: String): String? {
-            for (key in keys) {
-                val arr = props[key]
-                if (!arr.isNullOrEmpty()) {
-                    val value = arr[0].trim()
-                    if (value.isNotEmpty()) return value
-                }
-            }
-            return null
-        }
-
-        // Helper 函数，取第一个整数（用于 track/disc）
-        fun firstIntOf(vararg keys: String): Int? = firstOf(*keys)?.substringBefore('/')?.toIntOrNull()
-
-        // 常用可选字段
-        val lyrics = firstOf("LYRICS", "UNSYNCED LYRICS", "USLT", "LYRIC", "LYRICSENG","TXXX:USLT")
-        val albumArtist = firstOf("ALBUMARTIST", "ALBUM ARTIST", "TPE2", "aART", "ALBUMARTISTSORT")
-        val discNumber = firstIntOf("DISCNUMBER", "DISC", "TPOS", "DISKNUMBER")
-        val composer = firstOf("COMPOSER", "TCOM", "©wrt")
-        val lyricist = firstOf("LYRICIST", "TEXT", "WRITER", "LYRICS BY")
-        val comment = firstOf("COMMENT", "COMM", "DESCRIPTION","TXXX:COMM")
-        val style = firstOf("STYLE", "SUBGENRE", "MOOD")
-
-        // 处理封面
-        val pictures = mutableListOf<AudioPicture>()
-        if (readPictures && metadata.cover != null) {
-            pictures.add(
-                AudioPicture(
-                    data = metadata.cover,
-                    mimeType = "image/*",
-                    description = "",
-                    pictureType = "3" // Cover front
-                )
-            )
-        }
+        fun getInt(vararg keys: String): Int? =
+            getFirst(*keys)
+                ?.substringBefore("/")
+                ?.toIntOrNull()
 
         val audioProps = metadata.properties
 
         Log.d(TAG, "Reading properties: $audioProps")
         // 返回 AudioTagData
         return AudioTagData(
-            title = firstOf("TITLE", "TIT2", "©nam"),
-            artist = firstOf("ARTIST", "TPE1", "©ART"),
-            album = firstOf("ALBUM", "TALB", "©alb"),
-            genre = firstOf("GENRE") ?: style,
-            date = firstOf("DATE", "YEAR", "TDRC", "©day"),
-            trackerNumber = firstIntOf("TRACKNUMBER", "TRACK", "TRCK", "©trk")?.toString(),
-            albumArtist = albumArtist,
-            discNumber = discNumber,
-            composer = composer,
-            lyricist = lyricist,
-            comment = comment,
-            lyrics = lyrics,
-            durationMilliseconds = audioProps.durationMs.toInt(),
-            bitrate = audioProps.bitrateKbps,
-            sampleRate = audioProps.sampleRateHz,
-            channels = audioProps.channels,
-            pictures = pictures
+            title = getFirst("TIT2", "©nam", "TITLE", "sonm"),
+
+            artist = getFirst("TPE1", "©ART", "ARTIST", "----:COM.APPLE.ITUNES:PERFORMER"),
+
+            album = getFirst("TALB", "©alb", "ALBUM"),
+
+            albumArtist = getFirst("TPE2", "aART", "ALBUMARTIST", "soaa"),
+
+            date = getFirst("TDRC", "TDRL", "©day", "DATE", "----:COM.APPLE.ITUNES:RELEASETIME"),
+
+            genre = getFirst("TCON", "©gen", "GENRE"),
+
+            trackNumber = getFirst("TRCK", "trkn", "TRACKNUMBER", "©trk"),
+
+            discNumber = getInt("TPOS", "disk", "DISCNUMBER"),
+
+            composer = getFirst("TCOM", "©wrt", "COMPOSER", "soco"),
+
+            lyricist = getFirst("TEXT", "LYRICIST", "----:COM.APPLE.ITUNES:LYRICIST"),
+
+            lyrics = getFirst("USLT", "©lyr", "LYRICS", "UNSYNCEDLYRICS"),
+
+            comment = getFirst("COMM", "©cmt", "COMMENT"),
+
+            durationMilliseconds = metadata.properties.durationMs.toInt(),
+            bitrate = metadata.properties.bitrateKbps,
+            sampleRate = metadata.properties.sampleRateHz,
+            channels = metadata.properties.channels,
+
+            pictures = if (readPictures && metadata.cover != null) {
+                listOf(AudioPicture(data = metadata.cover, mimeType = "image/*", pictureType = "3"))
+            } else emptyList()
         )
     }
 }

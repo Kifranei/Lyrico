@@ -193,7 +193,7 @@ class SongRepositoryImpl(
                     artist = tag.artist ?: song.artist,
                     lyrics = tag.lyrics ?: song.lyrics,
                     date = tag.date ?: song.date,
-                    trackerNumber = tag.trackerNumber ?: song.trackerNumber,
+                    trackerNumber = tag.trackNumber ?: song.trackerNumber,
                     album = tag.album ?: song.album,
                     genre = tag.genre ?: song.genre,
                     fileLastModified = newModifiedTime // 更新为当前时间
@@ -236,7 +236,7 @@ class SongRepositoryImpl(
                 artist = audioData.artist,
                 album = audioData.album,
                 genre = audioData.genre,
-                trackerNumber = audioData.trackerNumber,
+                trackerNumber = audioData.trackNumber,
                 date = audioData.date,
                 lyrics = audioData.lyrics,
                 durationMilliseconds = audioData.durationMilliseconds,
@@ -274,7 +274,7 @@ class SongRepositoryImpl(
                 album = audioTagData.album ?: existingSong.album,
                 albumArtist = audioTagData.albumArtist ?: existingSong.albumArtist,
                 genre = audioTagData.genre ?: existingSong.genre,
-                trackerNumber = audioTagData.trackerNumber ?: existingSong.trackerNumber,
+                trackerNumber = audioTagData.trackNumber ?: existingSong.trackerNumber,
                 discNumber = audioTagData.discNumber ?: existingSong.discNumber,
                 date = audioTagData.date ?: existingSong.date,
                 composer = audioTagData.composer ?: existingSong.composer,
@@ -323,7 +323,7 @@ class SongRepositoryImpl(
             audioTagData.album?.let { updates["ALBUM"] = it }
             audioTagData.genre?.let { updates["GENRE"] = it }
             audioTagData.date?.let { updates["DATE"] = it }
-            audioTagData.trackerNumber?.let { updates["TRACKNUMBER"] = it }
+            audioTagData.trackNumber?.let { updates["TRACKNUMBER"] = it }
 
             audioTagData.albumArtist?.let { updates["ALBUMARTIST"] = it }
             audioTagData.discNumber?.let { updates["DISCNUMBER"] = it.toString() }
@@ -338,7 +338,7 @@ class SongRepositoryImpl(
                 updates["LYRICS"] = it
             }
 
-            AudioTagWriter.writeTags(pfdDescriptor, updates)
+            AudioTagWriter.writeTags(pfdDescriptor, updates,false)
 
             // 图片写入
             audioTagData.picUrl?.let { picUrl ->

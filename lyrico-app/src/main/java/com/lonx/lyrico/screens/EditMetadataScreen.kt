@@ -336,16 +336,16 @@ fun EditMetadataScreen(
 
             MetadataInputGroup(
                 label = stringResource(R.string.label_track_number),
-                value = editingTagData?.trackerNumber ?: "",
+                value = editingTagData?.trackNumber ?: "",
                 onValueChange = {
                     viewModel.updateTag {
-                        copy(trackerNumber = it)
+                        copy(trackNumber = it)
                     }
                 },
-                isModified = editingTagData?.trackerNumber != originalTagData?.trackerNumber,
+                isModified = editingTagData?.trackNumber != originalTagData?.trackNumber,
                 onRevert = {
                     viewModel.updateTag {
-                        copy(trackerNumber = originalTagData?.trackerNumber ?: "")
+                        copy(trackNumber = originalTagData?.trackNumber ?: "")
                     }
                 }
             )

@@ -645,7 +645,7 @@ fun OffsetAdjustPanel(
                 fontWeight = FontWeight.Bold,
                 color = SaltTheme.colors.highlight
             )
-            Text(text = "点击重置", fontSize = 9.sp, color = SaltTheme.colors.subText)
+            Text(text = stringResource(R.string.action_reset), fontSize = 9.sp, color = SaltTheme.colors.subText)
         }
 
         // 增加单位

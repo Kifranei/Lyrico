@@ -5,7 +5,6 @@ import android.app.RecoverableSecurityException
 import android.content.Context
 import android.content.IntentSender
 import android.os.Build
-import android.provider.MediaStore
 import android.util.Log
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
@@ -14,7 +13,6 @@ import com.lonx.audiotag.model.AudioPicture
 import com.lonx.audiotag.model.AudioTagData
 import com.lonx.lyrico.data.model.LyricsSearchResult
 import com.lonx.lyrico.data.model.entity.SongEntity
-import com.lonx.lyrico.data.model.entity.getUri
 import com.lonx.lyrico.data.repository.PlaybackRepository
 import com.lonx.lyrico.data.repository.SongRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +20,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.io.File
 
 data class EditMetadataUiState(
     val songInfo: SongInfo? = null,
@@ -129,8 +126,8 @@ class EditMetadataViewModel(
                     album = result.album?.takeIf { it.isNotBlank() } ?: current.album,
                     lyrics = result.lyrics?.takeIf { it.isNotBlank() } ?: current.lyrics,
                     date = result.date?.takeIf { it.isNotBlank() } ?: current.date,
-                    trackerNumber = result.trackerNumber?.takeIf { it.isNotBlank() }
-                        ?: current.trackerNumber,
+                    trackNumber = result.trackerNumber?.takeIf { it.isNotBlank() }
+                        ?: current.trackNumber,
                     picUrl = result.picUrl?.takeIf { it.isNotBlank() } ?: current.picUrl
                 ),
                 coverUri = result.picUrl?.takeIf { it.isNotBlank() }?.toUri()
