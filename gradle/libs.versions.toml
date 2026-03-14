@@ -23,7 +23,6 @@ retrofit2KotlinxSerializationConverter = "1.0.0"
 saltui = "2.9.0-alpha07"
 datastorePreferences = "1.2.0"
 room = "2.8.4"
-taglib = "v1.0.7"
 tinypinyin = "2.0.3"
 xxpermissions="28.0"
 monitor = "1.8.0"
@@ -51,7 +50,6 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 compose-destinations-ksp = { module = "io.github.raamcosta.compose-destinations:ksp", version.ref = "core" }
 reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
 salt-ui-android = { module = "io.github.moriafly:salt-ui-android", version.ref = "saltui" }
-taglib = { module = "com.github.Replica0110:taglib", version.ref = "taglib" }
 tinypinyin = { module = "com.github.promeg:tinypinyin", version.ref = "tinypinyin" }
 xxpermissions = { module = "com.github.getActivity:XXPermissions", version.ref = "xxpermissions" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }

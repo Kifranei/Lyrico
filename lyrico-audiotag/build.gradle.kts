@@ -15,6 +15,11 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
+        externalNativeBuild {
+            cmake {
+                cppFlags += ""
+            }
+        }
 
     }
 
@@ -31,6 +36,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
 
     kotlin {
         compilerOptions {
@@ -40,7 +51,6 @@ android {
 }
 
 dependencies {
-    implementation(libs.taglib)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.monitor)
     testImplementation(libs.junit)
