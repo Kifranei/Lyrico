@@ -20,5 +20,7 @@ data class SettingsBackup(
     @SerialName("theme_mode") val themeMode: String? = null,
     @SerialName("only_translation_if_available") val onlyTranslationIfAvailable: Boolean? = null,
     @SerialName("show_scroll_top_button") val showScrollTopButton: Boolean? = null,
-    @SerialName("character_mapping_config") val characterMappingConfig: CharacterMappingConfig? = null
+    @SerialName("character_mapping_config") val characterMappingConfig: CharacterMappingConfig? = null,
+    @SerialName("batch_match_config") val batchMatchConfig: BatchMatchConfig? = null,
+    @SerialName("rename_format") val renameFormat: String? = null
 )

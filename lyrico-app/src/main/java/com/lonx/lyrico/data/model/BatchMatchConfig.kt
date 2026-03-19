@@ -4,8 +4,10 @@ import android.os.Parcelable
 import androidx.annotation.StringRes
 import com.lonx.lyrico.R
 import kotlinx.parcelize.Parcelize
+import kotlinx.serialization.Serializable
 
 @Parcelize
+@Serializable
 data class BatchMatchConfig(
     val fields: Map<BatchMatchField, BatchMatchMode>,
     val concurrency: Int = 3
@@ -30,4 +32,19 @@ enum class BatchMatchField(
     TRACK_NUMBER(R.string.label_track_number),
     LYRICS(R.string.label_lyrics),
     COVER(R.string.label_cover)
+}
+object BatchMatchConfigDefaults {
+    val DEFAULT_CONFIG = BatchMatchConfig(
+        fields = mapOf(
+            BatchMatchField.TITLE to BatchMatchMode.SUPPLEMENT,
+            BatchMatchField.ARTIST to BatchMatchMode.SUPPLEMENT,
+            BatchMatchField.ALBUM to BatchMatchMode.SUPPLEMENT,
+            BatchMatchField.GENRE to BatchMatchMode.SUPPLEMENT,
+            BatchMatchField.DATE to BatchMatchMode.SUPPLEMENT,
+            BatchMatchField.TRACK_NUMBER to BatchMatchMode.SUPPLEMENT,
+            BatchMatchField.LYRICS to BatchMatchMode.SUPPLEMENT,
+            BatchMatchField.COVER to BatchMatchMode.SUPPLEMENT
+        ),
+        concurrency = 3
+    )
 }

@@ -16,6 +16,7 @@ import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.data.repository.BatchMatchHistoryRepository
 import com.lonx.lyrico.data.model.BatchMatchConfig
+import com.lonx.lyrico.data.model.BatchMatchConfigDefaults
 import com.lonx.lyrico.data.model.BatchMatchField
 import com.lonx.lyrico.data.model.BatchMatchHistory
 import com.lonx.lyrico.data.model.BatchMatchMode
@@ -131,6 +132,8 @@ class SongListViewModel(
     private val lyricFormat = settingsRepository.lyricFormat
         .stateIn(viewModelScope, SharingStarted.Eagerly, LyricFormat.VERBATIM_LRC)
 
+    val batchMatchConfig = settingsRepository.batchMatchConfig
+        .stateIn(viewModelScope, SharingStarted.Eagerly, BatchMatchConfigDefaults.DEFAULT_CONFIG)
 
     // UI 交互状态
     private val _uiState = MutableStateFlow(SongListUiState())
@@ -283,12 +286,19 @@ class SongListViewModel(
         _uiState.update { it.copy(showBatchConfigDialog = false) }
     }
 
+
+    fun saveBatchMatchConfig(matchConfig: BatchMatchConfig) {
+        viewModelScope.launch {
+            Log.d(TAG, "保存批量匹配配置:$matchConfig")
+            settingsRepository.saveBatchMatchConfig(matchConfig)
+        }
+    }
     /**
      * 批量匹配歌曲（支持并发控制）
-     * @param matchConfig 匹配配置
      */
-    fun batchMatch(matchConfig: BatchMatchConfig) {
+    fun batchMatch() {
         val selectedMap = _selectedSongIds.value
+        val matchConfig = batchMatchConfig.value
         if (selectedMap.isEmpty()) return
 
         val separator = separator.value

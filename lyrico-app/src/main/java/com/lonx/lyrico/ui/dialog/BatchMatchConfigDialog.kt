@@ -33,6 +33,7 @@ import com.lonx.lyrico.data.model.BatchMatchConfig
 import com.lonx.lyrico.data.model.BatchMatchField
 import com.lonx.lyrico.data.model.BatchMatchMode
 import com.moriafly.salt.ui.Button
+import com.moriafly.salt.ui.ButtonType
 import com.moriafly.salt.ui.Icon
 import com.moriafly.salt.ui.ItemContainer
 import com.moriafly.salt.ui.ItemSlider
@@ -50,32 +51,30 @@ import com.moriafly.salt.ui.outerPadding
 @OptIn(UnstableSaltUiApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun BatchMatchConfigDialog(
-    onDismissRequest: () -> Unit,
-    onConfirm: (BatchMatchConfig) -> Unit
+    initialConfig: BatchMatchConfig,
+    onDismissRequest: (BatchMatchConfig) -> Unit,
+    onConfirm: () -> Unit
 ) {
-    var config by remember {
-        mutableStateOf(
-            BatchMatchConfig(
-                fields = BatchMatchField.entries.associateWith { BatchMatchMode.SUPPLEMENT },
-                concurrency = 3
-            )
-        )
-    }
+    var config by remember { mutableStateOf(initialConfig) }
 
     val allFields = remember { BatchMatchField.entries }
 
-    fun updateField(field: BatchMatchField, isSelected: Boolean, mode: BatchMatchMode) {
-        val currentMap = config.fields.toMutableMap()
+    fun updateField(
+        field: BatchMatchField,
+        isSelected: Boolean,
+        mode: BatchMatchMode
+    ) {
+        val newMap = config.fields.toMutableMap()
         if (isSelected) {
-            currentMap[field] = mode
+            newMap[field] = mode
         } else {
-            currentMap.remove(field)
+            newMap.remove(field)
         }
-        config = config.copy(fields = currentMap)
+        config = config.copy(fields = newMap)
     }
 
     BasicDialog(
-        onDismissRequest = onDismissRequest,
+        onDismissRequest = { onDismissRequest(config) },
     ) {
         // 标题
         Text(
@@ -123,21 +122,15 @@ fun BatchMatchConfigDialog(
             Spacer(modifier = Modifier.height(SaltTheme.dimens.subPadding))
 
             RoundedColumn(paddingValues = PaddingValues(0.dp)) {
-                val tempConcurrency = remember(config.concurrency) {
-                    mutableIntStateOf(config.concurrency)
-                }
 
                 ItemSlider(
                     text = stringResource(id = R.string.batch_match_config_concurrency),
-                    sub = "${tempConcurrency.intValue}",
+                    sub = "${config.concurrency}",
                     steps = 3,
-                    value = tempConcurrency.intValue.toFloat(),
+                    value = config.concurrency.toFloat(),
                     valueRange = 1f..5f,
-                    onValueChangeFinished = {
-                        config = config.copy(concurrency = tempConcurrency.intValue)
-                    },
                     onValueChange = {
-                        tempConcurrency.intValue = it.toInt()
+                        config = config.copy(concurrency = it.toInt())
                     }
                 )
 
@@ -151,16 +144,16 @@ fun BatchMatchConfigDialog(
             modifier = Modifier.outerPadding()
         ) {
             Button(
-                onClick = onDismissRequest,
+                onClick = { onDismissRequest(config) },
                 text = stringResource(id = R.string.cancel),
                 modifier = Modifier.weight(1f),
-                type = com.moriafly.salt.ui.ButtonType.Sub
+                type = ButtonType.Sub
             )
             Spacer(modifier = Modifier.width(SaltTheme.dimens.padding))
             Button(
                 onClick = {
-                    onDismissRequest()
-                    onConfirm(config)
+                    onDismissRequest(config)
+                    onConfirm()
                 },
                 text = stringResource(id = R.string.confirm),
                 modifier = Modifier.weight(1f),
@@ -238,7 +231,20 @@ private fun BatchMatchConfigDialogPreview() {
     SaltTheme {
         BatchMatchConfigDialog(
             onDismissRequest = {},
-            onConfirm = {}
+            onConfirm = {},
+            initialConfig = BatchMatchConfig(
+                fields = mapOf(
+                    BatchMatchField.TITLE to BatchMatchMode.SUPPLEMENT,
+                    BatchMatchField.ARTIST to BatchMatchMode.OVERWRITE,
+                    BatchMatchField.ALBUM to BatchMatchMode.SUPPLEMENT,
+                    BatchMatchField.GENRE to BatchMatchMode.SUPPLEMENT,
+                    BatchMatchField.DATE to BatchMatchMode.SUPPLEMENT,
+                    BatchMatchField.TRACK_NUMBER to BatchMatchMode.SUPPLEMENT,
+                    BatchMatchField.LYRICS to BatchMatchMode.SUPPLEMENT,
+                    BatchMatchField.COVER to BatchMatchMode.SUPPLEMENT
+                ),
+                concurrency = 3
+            )
         )
     }
 }

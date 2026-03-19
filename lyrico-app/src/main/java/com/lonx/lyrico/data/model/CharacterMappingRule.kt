@@ -37,7 +37,7 @@ data class CharacterMappingConfig(
 )
 enum class ReplacementCharOption(
     val value: String,
-    @StringRes val labelRes: Int
+    @field:StringRes val labelRes: Int
 ) {
     REMOVE(
         value = "",

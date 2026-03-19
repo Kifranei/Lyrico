@@ -60,6 +60,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.lonx.lyrico.BuildConfig
 import com.lonx.lyrico.R
+import com.lonx.lyrico.data.model.BatchMatchConfig
+import com.lonx.lyrico.data.model.BatchMatchField
+import com.lonx.lyrico.data.model.BatchMatchMode
 import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.model.entity.getUri
@@ -132,6 +135,7 @@ fun SongListScreen(
     val isSelectionMode by viewModel.isSelectionMode.collectAsState(initial = false)
     val selectedSongIds by viewModel.selectedSongIds.collectAsState()
     val showScrollTopButton by viewModel.showScrollTopButton.collectAsStateWithLifecycle()
+    val batchMatchConfig by viewModel.batchMatchConfig.collectAsState()
     var sortOrderDropdownExpanded by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
@@ -727,8 +731,13 @@ fun SongListScreen(
             // 批量匹配配置对话框
             if (uiState.showBatchConfigDialog) {
                 BatchMatchConfigDialog(
-                    onDismissRequest = { viewModel.closeBatchMatchConfig() },
-                    onConfirm = { config -> viewModel.batchMatch(config) }
+                    initialConfig = batchMatchConfig,
+                    onDismissRequest = { config ->
+                        viewModel.saveBatchMatchConfig(config)
+                        viewModel.closeBatchMatchConfig() },
+                    onConfirm = {
+                        viewModel.batchMatch()
+                    }
                 )
             }
 

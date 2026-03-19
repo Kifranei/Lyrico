@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.lonx.lyrico.data.model.BatchMatchConfig
+import com.lonx.lyrico.data.model.BatchMatchConfigDefaults
 import com.lonx.lyrico.data.model.CharacterMappingConfig
 import com.lonx.lyrico.data.model.CharacterMappingDefaults
 import com.lonx.lyrico.data.model.LyricFormat
@@ -29,6 +31,7 @@ import kotlinx.serialization.json.Json
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
 object SettingsDefaults {
+    const val RENAME_FORMAT = "@1 - @2"
     const val SHOW_SCROLL_TOP_BUTTON = true
     val LYRIC_FORMAT = LyricFormat.VERBATIM_LRC
     val SORT_BY = SortBy.TITLE
@@ -56,6 +59,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
     }
 
     private object PreferencesKeys {
+        val RENAME_FORMAT = stringPreferencesKey("rename_format")
         val REMOVE_EMPTY_LINES = booleanPreferencesKey("remove_empty_lines")
         val SHOW_SCROLL_TOP_BUTTON = booleanPreferencesKey("show_scroll_top_button")
         val LYRIC_FORMAT = stringPreferencesKey("lyric_display_mode")
@@ -72,6 +76,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val ONLY_TRANSLATION_IF_AVAILABLE = booleanPreferencesKey("only_translation_if_available")
         val CHARACTER_MAPPING_CONFIG = stringPreferencesKey("character_mapping_config")
+        val BATCH_MATCH_CONFIG = stringPreferencesKey("batch_match_config")
     }
 
     override val lyricFormat: Flow<LyricFormat>
@@ -171,6 +176,10 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
             preferences[PreferencesKeys.SHOW_SCROLL_TOP_BUTTON] ?: SettingsDefaults.SHOW_SCROLL_TOP_BUTTON
         }
 
+    override val renameFormat: Flow<String>
+        get() = context.settingsDataStore.data.map { preferences ->
+            preferences[PreferencesKeys.RENAME_FORMAT] ?: SettingsDefaults.RENAME_FORMAT
+        }
     override suspend fun getLastScanTime(): Long {
         return context.settingsDataStore.data.map { preferences ->
             preferences[PreferencesKeys.LAST_SCAN_TIME] ?: 0L
@@ -360,6 +369,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
     override suspend fun exportSettings(): String {
         val prefs = context.settingsDataStore.data.first()
         val charMapping = getCharacterMappingConfig()
+        val batchMatchConfig = getBatchMatchConfig()
         val backup = SettingsBackup(
             removeEmptyLines = prefs[PreferencesKeys.REMOVE_EMPTY_LINES]
                 ?: SettingsDefaults.REMOVE_EMPTY_LINES,
@@ -388,7 +398,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
             ignoreShortAudio = prefs[PreferencesKeys.IGNORE_SHORT_AUDIO]
                 ?: SettingsDefaults.IGNORE_SHORT_AUDIO,
 
-            searchSourceOrder = (prefs[PreferencesKeys.SEARCH_SOURCE_ORDER] ?: "").toSourceList().map { it.name },
+            searchSourceOrder = (prefs[PreferencesKeys.SEARCH_SOURCE_ORDER] ?: SettingsDefaults.SEARCH_SOURCE_ORDER.toSourceCsv()).toSourceList().map { it.name },
 
             searchPageSize = prefs[PreferencesKeys.SEARCH_PAGE_SIZE]
                 ?: SettingsDefaults.SEARCH_PAGE_SIZE,
@@ -401,7 +411,10 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
 
             showScrollTopButton = prefs[PreferencesKeys.SHOW_SCROLL_TOP_BUTTON]
                 ?: SettingsDefaults.SHOW_SCROLL_TOP_BUTTON,
-            characterMappingConfig = charMapping
+            characterMappingConfig = charMapping,
+            renameFormat = prefs[PreferencesKeys.RENAME_FORMAT]
+                ?: SettingsDefaults.RENAME_FORMAT,
+            batchMatchConfig = batchMatchConfig,
         )
 
         return jsonFormatter.encodeToString(backup)
@@ -436,6 +449,10 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                 backup.characterMappingConfig?.let { config ->
                     prefs[PreferencesKeys.CHARACTER_MAPPING_CONFIG] = jsonFormatter.encodeToString(config)
                 }
+                backup.renameFormat?.let { prefs[PreferencesKeys.RENAME_FORMAT]  = it }
+                backup.batchMatchConfig?.let { config ->
+                    prefs[PreferencesKeys.BATCH_MATCH_CONFIG] = jsonFormatter.encodeToString(config)
+                }
             }
             true
         } catch (e: Exception) {
@@ -462,11 +479,36 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                 }
             }
         }
+    override val batchMatchConfig: Flow<BatchMatchConfig>
+        get() = context.settingsDataStore.data.map { preferences ->
+            val configJson = preferences[PreferencesKeys.BATCH_MATCH_CONFIG]
+            if (configJson.isNullOrBlank()) {
+                BatchMatchConfigDefaults.DEFAULT_CONFIG
+            } else {
+                try {
+                    jsonFormatter.decodeFromString<BatchMatchConfig>(configJson)
+                } catch (e: Exception) {
+                    BatchMatchConfigDefaults.DEFAULT_CONFIG
+                }
+            }
+        }
 
     override suspend fun saveCharacterMappingConfig(config: CharacterMappingConfig) {
         context.settingsDataStore.edit { preferences ->
             val configJson = jsonFormatter.encodeToString(config)
             preferences[PreferencesKeys.CHARACTER_MAPPING_CONFIG] = configJson
+        }
+    }
+
+    override suspend fun saveRenameFormat(format: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PreferencesKeys.RENAME_FORMAT] = format
+        }
+    }
+    override suspend fun saveBatchMatchConfig(config: BatchMatchConfig) {
+        context.settingsDataStore.edit { preferences ->
+            val configJson = jsonFormatter.encodeToString(config)
+            preferences[PreferencesKeys.BATCH_MATCH_CONFIG] = configJson
         }
     }
 
@@ -482,6 +524,9 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
 
     override suspend fun getCharacterMappingConfig(): CharacterMappingConfig {
         return characterMappingConfig.first()
+    }
+    override suspend fun getBatchMatchConfig(): BatchMatchConfig {
+        return batchMatchConfig.first()
     }
 }
 

@@ -66,6 +66,7 @@ fun BatchRenameScreen(
     fileLastModifieds: LongArray = longArrayOf()
 ) {
     val viewModel: BatchRenameViewModel = koinViewModel()
+    val renameFormat by viewModel.renameFormat.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     LaunchedEffect(filePaths, fileLastModifieds) {
@@ -92,21 +93,21 @@ fun BatchRenameScreen(
                 ItemOuterTitle(text = stringResource(id = R.string.rename_format))
                 RoundedColumn {
                     ItemEdit(
-                        value = uiState.format,
-                        onValueChange = { viewModel.setFormat(it) },
+                        value = renameFormat,
+                        onValueChange = { viewModel.saveFormat(it) },
                         placeholder = stringResource(id = R.string.format_placeholder),
                         hintText = stringResource(id = R.string.format_hint)
                     )
                     ItemDropdown(
                         text = stringResource(id = R.string.format_preset),
-                        value = if (uiState.presetFormats.contains(uiState.format)) uiState.format else "",
+                        value = if (uiState.presetFormats.contains(renameFormat)) renameFormat else "",
                         content = {
                             uiState.presetFormats.forEach { format ->
                                 ItemCheck(
                                     text = format,
-                                    state = uiState.format == format,
+                                    state = renameFormat == format,
                                     onChange = {
-                                        viewModel.setFormat(
+                                        viewModel.saveFormat(
                                             format
                                         ); state.dismiss()
                                     }

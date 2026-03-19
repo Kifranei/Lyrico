@@ -1,5 +1,6 @@
 package com.lonx.lyrico.data.repository
 
+import com.lonx.lyrico.data.model.BatchMatchConfig
 import com.lonx.lyrico.data.model.CharacterMappingConfig
 import com.lonx.lyrico.data.model.CharacterMappingRule
 import com.lonx.lyrico.data.model.LyricFormat
@@ -23,6 +24,10 @@ data class SettingsSnapshot(
 )
 
 interface SettingsRepository {
+    val batchMatchConfig: Flow<BatchMatchConfig>
+
+    val renameFormat: Flow<String>
+
     // Flow properties
     val lyricFormat: Flow<LyricFormat>
     val sortInfo: Flow<SortInfo>
@@ -62,9 +67,11 @@ interface SettingsRepository {
     suspend fun getLyricRenderConfig(): LyricRenderConfig
     suspend fun exportSettings(): String
     suspend fun importSettings(jsonString: String): Boolean
-
+    suspend fun saveBatchMatchConfig(config: BatchMatchConfig)
+    suspend fun saveRenameFormat(format: String)
     suspend fun saveCharacterMappingConfig(config: CharacterMappingConfig)
     // 更新指定规则中的字符映射
     suspend fun updateCharacterMappingInRule(ruleId: String, charMappings: Map<String, String?>)
     suspend fun getCharacterMappingConfig(): CharacterMappingConfig
+    suspend fun getBatchMatchConfig(): BatchMatchConfig
 }

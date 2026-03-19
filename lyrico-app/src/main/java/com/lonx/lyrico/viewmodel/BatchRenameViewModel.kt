@@ -15,15 +15,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import android.net.Uri
 import com.lonx.lyrico.R
+import com.lonx.lyrico.data.repository.SettingsDefaults
 import com.lonx.lyrico.utils.UiMessage
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import java.io.File
 
 data class BatchRenameUiState(
     val songs: List<SongForBatchRename> = emptyList(),
-    val format: String = "@1 - @2",
     val presetFormats: List<String> = emptyList(),
     val previews: List<RenamePreview> = emptyList(),
     val isGeneratingPreview: Boolean = false,
@@ -50,7 +52,9 @@ class BatchRenameViewModel(
 
     /** 独立的状态流，用于 combine */
     private val songsFlow = MutableStateFlow<List<SongForBatchRename>>(emptyList())
-    private val formatFlow = MutableStateFlow("@1 - @2")
+//    private val renameFormat = MutableStateFlow("@1 - @2")
+    val renameFormat = settingsRepository.renameFormat
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsDefaults.RENAME_FORMAT)
 
     init {
 
@@ -72,7 +76,7 @@ class BatchRenameViewModel(
 
             combine(
                 songsFlow,
-                formatFlow,
+                renameFormat,
                 settingsRepository.characterMappingConfig
             ) { songs, format, mapping ->
                 Triple(songs, format, mapping)
@@ -158,12 +162,9 @@ class BatchRenameViewModel(
     /**
      * 修改格式
      */
-    fun setFormat(format: String) {
-
-        formatFlow.value = format
-
-        _uiState.update {
-            it.copy(format = format)
+    fun saveFormat(format: String) {
+        viewModelScope.launch {
+            settingsRepository.saveRenameFormat(format)
         }
     }
 
