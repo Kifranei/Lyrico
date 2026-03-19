@@ -255,8 +255,7 @@ fun SongListScreen(
                         .align(Alignment.BottomEnd)
                         .padding(
                             end = 24.dp,
-                            // 如果处于选择模式，底部会有 NavigationBar，需要增加底部边距以避让
-                            bottom = if (isSelectionMode) 96.dp else 24.dp
+                            bottom =  24.dp
                         ),
                     enter = fadeIn() + scaleIn(),
                     exit = fadeOut() + scaleOut()
