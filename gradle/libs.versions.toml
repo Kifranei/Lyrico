@@ -1,11 +1,11 @@
 [versions]
-agp = "9.0.1"
+agp = "9.1.0"
 coil = "3.4.0"
 core = "2.3.0"
-kotlin = "2.3.10"
+kotlin = "2.3.20"
 ksp = "2.3.6"
 composeMarkdown = "0.5.7"
-coreKtx = "1.17.0"
+coreKtx = "1.18.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 koinAndroid = "4.1.1"
@@ -13,21 +13,20 @@ koinAndroidxCompose = "4.1.1"
 espressoCore = "3.7.0"
 lazycolumnscrollbar = "2.2.0"
 lifecycleRuntimeKtx = "2.10.0"
-activityCompose = "1.12.4"
-composeBom = "2026.02.00"
+activityCompose = "1.13.0"
+composeBom = "2026.03.00"
 kotlinxCoroutinesAndroid = "1.10.2"
 kotlinxSerializationJson = "1.10.0"
 okhttp = "5.3.2"
 reorderable = "3.0.0"
 retrofit = "3.0.0"
 retrofit2KotlinxSerializationConverter = "1.0.0"
-saltui = "2.9.0-alpha07"
-datastorePreferences = "1.2.0"
+saltui = "2.9.0-alpha08"
+datastorePreferences = "1.2.1"
 room = "2.8.4"
 tinypinyin = "2.0.3"
 xxpermissions="28.0"
 monitor = "1.8.0"
-protobuf = "0.9.6"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -73,4 +72,3 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-protobuf = { id = "com.google.protobuf", version.ref = "protobuf" }
