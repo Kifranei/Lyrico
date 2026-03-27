@@ -96,6 +96,7 @@ dependencies {
     implementation(libs.salt.ui.android)
     implementation(libs.miuix.android)
     implementation(libs.miuix.icons.android)
+    implementation(libs.shapes)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.reorderable)

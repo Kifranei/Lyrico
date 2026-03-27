@@ -2,6 +2,7 @@ package com.lonx.lyrico.screens
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -13,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -35,11 +37,20 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.extra.SuperSwitch
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 @Composable
 @Destination<RootGraph>(route = "about")
@@ -61,14 +72,37 @@ fun AboutScreen(
         UiError.LoadFailed -> stringResource(R.string.load_failed)
         is UiError.Message -> e.text
     }
-
-    BasicScreenBox(
-        title = stringResource(R.string.about_title),
-        onBack = { navigator.popBackStack() }
-    ) {
+    val topAppBarScrollBehavior = MiuixScrollBehavior()
+    Scaffold(
+        topBar = {
+            SmallTopAppBar(
+                title = stringResource(R.string.about_title),
+                navigationIcon = {
+                    IconButton(
+                        modifier = Modifier.padding(start = 12.dp),
+                        onClick = { navigator.popBackStack() }
+                    ) {
+                        Icon(
+                            MiuixIcons.Back,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
+                    }
+                },
+                scrollBehavior = topAppBarScrollBehavior
+            )
+        }
+    ) { paddingValues ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 12.dp)
+            modifier = Modifier
+                .scrollEndHaptic()
+                .overScrollVertical()
+                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+                .fillMaxHeight(),
+            contentPadding = PaddingValues(
+                top = paddingValues.calculateTopPadding(),
+                bottom = paddingValues.calculateBottomPadding() + 12.dp,
+            ),
+            overscrollEffect = null,
         ) {
             item {
                 SmallTitle(text = stringResource(R.string.about_app_info))

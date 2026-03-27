@@ -353,4 +353,5 @@
     <string name="chinese_conversion_mode_traditional_to_simplified">CHT -> CHS</string>
     <string name="chinese_conversion_mode_simplified_to_traditional">CHS -> CHT</string>
     <string name="conversion_mode">Lyric Conversion Mode</string>
+    <string name="offset_adjust_hint">Adjsut Offset</string>
 </resources>
