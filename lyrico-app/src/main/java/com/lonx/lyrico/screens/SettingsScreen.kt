@@ -37,6 +37,9 @@ import com.lonx.lyrico.data.model.ArtistSeparator
 import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricFormat
 import com.lonx.lyrico.data.model.ThemeMode
+import com.lonx.lyrico.ui.components.RoundedRectanglePainter
+import com.lonx.lyrico.ui.components.getSystemWallpaperColor
+import com.lonx.lyrico.ui.theme.KeyColors
 import com.lonx.lyrico.viewmodel.FolderManagerViewModel
 import com.lonx.lyrico.viewmodel.SettingsEvent
 import com.lonx.lyrico.viewmodel.SettingsViewModel
@@ -52,14 +55,17 @@ import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.SpinnerEntry
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.extra.SuperDropdown
+import top.yukonga.miuix.kmp.extra.SuperSpinner
 import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
@@ -78,6 +84,9 @@ fun SettingsScreen(
     val lyricFormat = settingsUiState.lyricFormat
     val artistSeparator = settingsUiState.separator
     val romaEnabled = settingsUiState.romaEnabled
+    val themeMode = settingsUiState.themeMode
+    val monetEnable = settingsUiState.monetEnable
+    val currentKeyColor = settingsUiState.keyColor
     val translationEnabled = settingsUiState.translationEnabled
     val onlyTranslationIfAvailable = settingsUiState.onlyTranslationIfAvailable
     val removeEmptyLines = settingsUiState.removeEmptyLines
@@ -294,6 +303,44 @@ fun SettingsScreen(
                         settingsViewModel.setThemeMode(ThemeMode.entries[index])
                     }
                 )
+                SuperSwitch(
+                    title = stringResource(R.string.monet),
+                    checked = monetEnable,
+                    onCheckedChange = {
+                        settingsViewModel.setMonetEnable(!monetEnable)
+                    }
+                )
+                AnimatedVisibility(visible = (monetEnable)) {
+                    val currentSelectedIndex = KeyColors.indexOf(currentKeyColor).let {
+                        if (it == -1) 0 else it
+                    }
+                    val options = KeyColors.map { keyColor ->
+                        SpinnerEntry(
+                            title = stringResource(keyColor.nameResId),
+                            icon = {
+                                val tintColor =
+                                    keyColor.color ?: getSystemWallpaperColor(context)
+
+                                Icon(
+                                    painter = RoundedRectanglePainter(),
+                                    contentDescription = stringResource(keyColor.nameResId),
+                                    modifier = Modifier.padding(end = 12.dp),
+                                    tint = tintColor
+                                )
+                            }
+                        )
+                    }
+
+                    SuperSpinner(
+                        items = options,
+                        selectedIndex = currentSelectedIndex,
+                        title = stringResource(R.string.key_color),
+                        onSelectedIndexChange = {
+                            val selectedKeyColor = KeyColors[it]
+                            settingsViewModel.setKeyColor(selectedKeyColor)
+                        }
+                    )
+                }
             }
 
             SmallTitle(text = stringResource(R.string.section_scan))

@@ -2,13 +2,18 @@ package com.lonx.lyrico
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -25,6 +30,7 @@ import com.lonx.lyrico.App.Companion.ACTION_EDIT_TAG
 import com.lonx.lyrico.data.model.ThemeMode
 import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.ui.dialog.UpdateDialog
+import com.lonx.lyrico.ui.theme.KeyColors
 import com.lonx.lyrico.ui.theme.LyricoTheme
 import com.lonx.lyrico.utils.PermissionUtil
 import com.lonx.lyrico.utils.UpdateManager
@@ -83,11 +89,46 @@ open class MainActivity : ComponentActivity() {
             val themeMode by settingsRepository.themeMode.collectAsStateWithLifecycle(
                 initialValue = ThemeMode.AUTO
             )
+            val monetEnable by settingsRepository.monetEnable.collectAsStateWithLifecycle(
+                initialValue = false
+            )
+            val keyColor by settingsRepository.keyColor.collectAsStateWithLifecycle(
+                initialValue = KeyColors.first()
+            )
+            val darkMode = when (themeMode) {
+                ThemeMode.DARK -> true
+                ThemeMode.AUTO -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+            }
+
+            DisposableEffect(darkMode) {
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.auto(
+                        Color.TRANSPARENT,
+                        Color.TRANSPARENT
+                    ) { darkMode },
+                    navigationBarStyle = SystemBarStyle.auto(
+                        Color.TRANSPARENT,
+                        Color.TRANSPARENT
+                    ) { darkMode },
+                )
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    window.isNavigationBarContrastEnforced =
+                        false // Xiaomi moment, this code must be here
+                }
+
+                onDispose {}
+            }
             val updateManager: UpdateManager = koinInject()
             val updateState by updateManager.state.collectAsState()
             val context = this
 
-            LyricoTheme(themeMode = themeMode) {
+            LyricoTheme(
+                colorMode = themeMode,
+                monetEnabled = monetEnable,
+                keyColor = keyColor.color
+            ) {
                 LaunchedEffect(Unit) {
                     updateManager.effect.collect { effect ->
                         val message = context.getString(

@@ -185,7 +185,15 @@ fun FolderManagerScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                FolderTipCard()
+                Card(
+                    modifier = Modifier.padding(12.dp),
+                    insideMargin = PaddingValues(16.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.folder_tip_disabled_logic),
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                    )
+                }
             }
 
             item {
@@ -194,7 +202,14 @@ fun FolderManagerScreen(
 
             if (folders.isEmpty()) {
                 item {
-                    FolderEmptyCard()
+                    Card(
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.folder_empty_state_tip),
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                        )
+                    }
                 }
             } else {
                 item {
@@ -228,33 +243,7 @@ fun FolderManagerScreen(
     }
 }
 
-@Composable
-private fun FolderTipCard() {
-    Card(
-        modifier = Modifier.padding(12.dp),
-        colors = CardDefaults.defaultColors(
-            color = MiuixTheme.colorScheme.surfaceContainer,
-            contentColor = MiuixTheme.colorScheme.onBackground
-        )
-    ) {
-        BasicComponent(
-            title = stringResource(R.string.folder_tip_disabled_logic),
-            summary = stringResource(R.string.folder_manage_hint)
-        )
-    }
-}
 
-@Composable
-private fun FolderEmptyCard() {
-    Card(
-        modifier = Modifier.padding(horizontal = 12.dp)
-    ) {
-        BasicComponent(
-            title = stringResource(R.string.folder_empty_state_tip),
-            summary = stringResource(R.string.folder_manage_hint)
-        )
-    }
-}
 
 @Composable
 private fun FolderListItem(
