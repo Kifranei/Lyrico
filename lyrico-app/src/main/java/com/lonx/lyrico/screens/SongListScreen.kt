@@ -16,7 +16,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -49,7 +48,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextAlign
@@ -84,7 +82,6 @@ import my.nanihadesuka.compose.ScrollbarSelectionMode
 import my.nanihadesuka.compose.ScrollbarSettings
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.BasicComponentColors
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -455,7 +452,7 @@ fun SongListScreen(
                                             val isSelected = sortInfo.sortBy == type
                                             DropdownItem(
                                                 text = stringResource(type.labelRes),
-                                                optionSize = sortTypes.size+1,
+                                                optionSize = sortTypes.size + 1,
                                                 index = sortTypes.indexOf(type),
                                                 isSelected = isSelected,
                                                 iconPainter = if (isSelected) {
@@ -682,18 +679,17 @@ fun SongListScreen(
                 }
             }
             // 批量匹配配置对话框
-            if (uiState.showBatchConfigDialog) {
-                BatchMatchConfigDialog(
-                    initialConfig = batchMatchConfig,
-                    onDismissRequest = { config ->
-                        viewModel.saveBatchMatchConfig(config)
-                        viewModel.closeBatchMatchConfig()
-                    },
-                    onConfirm = {
-                        scope.launch { viewModel.batchMatch() }
-                    }
-                )
-            }
+            BatchMatchConfigDialog(
+                show = uiState.showBatchConfigDialog,
+                initialConfig = batchMatchConfig,
+                onDismissRequest = { config ->
+                    viewModel.saveBatchMatchConfig(config)
+                    viewModel.closeBatchMatchConfig()
+                },
+                onConfirm = {
+                    scope.launch { viewModel.batchMatch() }
+                }
+            )
 
             SuperDialog(
                 show = uiState.isBatchMatching || uiState.batchProgress != null,
@@ -1184,7 +1180,9 @@ fun SongDetailBottomSheetContent(context: Context, song: SongEntity) {
                 AsyncImage(
                     model = CoverRequest(song.getUri, song.fileLastModified),
                     contentDescription = stringResource(R.string.cd_cover),
-                    modifier = Modifier.size(100.dp).clip(RoundedCornerShape(12.dp)),
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(12.dp)),
                     contentScale = ContentScale.Crop,
                     placeholder = painterResource(R.drawable.ic_album_24dp),
                     error = painterResource(R.drawable.ic_album_24dp)

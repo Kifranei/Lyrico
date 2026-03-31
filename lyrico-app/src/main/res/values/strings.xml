@@ -256,7 +256,7 @@
     <string name="label_lyrics">Lyrics</string>
     <string name="label_file_size">File Size</string>
     <!-- Cover Editor -->
-    <string name="status_modified">Modified</string>
+    <string name="status_modified">Modified, click to revert</string>
     <string name="cd_cover">Cover Art</string>
     <string name="cd_play">Play</string>
     <!-- Song Menu -->

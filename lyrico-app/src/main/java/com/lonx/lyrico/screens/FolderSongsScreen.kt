@@ -1,14 +1,14 @@
 package com.lonx.lyrico.screens
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -22,7 +22,16 @@ import org.koin.core.parameter.parametersOf
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 @Composable
 @Destination<RootGraph>(route = "folder_songs")
@@ -35,15 +44,36 @@ fun FolderSongsScreen(
         parameters = { parametersOf(folderId) }
     )
     val songs by viewModel.songs.collectAsStateWithLifecycle()
-
-    BasicScreenBox(
-        title = folderPath.substringAfterLast("/"),
-        onBack = { navigator.popBackStack() }
-    ) {
+    val topAppBarScrollBehavior = MiuixScrollBehavior()
+    Scaffold(
+        topBar = {
+            SmallTopAppBar(
+                title = folderPath.substringAfterLast("/"),
+                navigationIcon = {
+                    IconButton(
+                        modifier = Modifier.padding(start = 12.dp),
+                        onClick = { navigator.popBackStack() }) {
+                        Icon(
+                            imageVector = MiuixIcons.Back,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
+                    }
+                },
+                scrollBehavior = topAppBarScrollBehavior
+            )
+        }
+    ) { paddingValues ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 12.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier
+                .scrollEndHaptic()
+                .overScrollVertical()
+                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+                .fillMaxHeight(),
+            contentPadding = PaddingValues(
+                top = paddingValues.calculateTopPadding(),
+                bottom = paddingValues.calculateBottomPadding() + 12.dp,
+            ),
+            overscrollEffect = null,
         ) {
             item {
                 FolderSongsOverviewCard(

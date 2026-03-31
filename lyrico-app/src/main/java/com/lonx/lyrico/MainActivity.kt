@@ -148,6 +148,7 @@ open class MainActivity : ComponentActivity() {
 
                     updateState.releaseInfo?.let { releaseInfo ->
                         UpdateDialog(
+                            show = true,
                             versionName = releaseInfo.versionName,
                             onConfirm = {
                                 openBrowser(this@MainActivity, releaseInfo.url)

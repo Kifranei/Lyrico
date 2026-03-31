@@ -1,7 +1,6 @@
 package com.lonx.lyrico.screens
 
 import android.annotation.SuppressLint
-import android.util.Log
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -26,9 +25,7 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -49,29 +46,25 @@ import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.data.model.LyricsSearchResult
 import com.lonx.lyrico.ui.components.bar.SearchBar
 import com.lonx.lyrico.ui.theme.LyricoColors
+import com.lonx.lyrico.ui.theme.isDarkTheme
 import com.lonx.lyrico.viewmodel.SearchViewModel
 import com.lonx.lyrics.model.SongSearchResult
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.result.ResultBackNavigator
 import org.koin.androidx.compose.koinViewModel
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.extra.SuperBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Settings
-import top.yukonga.miuix.kmp.theme.ColorSchemeMode
-import top.yukonga.miuix.kmp.theme.ColorSchemeMode.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @SuppressLint("LocalContextGetResourceValueCall")
@@ -502,14 +495,7 @@ fun SearchResultItem(
                         )
                     )
 
-                    // 尺寸标注
-                    val isDark = when (MiuixTheme.colorSchemeMode) {
-                        Dark, MonetDark -> true
-                        Light, MonetLight -> false
-                        System, MonetSystem -> isSystemInDarkTheme()
-                        null -> false
-                    }
-                    val textColor = if (isDark) Color.Black else Color.White
+                    val textColor = if (isDarkTheme) Color.Black else Color.White
 
                     Box(
                         modifier = Modifier

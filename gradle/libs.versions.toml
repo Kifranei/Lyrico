@@ -22,7 +22,6 @@ opencc4j = "1.14.0"
 reorderable = "3.0.0"
 retrofit = "3.0.0"
 retrofit2KotlinxSerializationConverter = "1.0.0"
-saltui = "2.9.0-alpha08"
 shapes = "1.2.0"
 datastorePreferences = "1.2.1"
 room = "2.8.4"
@@ -54,7 +53,6 @@ compose-destinations-ksp = { module = "io.github.raamcosta.compose-destinations:
 lazycolumnscrollbar = { module = "com.github.nanihadesuka:LazyColumnScrollbar", version.ref = "lazycolumnscrollbar" }
 opencc4j = { module = "com.github.houbb:opencc4j", version.ref = "opencc4j" }
 reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
-salt-ui-android = { module = "io.github.moriafly:salt-ui-android", version.ref = "saltui" }
 shapes = { module = "io.github.kyant0:shapes", version.ref = "shapes" }
 tinypinyin = { module = "com.github.promeg:tinypinyin", version.ref = "tinypinyin" }
 xxpermissions = { module = "com.github.getActivity:XXPermissions", version.ref = "xxpermissions" }

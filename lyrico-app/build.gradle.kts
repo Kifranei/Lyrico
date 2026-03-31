@@ -93,7 +93,6 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.compose.destinations.core)
-    implementation(libs.salt.ui.android)
     implementation(libs.miuix.android)
     implementation(libs.miuix.icons.android)
     implementation(libs.shapes)

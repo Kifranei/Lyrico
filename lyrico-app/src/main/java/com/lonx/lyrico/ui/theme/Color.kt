@@ -1,18 +1,27 @@
 package com.lonx.lyrico.ui.theme
 
-import android.app.WallpaperManager
-import android.content.Context
-import android.os.Build
 import androidx.annotation.StringRes
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import com.lonx.lyrico.R
-import com.moriafly.salt.ui.SaltTheme
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode.Dark
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode.Light
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode.MonetDark
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode.MonetLight
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode.MonetSystem
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/**
- * Theme-aware colors that adapt to light/dark mode.
- * Use these instead of hardcoded colors for proper dark mode support.
- */
+
+val isDarkTheme: Boolean
+    @Composable
+    get() = when (MiuixTheme.colorSchemeMode) {
+        Dark, MonetDark -> true
+        Light, MonetLight -> false
+        ColorSchemeMode.System, MonetSystem -> isSystemInDarkTheme()
+        null -> false
+    }
 object LyricoColors {
     /**
      * Placeholder background color for album covers.
@@ -20,14 +29,8 @@ object LyricoColors {
      */
     val coverPlaceholder: Color
         @Composable
-        get() = SaltTheme.colors.subBackground.copy(alpha = 0.5f)
+        get() = MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
 
-    /**
-     * Secondary text color for metadata like bitrate.
-     */
-    val secondaryText: Color
-        @Composable
-        get() = SaltTheme.colors.subText
 
     /**
      * Modified state background color (for edited items).
@@ -35,7 +38,7 @@ object LyricoColors {
      */
     val modifiedBackground: Color
         @Composable
-        get() = if (SaltTheme.configs.isDarkTheme) {
+        get() = if (isDarkTheme) {
             Color(0xFF433519) // Dark amber
         } else {
             Color(0xFFFFFBEB) // Light amber
@@ -46,7 +49,7 @@ object LyricoColors {
      */
     val modifiedBorder: Color
         @Composable
-        get() = if (SaltTheme.configs.isDarkTheme) {
+        get() = if (isDarkTheme) {
             Color(0xFF9D5D00) // Dark amber
         } else {
             Color(0xFFFCD34D) // Light amber
@@ -57,7 +60,7 @@ object LyricoColors {
      */
     val modifiedBadgeBackground: Color
         @Composable
-        get() = if (SaltTheme.configs.isDarkTheme) {
+        get() = if (isDarkTheme) {
             Color(0xFF433519) // Dark amber
         } else {
             Color(0xFFFEF3C7) // Light amber
@@ -68,25 +71,11 @@ object LyricoColors {
      */
     val modifiedText: Color
         @Composable
-        get() = if (SaltTheme.configs.isDarkTheme) {
+        get() = if (isDarkTheme) {
             Color(0xFFFCE100) // Dark amber
         } else {
             Color(0xFFD97706) // Light amber
         }
-
-    /**
-     * Input field border color (unfocused).
-     */
-    val inputBorder: Color
-        @Composable
-        get() = SaltTheme.colors.stroke
-
-    /**
-     * Input field focused border color.
-     */
-    val inputFocusedBorder: Color
-        @Composable
-        get() = SaltTheme.colors.highlight
 
     /**
      * Icon color for album cover placeholder.
@@ -94,7 +83,7 @@ object LyricoColors {
      */
     val coverPlaceholderIcon: Color
         @Composable
-        get() = SaltTheme.colors.subText
+        get() = MiuixTheme.colorScheme.onSurfaceVariantActions.copy(alpha = 0.5f)
 }
 
 data class KeyColor(
