@@ -81,6 +81,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.BasicComponentColors
+import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -251,6 +252,12 @@ fun SongListScreen(
         }
     }
     val topAppBarScrollBehavior = MiuixScrollBehavior()
+    val refreshTexts = listOf(
+        stringResource(R.string.pull_to_refresh),
+        stringResource(R.string.release_to_refresh),
+        stringResource(R.string.refreshing),
+        stringResource(R.string.refresh_success)
+    )
     Box {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -488,6 +495,7 @@ fun SongListScreen(
                 onRefresh = { viewModel.refreshSongs() },
                 modifier = Modifier.padding(paddingValues),
                 topAppBarScrollBehavior = topAppBarScrollBehavior,
+                refreshTexts = refreshTexts
             ) {
                 LazyColumn(
                     modifier = Modifier
@@ -499,35 +507,46 @@ fun SongListScreen(
                     state = listState,
                     overscrollEffect = null
                 ) {
-                    items(
-                        items = songs,
-                        key = { song -> song.mediaId }
-                    ) { song ->
-                        SongListItem(
-                            song = song,
-                            navigator = navigator,
-                            modifier = Modifier.animateItem(),
-                            isSelectionMode = isSelectionMode,
-                            isSelected = selectedSongIds.containsKey(song.mediaId),
-                            onToggleSelection = { viewModel.toggleSelection(song) },
-                            trailingContent = {
-                                Box(modifier = Modifier.padding(end = 8.dp)) {
-                                    if (!isSelectionMode) {
-                                        IconButton(onClick = { viewModel.showMenu(song) }) {
-                                            Icon(
-                                                imageVector = MiuixIcons.More,
-                                                contentDescription = "More"
+                    if (songs.isNotEmpty()){
+                        items(
+                            items = songs,
+                            key = { song -> song.mediaId }
+                        ) { song ->
+                            SongListItem(
+                                song = song,
+                                navigator = navigator,
+                                modifier = Modifier.animateItem(),
+                                isSelectionMode = isSelectionMode,
+                                isSelected = selectedSongIds.containsKey(song.mediaId),
+                                onToggleSelection = { viewModel.toggleSelection(song) },
+                                trailingContent = {
+                                    Box(modifier = Modifier.padding(end = 8.dp)) {
+                                        if (!isSelectionMode) {
+                                            IconButton(onClick = { viewModel.showMenu(song) }) {
+                                                Icon(
+                                                    imageVector = MiuixIcons.More,
+                                                    contentDescription = "More"
+                                                )
+                                            }
+                                        } else {
+                                            Checkbox(
+                                                state = if (selectedSongIds.containsKey(song.mediaId)) ToggleableState.On else ToggleableState.Off,
+                                                onClick = { viewModel.toggleSelection(song) }
                                             )
                                         }
-                                    } else {
-                                        Checkbox(
-                                            state = if (selectedSongIds.containsKey(song.mediaId)) ToggleableState.On else ToggleableState.Off,
-                                            onClick = { viewModel.toggleSelection(song) }
-                                        )
                                     }
                                 }
+                            )
+                        }
+                    }else {
+                        item {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+
                             }
-                        )
+                        }
                     }
                 }
             }
