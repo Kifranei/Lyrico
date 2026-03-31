@@ -19,8 +19,7 @@ import kotlinx.coroutines.launch
 
 data class BatchMatchHistoryUiState(
     val historyList: List<BatchMatchHistory> = emptyList(),
-    val records: List<BatchMatchRecordEntity> = emptyList(),
-    val selectedTab: BatchMatchResult = BatchMatchResult.SUCCESS,
+    val allRecords: List<BatchMatchRecordEntity> = emptyList(),
     val isLoading: Boolean = false
 )
 
@@ -28,17 +27,10 @@ class BatchMatchHistoryViewModel(
     private val repository: BatchMatchHistoryRepository
 ) : ViewModel() {
 
-    private val selectedTabFlow =
-        MutableStateFlow(BatchMatchResult.SUCCESS)
+    private val historyIdFlow = MutableStateFlow<Long?>(null)
 
-    private val historyIdFlow =
-        MutableStateFlow<Long?>(null)
-
-    private val _uiState =
-        MutableStateFlow(BatchMatchHistoryUiState(isLoading = true))
-
-    val uiState: StateFlow<BatchMatchHistoryUiState> =
-        _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(BatchMatchHistoryUiState(isLoading = true))
+    val uiState: StateFlow<BatchMatchHistoryUiState> = _uiState.asStateFlow()
 
     init {
         observeHistoryList()
@@ -46,45 +38,42 @@ class BatchMatchHistoryViewModel(
     }
 
     /**
-     * 由 UI 调用，告诉 ViewModel 当前页面对应的 historyId
+     * 详情页调用：告诉 ViewModel 加载哪条历史的明细
      */
     fun loadHistory(historyId: Long) {
         historyIdFlow.value = historyId
     }
 
-    fun onTabSelected(status: BatchMatchResult) {
-        selectedTabFlow.value = status
-    }
-
+    /**
+     * 监听所有历史记录（用于 BatchMatchHistoryScreen 列表页）
+     */
     private fun observeHistoryList() {
         viewModelScope.launch {
             repository.getAllHistory().collect { list ->
                 _uiState.update {
-                    it.copy(historyList = list)
+                    it.copy(
+                        historyList = list,
+                        isLoading = false
+                    )
                 }
             }
         }
     }
 
+    /**
+     * 监听当前选中历史的明细记录（用于 BatchMatchHistoryDetailScreen 详情页）
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeRecords() {
         viewModelScope.launch {
-
             historyIdFlow
                 .filterNotNull()
                 .flatMapLatest { historyId ->
                     repository.getRecordsByHistoryId(historyId)
                 }
-                .combine(selectedTabFlow) { records, tab ->
-                    records.filter { it.status == tab }
-                }
-                .collect { filteredRecords ->
+                .collect { records ->
                     _uiState.update {
-                        it.copy(
-                            records = filteredRecords,
-                            selectedTab = selectedTabFlow.value,
-                            isLoading = false
-                        )
+                        it.copy(allRecords = records)
                     }
                 }
         }
@@ -93,12 +82,17 @@ class BatchMatchHistoryViewModel(
     fun deleteHistory(id: Long) {
         viewModelScope.launch {
             repository.deleteHistory(id)
+            // 删除时如果正好是当前详情页的数据，可以清空 detail
+            if (historyIdFlow.value == id) {
+                historyIdFlow.value = null
+            }
         }
     }
 
     fun clearAllHistory() {
         viewModelScope.launch {
             repository.clearAllHistory()
+            historyIdFlow.value = null
         }
     }
 

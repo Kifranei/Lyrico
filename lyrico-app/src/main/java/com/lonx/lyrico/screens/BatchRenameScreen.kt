@@ -3,15 +3,14 @@ package com.lonx.lyrico.screens
 import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,9 +18,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -30,33 +29,41 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.RenamePreview
 import com.ramcosta.composedestinations.generated.destinations.CharacterMappingDestination
-import com.lonx.lyrico.ui.theme.LyricoColors.modifiedBorder
-import com.lonx.lyrico.utils.RenameEngine
 import com.lonx.lyrico.utils.TagField
 import com.lonx.lyrico.viewmodel.BatchRenameViewModel
 import com.lonx.lyrico.viewmodel.SongForBatchRename
-import com.moriafly.salt.ui.Item
-import com.moriafly.salt.ui.ItemButton
-import com.moriafly.salt.ui.ItemCheck
-import com.moriafly.salt.ui.ItemDivider
-import com.moriafly.salt.ui.ItemDropdown
-import com.moriafly.salt.ui.ItemInfo
-import com.moriafly.salt.ui.ItemInfoType
-import com.moriafly.salt.ui.ItemOuterTitle
-import com.moriafly.salt.ui.ItemSwitcher
-import com.moriafly.salt.ui.ItemTip
-import com.moriafly.salt.ui.RoundedColumn
-import com.moriafly.salt.ui.SaltTheme
-import com.moriafly.salt.ui.Text
-import com.moriafly.salt.ui.UnstableSaltUiApi
-import com.moriafly.salt.ui.dialog.YesNoDialog
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.DropdownImpl
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
+import top.yukonga.miuix.kmp.basic.ListPopupDefaults
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.extra.SuperListPopup
+import top.yukonga.miuix.kmp.extra.SuperSwitch
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.ListView
+import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import java.io.File
 
-@OptIn(UnstableSaltUiApi::class)
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 @Destination<RootGraph>(route = "batch_rename")
@@ -69,6 +76,8 @@ fun BatchRenameScreen(
     val renameFormat by viewModel.renameFormat.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val showDropdowns = remember { mutableStateOf(false) }
+
     LaunchedEffect(filePaths, fileLastModifieds) {
         if (filePaths.isNotEmpty()) {
             val songList = filePaths.mapIndexed { index, path ->
@@ -81,62 +90,123 @@ fun BatchRenameScreen(
 
     var showPlaceholderInfo by remember { mutableStateOf(false) }
 
-    BasicScreenBox(
-        title = stringResource(id = R.string.batch_rename_title),
-        onBack = { if (!uiState.isRenamingInProgress) navigator.popBackStack() }
-    ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 16.dp)
-        ) {
-            item {
-                ItemOuterTitle(text = stringResource(id = R.string.rename_format))
-                RoundedColumn {
-                    ItemEdit(
-                        value = renameFormat,
-                        onValueChange = { viewModel.saveFormat(it) },
-                        placeholder = stringResource(id = R.string.format_placeholder),
-                        hintText = stringResource(id = R.string.format_hint)
-                    )
-                    ItemDropdown(
-                        text = stringResource(id = R.string.format_preset),
-                        value = if (uiState.presetFormats.contains(renameFormat)) renameFormat else "",
-                        content = {
-                            uiState.presetFormats.forEach { format ->
-                                ItemCheck(
-                                    text = format,
-                                    state = renameFormat == format,
-                                    onChange = {
-                                        viewModel.saveFormat(
-                                            format
-                                        ); state.dismiss()
-                                    }
-                                )
+    val topAppBarScrollBehavior = MiuixScrollBehavior()
+    Scaffold(
+        topBar = {
+            SmallTopAppBar(
+                title = stringResource(id = R.string.batch_rename_title),
+                navigationIcon = {
+                    IconButton(
+                        modifier = Modifier.padding(start = 12.dp),
+                        onClick = { if (!uiState.isRenamingInProgress) navigator.popBackStack() }) {
+                        Icon(
+                            imageVector = MiuixIcons.Back,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        modifier = Modifier.padding(end = 12.dp),
+                        onClick = {
+                            if (!uiState.isRenamingInProgress) {
+                                navigator.navigate(CharacterMappingDestination)
                             }
                         }
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.ListView,
+                            contentDescription = null
+                        )
+                    }
+                },
+                scrollBehavior = topAppBarScrollBehavior,
+            )
+        }
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .scrollEndHaptic()
+                .overScrollVertical()
+                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+                .fillMaxHeight(),
+            contentPadding = PaddingValues(
+                top = paddingValues.calculateTopPadding(),
+                bottom = paddingValues.calculateBottomPadding() + 12.dp,
+            ),
+            overscrollEffect = null,
+        ) {
+            item {
+                SmallTitle(text = stringResource(id = R.string.rename_format))
+                Card(
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                ) {
+                    TextField(
+                        modifier = Modifier.padding(12.dp),
+                        value = renameFormat,
+                        onValueChange = { viewModel.saveFormat(it) },
+                        trailingIcon = {
+                            Box() {
+                                IconButton(
+                                    modifier = Modifier.padding(end = 12.dp),
+                                    onClick = { showDropdowns.value = true }) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Notes,
+                                        contentDescription = null
+                                    )
+                                }
+                                SuperListPopup(
+                                    show = showDropdowns.value,
+                                    popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
+                                    onDismissRequest = { showDropdowns.value = false },
+                                    alignment = PopupPositionProvider.Align.TopEnd
+                                ) {
+                                    ListPopupColumn {
+                                        uiState.presetFormats.forEach { format ->
+                                            DropdownImpl(
+                                                text = format,
+                                                isSelected = renameFormat == format,
+                                                optionSize = uiState.presetFormats.size,
+                                                index = uiState.presetFormats.indexOf(format),
+                                                onSelectedIndexChange = {
+                                                    viewModel.saveFormat(format)
+                                                    showDropdowns.value = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        },
                     )
-                    ItemSwitcher(
-                        text = stringResource(id = R.string.format_preset_show_placeholders),
-                        state = showPlaceholderInfo,
-                        onChange = { showPlaceholderInfo = it }
+                    Text(
+                        modifier = Modifier.padding(12.dp),
+                        text = stringResource(id = R.string.format_hint),
+                        fontSize = MiuixTheme.textStyles.footnote1.fontSize,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantActions
                     )
-                    Item(
-                        onClick = { navigator.navigate(CharacterMappingDestination()) },
-                        text = stringResource(id = R.string.configure_character_mapping)
+                    SuperSwitch(
+                        title = stringResource(id = R.string.format_preset_show_placeholders),
+                        checked = showPlaceholderInfo,
+                        onCheckedChange = { showPlaceholderInfo = it }
                     )
                     AnimatedVisibility(visible = showPlaceholderInfo) {
                         PlaceholderInfoContent()
                     }
-                    ItemButton(
+                    TextButton(
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .fillMaxWidth(),
                         onClick = { viewModel.executeRename() },
-                        enabled = uiState.previews.isNotEmpty() && !uiState.isRenamingInProgress,
                         text = stringResource(id = R.string.action_rename),
+                        enabled = uiState.previews.isNotEmpty() && !uiState.isRenamingInProgress,
+                        colors = ButtonDefaults.textButtonColorsPrimary()
                     )
                 }
             }
 
             item {
-                ItemOuterTitle(
+                SmallTitle(
                     text = stringResource(
                         if (uiState.isGeneratingPreview)
                             R.string.preview_title_generating
@@ -149,15 +219,30 @@ fun BatchRenameScreen(
 
             if (uiState.previews.isEmpty()) {
                 item {
-                    RoundedColumn { ItemTip(text =stringResource(id = R.string.preview_empty_tip)) }
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.preview_empty_tip),
+                            fontSize = MiuixTheme.textStyles.footnote1.fontSize,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
                 }
             } else {
                 item {
-                    RoundedColumn {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                    ) {
                         uiState.previews.forEachIndexed { index, preview ->
                             PreviewItem(preview = preview)
                             if (index < uiState.previews.size - 1) {
-                                ItemDivider()
+                                HorizontalDivider()
                             }
                         }
                     }
@@ -166,18 +251,70 @@ fun BatchRenameScreen(
 
             uiState.errorMessage?.let {
                 item {
-                    RoundedColumn(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        it.asString(context)?.let { text -> ItemInfo(text = text, infoType = ItemInfoType.Error) }
+                    Card(modifier = Modifier.padding(horizontal = 12.dp)) {
+                        it.asString(context)?.let { text ->
+                            Text(
+                                text = text, fontSize = MiuixTheme.textStyles.footnote1.fontSize,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
                     }
                 }
             }
         }
 
-        if (uiState.renameResult != null) {
-            RenameResultDialog(
-                result = uiState.renameResult!!,
-                onDismiss = { viewModel.clearResult(); navigator.popBackStack() }
-            )
+        uiState.renameResult?.let { result ->
+            val summary = buildString {
+                    append(
+                        stringResource(
+                            R.string.rename_result_summary,
+                            result.successCount,
+                            result.totalCount
+                        )
+                    )
+                    append("\n")
+
+                    if (result.failureCount > 0) {
+                        append(
+                            stringResource(
+                                R.string.rename_result_failure,
+                                result.failureCount
+                            )
+                        )
+                        append("\n")
+
+                        result.failed.take(3).forEach { (_, error) ->
+                            append("• $error\n")
+                        }
+
+                        if (result.failed.size > 3) {
+                            append("...")
+                        }
+                    }
+                }
+            SuperDialog(
+                show = true,
+                title =  stringResource(
+                    if (result.isSuccessful)
+                        R.string.rename_success_title
+                    else
+                        R.string.rename_finished_title
+                ),
+                summary = summary,
+                onDismissRequest = {
+                    viewModel.clearResult()
+                }
+            ) {
+                TextButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    text = stringResource(R.string.confirm),
+                    onClick = {
+                        viewModel.clearResult()
+                    },
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                )
+            }
         }
     }
 }
@@ -194,8 +331,7 @@ private fun PreviewItem(preview: RenamePreview) {
                 R.string.label_old_name,
                 preview.originalPath.substringAfterLast('/')
             ),
-            fontSize = 13.sp,
-            color = SaltTheme.colors.subText,
+            style = MiuixTheme.textStyles.body1,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -205,9 +341,7 @@ private fun PreviewItem(preview: RenamePreview) {
                 R.string.label_new_name,
                 preview.newPath.substringAfterLast('/')
             ),
-            fontSize = 14.sp,
-            color = if (preview.conflict) modifiedBorder else SaltTheme.colors.highlight,
-            fontWeight = FontWeight.Medium,
+            style = MiuixTheme.textStyles.body1.copy(if (preview.conflict) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -216,7 +350,7 @@ private fun PreviewItem(preview: RenamePreview) {
             Text(
                 text = stringResource(R.string.rename_conflict_warning),
                 fontSize = 11.sp,
-                color = modifiedBorder,
+                color = MiuixTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 2.dp)
             )
         }
@@ -243,102 +377,14 @@ private fun PlaceholderInfoContent() {
                     text = placeholder,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    color = SaltTheme.colors.highlight
+                    color = MiuixTheme.colorScheme.primary
                 )
                 Text(
                     text = stringResource(description),
                     fontSize = 13.sp,
-                    color = SaltTheme.colors.subText
+                    color = MiuixTheme.colorScheme.onSurfaceVariantActions
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun RenameResultDialog(
-    result: RenameEngine.Result,
-    onDismiss: () -> Unit
-) {
-    YesNoDialog(
-        onDismissRequest = onDismiss,
-        onConfirm = onDismiss,
-        title = stringResource(
-            if (result.isSuccessful)
-                R.string.rename_success_title
-            else
-                R.string.rename_finished_title
-        ),
-        confirmText = stringResource(R.string.confirm),
-        content = buildString {
-            append(
-                stringResource(
-                    R.string.rename_result_summary,
-                    result.successCount,
-                    result.totalCount
-                )
-            )
-            append("\n")
-
-            if (result.failureCount > 0) {
-                append(
-                    stringResource(
-                        R.string.rename_result_failure,
-                        result.failureCount
-                    )
-                )
-                append("\n")
-
-                result.failed.take(3).forEach { (_, error) ->
-                    append("• $error\n")
-                }
-
-                if (result.failed.size > 3) {
-                    append("...")
-                }
-            }
-        }
-    )
-}
-
-@Composable
-private fun ItemEdit(
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String,
-    hintText: String,
-    readOnly: Boolean = false
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(SaltTheme.dimens.padding)
-    ) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = {
-                Text(
-                    text = placeholder,
-                    color = SaltTheme.colors.subText,
-                    fontSize = 14.sp
-                )
-            },
-            readOnly = readOnly,
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedBorderColor = SaltTheme.colors.subText.copy(alpha = 0.2f),
-                focusedBorderColor = SaltTheme.colors.highlight,
-                cursorColor = SaltTheme.colors.highlight
-            ),
-            textStyle = TextStyle(fontSize = 14.sp, color = SaltTheme.colors.text)
-        )
-        Text(
-            text = hintText,
-            fontSize = 11.sp,
-            color = SaltTheme.colors.subText,
-            modifier = Modifier.padding(top = 4.dp, start = 2.dp)
-        )
     }
 }

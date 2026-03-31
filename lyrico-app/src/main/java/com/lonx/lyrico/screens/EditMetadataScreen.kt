@@ -9,13 +9,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -24,42 +20,55 @@ import com.lonx.lyrico.ui.theme.LyricoColors
 import com.lonx.lyrico.viewmodel.EditMetadataViewModel
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import coil3.compose.AsyncImage
 import com.lonx.lyrico.R
 import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.data.model.LyricsSearchResult
-import com.moriafly.salt.ui.Button
-import com.moriafly.salt.ui.Item
-import com.moriafly.salt.ui.ItemEdit
-import com.moriafly.salt.ui.RoundedColumn
-import com.moriafly.salt.ui.SaltTheme
-import com.moriafly.salt.ui.Text
-import com.moriafly.salt.ui.UnstableSaltUiApi
-import com.moriafly.salt.ui.icons.ArrowBack
-import com.moriafly.salt.ui.icons.SaltIcons
-import com.moriafly.salt.ui.verticalScroll
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
-import com.ramcosta.composedestinations.generated.destinations.EditMetadataDestination
 import com.ramcosta.composedestinations.generated.destinations.SearchResultsDestination
-import com.ramcosta.composedestinations.generated.destinations.SongListDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.result.ResultRecipient
 import com.ramcosta.composedestinations.result.onResult
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.FloatingActionButton
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.SnackbarHost
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.extra.SuperArrow
+import top.yukonga.miuix.kmp.extra.SuperBottomSheet
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.icon.extended.Play
+import top.yukonga.miuix.kmp.icon.extended.Search
+import top.yukonga.miuix.kmp.icon.extended.Tune
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @OptIn(
-    ExperimentalMaterial3Api::class,
-    UnstableSaltUiApi::class
+    ExperimentalMaterial3Api::class
 )
 @Composable
 @Destination<RootGraph>(route = "edit_metadata")
@@ -76,429 +85,388 @@ fun EditMetadataScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val activity = context as  Activity
-    // 控制 BottomSheet 显示的 State
-    var showOffsetSheet by remember { mutableStateOf(false) }
-    val currentShiftOffset by viewModel.currentShiftOffset.collectAsState()
-    val offsetBottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val coverOptinsBottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    // 控制封面操作弹窗的 State
-    var showCoverOptionsSheet by remember { mutableStateOf(false) }
 
-    // 照片选择器 Launcher
+    // BottomSheet 状态
+    var showOffsetSheet by remember { mutableStateOf(false) }
+    var showCoverOptionsSheet by remember { mutableStateOf(false) }
+    val currentShiftOffset by viewModel.currentShiftOffset.collectAsState()
+
+    // 各种 Launcher
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri != null) {
-            viewModel.updateCover(uri)
-        }
-    }
+    ) { uri -> uri?.let { viewModel.updateCover(it) } }
 
-    onLyricsResult.onResult { result ->
-        viewModel.updateMetadataFromSearchResult(result)
-    }
     val intentSenderLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            viewModel.saveMetadata()
-        } else {
-            scope.launch {
-                snackbarHostState.showSnackbar(
-                    context.getString(R.string.permission_denied_cannot_save)
-                )
-            }
-        }
+        if (result.resultCode == Activity.RESULT_OK) viewModel.saveMetadata()
+        else scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.permission_denied_cannot_save)) }
     }
+
+    // 事件监听
+    onLyricsResult.onResult { result -> viewModel.updateMetadataFromSearchResult(result) }
 
     LaunchedEffect(uiState.permissionIntentSender) {
         uiState.permissionIntentSender?.let { intentSender ->
-            val request = IntentSenderRequest.Builder(intentSender).build()
-            intentSenderLauncher.launch(request)
+            intentSenderLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
             viewModel.consumePermissionRequest()
         }
     }
 
-    LaunchedEffect(songFileUri) {
-        viewModel.readMetadata(songFileUri)
-    }
+    LaunchedEffect(songFileUri) { viewModel.readMetadata(songFileUri) }
 
     LaunchedEffect(uiState.saveSuccess) {
-        when (uiState.saveSuccess) {
-            true -> scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.msg_save_success)) }
-            false -> scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.msg_save_failed)) }
-            null -> {}
-        }
-        if (uiState.saveSuccess != null) {
+        uiState.saveSuccess?.let { success ->
+            val msg = if (success) R.string.msg_save_success else R.string.msg_save_failed
+            scope.launch { snackbarHostState.showSnackbar(context.getString(msg)) }
             viewModel.clearSaveStatus()
         }
     }
 
-    LaunchedEffect(uiState.exportCoverResult) {
-        when (uiState.exportCoverResult) {
-            true -> scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.msg_cover_saved_to_gallery)) }
-            false -> scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.msg_cover_save_failed)) }
-            null -> {}
-        }
-        if (uiState.exportCoverResult != null) {
-            viewModel.clearExportCoverStatus()
-        }
-    }
+    val topAppBarScrollBehavior = MiuixScrollBehavior()
 
     Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(SaltTheme.colors.background),
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            val titleText = uiState.songInfo?.tagData?.title
+                ?: uiState.songInfo?.tagData?.fileName
+                ?: stringResource(R.string.edit_metadata_default_title)
+
+            SmallTopAppBar(
+                title = titleText,
+                navigationIcon = {
+                    IconButton(
+                        modifier = Modifier.padding(start = 12.dp),
+                        onClick = { navigator.popBackStack() }
+                    ) { Icon(imageVector = MiuixIcons.Back, contentDescription = null) }
+                },
+                actions = {
+                    // 搜索按钮
+                    IconButton(onClick = {
+                        val keyword = if (!editingTagData?.title.isNullOrEmpty()) {
+                            if (editingTagData.artist.isNullOrEmpty()) editingTagData.title!!
+                            else "${editingTagData.title} ${editingTagData.artist}"
+                        } else {
+                            uiState.songInfo?.tagData?.fileName?.substringBeforeLast(".") ?: ""
+                        }
+                        navigator.navigate(SearchResultsDestination(keyword))
+                    }) { Icon(imageVector = MiuixIcons.Search, contentDescription = null) }
+
+                    // 保存按钮
+                    IconButton(
+                        modifier = Modifier.padding(end = 12.dp),
+                        onClick = { viewModel.saveMetadata() },
+                        enabled = !uiState.isSaving
+                    ) {
+                        if (uiState.isSaving) CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        else Icon(imageVector = MiuixIcons.Ok, contentDescription = null)
+                    }
+                },
+                scrollBehavior = topAppBarScrollBehavior
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             Column(
+                modifier = Modifier.padding(bottom = 16.dp),
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (!editingTagData?.lyrics.isNullOrBlank()) {
                     FloatingActionButton(
-                        containerColor = SaltTheme.colors.highlight,
                         onClick = {
                             viewModel.prepareLyricsOffset()
                             showOffsetSheet = true
                         }
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.ic_timer_24dp),
+                            imageVector = MiuixIcons.Tune,
                             contentDescription = null,
-                            tint = SaltTheme.colors.onHighlight
+                            tint = MiuixTheme.colorScheme.onPrimary
                         )
                     }
                 }
-
                 FloatingActionButton(
-                    containerColor = SaltTheme.colors.highlight,
                     onClick = { viewModel.play(context) }
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_play_24dp),
+                        imageVector = MiuixIcons.Play,
                         contentDescription = null,
-                        tint = SaltTheme.colors.onHighlight
+                        tint = MiuixTheme.colorScheme.onPrimary
                     )
                 }
             }
-        },
-        topBar = {
 
-            val titleText = if (uiState.songInfo?.tagData?.title != null) {
-                "${uiState.songInfo!!.tagData!!.title}"
-            } else {
-                uiState.songInfo?.tagData?.fileName
-                    ?: stringResource(R.string.edit_metadata_default_title)
-            }
-
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = titleText,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                colors = TopAppBarColors(
-                    containerColor = SaltTheme.colors.background,
-                    scrolledContainerColor = SaltTheme.colors.background,
-                    navigationIconContentColor = SaltTheme.colors.text,
-                    titleContentColor = SaltTheme.colors.text,
-                    actionIconContentColor = SaltTheme.colors.text,
-                    subtitleContentColor = SaltTheme.colors.subText
-                ),
-                navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            if (!navigator.popBackStack()) {
-                                activity.finish()
-                            }
-                        }
-                    ) {
-                        Icon(
-                            SaltIcons.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back)
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        val keyword = if (editingTagData?.title?.isNotEmpty() == true) {
-                            if (editingTagData.artist.isNullOrEmpty()) {
-                                editingTagData.title!!
-                            } else {
-                                "${editingTagData.title} ${editingTagData.artist}"
-                            }
-                        } else {
-                            uiState.songInfo?.tagData?.fileName?.substringBeforeLast(".") ?: ""
-                        }
-                        navigator.navigate(SearchResultsDestination(keyword))
-                    }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_search_24dp),
-                            contentDescription = stringResource(R.string.action_search)
-                        )
-                    }
-                    IconButton(
-                        onClick = { viewModel.saveMetadata() },
-                        enabled = !uiState.isSaving
-                    ) {
-                        if (uiState.isSaving) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp,
-                                color = SaltTheme.colors.highlight
-                            )
-                        } else {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_save_24dp),
-                                contentDescription = stringResource(R.string.action_save)
-                            )
-                        }
-                    }
-                }
-            )
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
-                .fillMaxSize()
-                .background(SaltTheme.colors.background)
-                .padding(paddingValues)
-                .padding(horizontal = 12.dp)
-                .imePadding()
-                .verticalScroll(scrollState),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxHeight()
+                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+                .overScrollVertical()
+                .scrollEndHaptic()
+                .imePadding(),
+            contentPadding = PaddingValues(
+                top = paddingValues.calculateTopPadding(),
+                bottom = paddingValues.calculateBottomPadding() + 80.dp, // 留出空间给 FAB
+            )
         ) {
-            CoverEditor(
-                coverUri = uiState.coverUri,
-                isModified = uiState.coverUri != uiState.originalCover,
-                onCoverClick = { showCoverOptionsSheet = true },
-                onRevertClick = { viewModel.revertCover() }, // 撤销
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp)
-            )
+            // 封面编辑区
+            item(key = "cover") {
+                Card(
+                    modifier = Modifier.padding(12.dp)
+                ) {
+                    CoverEditor(
+                        coverUri = uiState.coverUri,
+                        isModified = uiState.coverUri != uiState.originalCover,
+                        onCoverClick = { showCoverOptionsSheet = true },
+                        onRevertClick = { viewModel.revertCover() }
+                    )
+                }
+            }
 
-            MetadataInputGroup(
-                label = stringResource(R.string.label_title),
-                value = editingTagData?.title ?: "",
-                onValueChange = {
-                    viewModel.updateTag {
-                        editingTagData!!.copy(title = it)
+            // 基础信息组
+            item(key = "title") {
+                MetadataInputGroup(
+                    label = stringResource(R.string.label_title),
+                    value = editingTagData?.title ?: "",
+                    onValueChange = { viewModel.updateTag { copy(title = it) } },
+                    isModified = editingTagData?.title != originalTagData?.title,
+                    onRevert = {
+                        viewModel.updateTag {
+                            copy(
+                                title = originalTagData?.title ?: ""
+                            )
+                        }
                     }
-                },
-                isModified = editingTagData?.title != originalTagData?.title,
-                onRevert = {
-                    viewModel.updateTag {
-                        copy(title = originalTagData?.title ?: "")
-                    }
-                }
-            )
+                )
+            }
 
-            MetadataInputGroup(
-                label = stringResource(R.string.label_artists),
-                value = editingTagData?.artist ?: "",
-                onValueChange = {
-                    viewModel.updateTag {
-                        copy(artist = it)
+            item(key = "artist") {
+                MetadataInputGroup(
+                    label = stringResource(R.string.label_artists),
+                    value = editingTagData?.artist ?: "",
+                    onValueChange = { viewModel.updateTag { copy(artist = it) } },
+                    isModified = editingTagData?.artist != originalTagData?.artist,
+                    onRevert = {
+                        viewModel.updateTag {
+                            copy(
+                                artist = originalTagData?.artist ?: ""
+                            )
+                        }
                     }
-                },
-                isModified = editingTagData?.artist != originalTagData?.artist,
-                onRevert = {
-                    viewModel.updateTag {
-                        copy(artist = originalTagData?.artist ?: "")
-                    }
-                }
-            )
-            MetadataInputGroup(
-                label = stringResource(R.string.label_album_artist),
-                value = editingTagData?.albumArtist ?: "",
-                onValueChange = {
-                    viewModel.updateTag {
-                        copy(albumArtist = it)
-                    }
-                },
-                isModified = editingTagData?.albumArtist != originalTagData?.albumArtist,
-                onRevert = {
-                    viewModel.updateTag {
-                        copy(albumArtist = originalTagData?.albumArtist ?: "")
-                    }
-                }
-            )
-            MetadataInputGroup(
-                label = stringResource(R.string.label_album),
-                value = editingTagData?.album ?: "",
-                onValueChange = {
-                    viewModel.updateTag {
-                        copy(album = it)
-                    }
-                },
-                isModified = editingTagData?.album != originalTagData?.album,
-                onRevert = {
-                    viewModel.updateTag {
-                        copy(album = originalTagData?.album ?: "")
-                    }
-                }
-            )
+                )
+            }
 
-            MetadataInputGroup(
-                label = stringResource(R.string.label_date),
-                value = editingTagData?.date ?: "",
-                onValueChange = {
-                    viewModel.updateTag {
-                        copy(date = it)
+            item(key = "album_artist") {
+                MetadataInputGroup(
+                    label = stringResource(R.string.label_album_artist),
+                    value = editingTagData?.albumArtist ?: "",
+                    onValueChange = { viewModel.updateTag { copy(albumArtist = it) } },
+                    isModified = editingTagData?.albumArtist != originalTagData?.albumArtist,
+                    onRevert = {
+                        viewModel.updateTag {
+                            copy(
+                                albumArtist = originalTagData?.albumArtist ?: ""
+                            )
+                        }
                     }
-                },
-                isModified = editingTagData?.date != originalTagData?.date,
-                onRevert = {
-                    viewModel.updateTag {
-                        copy(date = originalTagData?.date ?: "")
-                    }
-                }
-            )
+                )
+            }
 
-            MetadataInputGroup(
-                label = stringResource(R.string.label_genre),
-                value = editingTagData?.genre ?: "",
-                onValueChange = {
-                    viewModel.updateTag {
-                        copy(genre = it)
+            item(key = "album") {
+                MetadataInputGroup(
+                    label = stringResource(R.string.label_album),
+                    value = editingTagData?.album ?: "",
+                    onValueChange = { viewModel.updateTag { copy(album = it) } },
+                    isModified = editingTagData?.album != originalTagData?.album,
+                    onRevert = {
+                        viewModel.updateTag {
+                            copy(
+                                album = originalTagData?.album ?: ""
+                            )
+                        }
                     }
-                },
-                isModified = editingTagData?.genre != originalTagData?.genre,
-                onRevert = {
-                    viewModel.updateTag {
-                        copy(genre = originalTagData?.genre ?: "")
-                    }
-                }
-            )
+                )
+            }
 
-            MetadataInputGroup(
-                label = stringResource(R.string.label_track_number),
-                value = editingTagData?.trackNumber ?: "",
-                onValueChange = {
-                    viewModel.updateTag {
-                        copy(trackNumber = it)
-                    }
-                },
-                isModified = editingTagData?.trackNumber != originalTagData?.trackNumber,
-                onRevert = {
-                    viewModel.updateTag {
-                        copy(trackNumber = originalTagData?.trackNumber ?: "")
-                    }
-                }
-            )
-            MetadataInputGroup(
-                label = stringResource(R.string.label_disc_number),
-                value = editingTagData?.discNumber?.toString() ?: "",
-                onValueChange = {
-                    viewModel.updateTag {
-                        copy(discNumber = it.toIntOrNull())
-                    }
-                },
-                isModified = editingTagData?.discNumber != originalTagData?.discNumber,
-                onRevert = {
-                    viewModel.updateTag {
-                        copy(discNumber = originalTagData?.discNumber)
-                    }
-                }
-            )
-            MetadataInputGroup(
-                label = stringResource(R.string.label_composer),
-                value = editingTagData?.composer ?: "",
-                onValueChange = {
-                    viewModel.updateTag { copy(composer = it) }
-                },
-                isModified = editingTagData?.composer != originalTagData?.composer,
-                onRevert = {
-                    viewModel.updateTag {
-                        copy(composer = originalTagData?.composer ?: "")
-                    }
-                }
-            )
-            MetadataInputGroup(
-                label = stringResource(R.string.label_lyricist),
-                value = editingTagData?.lyricist ?: "",
-                onValueChange = {
-                    viewModel.updateTag { copy(lyricist = it) }
-                },
-                isModified = editingTagData?.lyricist != originalTagData?.lyricist,
-                onRevert = {
-                    viewModel.updateTag {
-                        copy(lyricist = originalTagData?.lyricist ?: "")
-                    }
-                }
-            )
-            MetadataInputGroup(
-                label = stringResource(R.string.label_comment),
-                value = editingTagData?.comment ?: "",
-                onValueChange = {
-                    viewModel.updateTag { copy(comment = it) }
-                },
-                isModified = editingTagData?.comment != originalTagData?.comment,
-                onRevert = {
-                    viewModel.updateTag {
-                        copy(comment = originalTagData?.comment ?: "")
-                    }
-                }
-            )
+            item(key = "date") {
+                MetadataInputGroup(
+                    label = stringResource(R.string.label_date),
+                    value = editingTagData?.date ?: "",
+                    onValueChange = { viewModel.updateTag { copy(date = it) } },
+                    isModified = editingTagData?.date != originalTagData?.date,
+                    onRevert = { viewModel.updateTag { copy(date = originalTagData?.date ?: "") } }
+                )
+            }
 
+            item(key = "genre") {
+                MetadataInputGroup(
+                    label = stringResource(R.string.label_genre),
+                    value = editingTagData?.genre ?: "",
+                    onValueChange = { viewModel.updateTag { copy(genre = it) } },
+                    isModified = editingTagData?.genre != originalTagData?.genre,
+                    onRevert = {
+                        viewModel.updateTag {
+                            copy(
+                                genre = originalTagData?.genre ?: ""
+                            )
+                        }
+                    }
+                )
+            }
 
-            MetadataInputGroup(
-                label = stringResource(R.string.label_lyrics),
-                value = editingTagData?.lyrics ?: "",
-                onValueChange = {
-                    viewModel.updateTag {
-                        copy(lyrics = it)
+            item(key = "track_number") {
+                MetadataInputGroup(
+                    label = stringResource(R.string.label_track_number),
+                    value = editingTagData?.trackNumber ?: "",
+                    onValueChange = { viewModel.updateTag { copy(trackNumber = it) } },
+                    isModified = editingTagData?.trackNumber != originalTagData?.trackNumber,
+                    onRevert = {
+                        viewModel.updateTag {
+                            copy(
+                                trackNumber = originalTagData?.trackNumber ?: ""
+                            )
+                        }
                     }
-                },
-                isModified = editingTagData?.lyrics != originalTagData?.lyrics,
-                onRevert = {
-                    viewModel.updateTag {
-                        copy(lyrics = originalTagData?.lyrics ?: "")
+                )
+            }
+
+            item(key = "disc_number") {
+                MetadataInputGroup(
+                    label = stringResource(R.string.label_disc_number),
+                    value = editingTagData?.discNumber?.toString() ?: "",
+                    onValueChange = { viewModel.updateTag { copy(discNumber = it.toIntOrNull()) } },
+                    isModified = editingTagData?.discNumber != originalTagData?.discNumber,
+                    onRevert = { viewModel.updateTag { copy(discNumber = originalTagData?.discNumber) } }
+                )
+            }
+            item(key = "composer") {
+                MetadataInputGroup(
+                    label = stringResource(R.string.label_composer),
+                    value = editingTagData?.composer ?: "",
+                    onValueChange = { viewModel.updateTag { copy(composer = it) } },
+                    isModified = editingTagData?.composer != originalTagData?.composer,
+                    onRevert = {
+                        viewModel.updateTag {
+                            copy(
+                                composer = originalTagData?.composer ?: ""
+                            )
+                        }
                     }
-                },
-                isMultiline = true
-            )
-            Spacer(modifier = Modifier.height(200.dp))
+                )
+            }
+
+            item(key = "lyricist") {
+                MetadataInputGroup(
+                    label = stringResource(R.string.label_lyricist),
+                    value = editingTagData?.lyricist ?: "",
+                    onValueChange = { viewModel.updateTag { copy(lyricist = it) } },
+                    isModified = editingTagData?.lyricist != originalTagData?.lyricist,
+                    onRevert = {
+                        viewModel.updateTag {
+                            copy(
+                                lyricist = originalTagData?.lyricist ?: ""
+                            )
+                        }
+                    }
+                )
+            }
+
+            // 其他信息
+            item(key = "commit") {
+                MetadataInputGroup(
+                    label = stringResource(R.string.label_comment),
+                    value = editingTagData?.comment ?: "",
+                    onValueChange = { viewModel.updateTag { copy(comment = it) } },
+                    isModified = editingTagData?.comment != originalTagData?.comment,
+                    onRevert = {
+                        viewModel.updateTag {
+                            copy(
+                                comment = originalTagData?.comment ?: ""
+                            )
+                        }
+                    }
+                )
+            }
+
+            item(key = "lyrics") {
+                MetadataInputGroup(
+                    label = stringResource(R.string.label_lyrics),
+                    value = editingTagData?.lyrics ?: "",
+                    onValueChange = { viewModel.updateTag { copy(lyrics = it) } },
+                    isModified = editingTagData?.lyrics != originalTagData?.lyrics,
+                    onRevert = {
+                        viewModel.updateTag {
+                            copy(
+                                lyrics = originalTagData?.lyrics ?: ""
+                            )
+                        }
+                    },
+                    actionButtons = {
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(MiuixTheme.colorScheme.primary)
+                                .clickable {
+                                    viewModel.prepareLyricsOffset()
+                                    showOffsetSheet = true
+                                }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            top.yukonga.miuix.kmp.basic.Text(
+                                text = stringResource(R.string.offset_adjust_hint),
+                                fontSize = 11.sp,
+                                color = MiuixTheme.colorScheme.onPrimary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    },
+                    isMultiline = true
+                )
+            }
         }
     }
-    if (showCoverOptionsSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showCoverOptionsSheet = false },
-            sheetState = coverOptinsBottomSheetState,
-            containerColor = SaltTheme.colors.background
+
+    // 封面操作
+    SuperBottomSheet(
+        show = showCoverOptionsSheet,
+        onDismissRequest = { showCoverOptionsSheet = false }
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+                .scrollEndHaptic()
+                .overScrollVertical(),
+            overscrollEffect = null
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 32.dp)
-            ) {
-                RoundedColumn {
-                    Item(
-                        text = stringResource(R.string.label_change_cover),
+            item(key = "cover_options") {
+                Card(
+                    colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.secondaryContainer)
+                ) {
+                    SuperArrow(
+                        title = stringResource(R.string.label_change_cover),
                         onClick = {
                             showCoverOptionsSheet = false
                             photoPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly
+                                )
                             )
                         }
                     )
-                    Item(
-                        text = stringResource(R.string.label_remove_cover),
+                    SuperArrow(
+                        title = stringResource(R.string.label_remove_cover),
                         onClick = {
                             showCoverOptionsSheet = false
                             viewModel.removeCover()
                         }
                     )
-
                     if (uiState.coverUri != null || uiState.originalCover != null) {
-                        Item(
-                            text = stringResource(R.string.label_save_cover),
+                        SuperArrow(
+                            title = stringResource(R.string.label_save_cover),
                             onClick = {
                                 showCoverOptionsSheet = false
                                 viewModel.exportCover(context)
@@ -509,40 +477,38 @@ fun EditMetadataScreen(
             }
         }
     }
-    if (showOffsetSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showOffsetSheet = false },
-            sheetState = offsetBottomSheetState,
-            containerColor = SaltTheme.colors.background
+
+    // 偏移调整 BottomSheet
+    SuperBottomSheet(
+        show = showOffsetSheet,
+        onDismissRequest = { showOffsetSheet = false }
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(bottom = 32.dp)
+                .fillMaxWidth()
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
+            Card(
+                colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.secondaryContainer)
             ) {
-                RoundedColumn(
+                Box(
                     modifier = Modifier
-                        .heightIn(min = 150.dp, max = 350.dp)
+                        .heightIn(max = 300.dp)
+                        .padding(8.dp)
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    ItemEdit(
+                    top.yukonga.miuix.kmp.basic.Text(
                         text = editingTagData?.lyrics ?: "",
-                        onChange = {},
-                        readOnly = true
+                        style = MiuixTheme.textStyles.footnote1
                     )
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OffsetAdjustPanel(
-                    currentOffset = currentShiftOffset,
-                    onOffsetChange = { newOffset ->
-                        viewModel.applyLyricsOffset(newOffset)
-                    },
-                    onReset = {
-                        viewModel.resetLyricsOffset()
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
             }
+
+            OffsetAdjustPanel(
+                currentOffset = currentShiftOffset,
+                onOffsetChange = { viewModel.applyLyricsOffset(it) },
+                onReset = { viewModel.resetLyricsOffset() }
+            )
         }
     }
 }
@@ -550,31 +516,20 @@ fun EditMetadataScreen(
 @Composable
 fun CoverEditor(
     modifier: Modifier = Modifier,
-    coverUri: Any?,                   // 当前编辑封面
-    isModified: Boolean = false,              // 原始封面，用于撤销
-    onCoverClick: () -> Unit,         // 点击更换封面
-    onRevertClick: () -> Unit              // 点击撤销
+    coverUri: Any?,
+    isModified: Boolean = false,
+    onCoverClick: () -> Unit,
+    onRevertClick: () -> Unit
 ) {
-    // 判断是否修改
     Box(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .border(
-                width = 1.5.dp,
-                color = if (isModified) LyricoColors.modifiedBorder else LyricoColors.inputBorder,
-                shape = RoundedCornerShape(12.dp)
-            )
-            .background(
-                color = if (isModified) LyricoColors.modifiedBackground.copy(alpha = 0.5f) else SaltTheme.colors.subBackground,
-                shape = RoundedCornerShape(12.dp)
-            )
-            .clip(RoundedCornerShape(12.dp))
             .clickable { onCoverClick() }
     ) {
         AsyncImage(
             model = coverUri,
-            contentDescription = stringResource(R.string.cd_cover),
+            contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
             placeholder = rememberTintedPainter(
@@ -588,59 +543,30 @@ fun CoverEditor(
         )
 
         if (isModified) {
-            // 顶部对齐容器：已修改角标和撤销按钮
             Row(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
             ) {
-                // 已修改角标（左侧）
                 Box(
                     modifier = Modifier
-                        .background(
-                            color = LyricoColors.modifiedBadgeBackground.copy(alpha = 0.8f),
-                            shape = RoundedCornerShape(4.dp)
-                        )
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                        .shadow(1.dp, RoundedCornerShape(4.dp))
+                        .clip(CircleShape)
+                        .background(LyricoColors.modifiedBadgeBackground.copy(alpha = 0.9f))
+                        .clickable { onRevertClick() }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
-                    Text(
+                    top.yukonga.miuix.kmp.basic.Text(
                         text = stringResource(R.string.status_modified),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = LyricoColors.modifiedText
-                    )
-                }
-
-                // 撤销按钮（右侧）
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(
-                            color = SaltTheme.colors.background.copy(alpha = 0.8f),
-                            shape = CircleShape
-                        )
-                        .clickable { onRevertClick() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_undo_24dp),
-                        contentDescription = stringResource(R.string.action_undo_changes),
-                        modifier = Modifier.size(18.dp),
-                        tint = SaltTheme.colors.text
+                        fontSize = 11.sp,
+                        color = LyricoColors.modifiedText,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
         }
-
     }
-
 }
 
-@OptIn(UnstableSaltUiApi::class)
 @Composable
 private fun MetadataInputGroup(
     label: String,
@@ -650,74 +576,59 @@ private fun MetadataInputGroup(
     isModified: Boolean = false,
     onRevert: () -> Unit,
     isMultiline: Boolean = false,
-    icon: ImageVector? = null,
     actionButtons: @Composable RowScope.() -> Unit = {}
 ) {
-    Column(modifier = modifier) {
+    Card(
+        modifier = modifier
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier
+                .heightIn(min = 40.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            if (icon != null) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = SaltTheme.colors.subText,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Text(
-                text = label.uppercase(),
-                color = SaltTheme.colors.subText,
-                fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
-                letterSpacing = 0.5.sp
-            )
-            if (isModified) {
-                Box(
-                    modifier = Modifier
-                        .background(LyricoColors.modifiedBadgeBackground, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.status_modified),
-                        color = LyricoColors.modifiedText,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
+            SmallTitle(text = label, insideMargin = PaddingValues(0.dp))
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (isModified) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(LyricoColors.modifiedBadgeBackground.copy(alpha = 0.8f))
+                            .clickable { onRevert() }
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        top.yukonga.miuix.kmp.basic.Text(
+                            text = stringResource(R.string.status_modified),
+                            fontSize = 11.sp,
+                            color = LyricoColors.modifiedText,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
-                IconButton(onClick = onRevert, modifier = Modifier.size(24.dp)) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_undo_24dp),
-                        contentDescription = stringResource(R.string.action_undo_changes),
-                        tint = SaltTheme.colors.subText
-                    )
-                }
+
+                actionButtons()
             }
-            // 添加操作按钮
-            actionButtons()
         }
-        Spacer(modifier = Modifier.height(6.dp))
-        OutlinedTextField(
+
+        TextField(
+            textStyle = MiuixTheme.textStyles.body2,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp)
+                .padding(bottom = 12.dp),
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = LyricoColors.inputFocusedBorder,
-                unfocusedBorderColor = if (isModified) LyricoColors.modifiedBorder else LyricoColors.inputBorder,
-                focusedContainerColor = SaltTheme.colors.subBackground,
-                unfocusedContainerColor = if (isModified) LyricoColors.modifiedBackground.copy(alpha = 0.3f) else SaltTheme.colors.subBackground,
-                focusedTextColor = SaltTheme.colors.text,
-                unfocusedTextColor = SaltTheme.colors.text,
-                cursorColor = SaltTheme.colors.highlight,
-                focusedPlaceholderColor = SaltTheme.colors.subText,
-                unfocusedPlaceholderColor = SaltTheme.colors.subText,
-                focusedLabelColor = SaltTheme.colors.text,
-                unfocusedLabelColor = SaltTheme.colors.subText
-            ),
+            borderColor = if (isModified) LyricoColors.modifiedBorder else MiuixTheme.colorScheme.primary,
             singleLine = !isMultiline,
-            minLines = if (isMultiline) 20 else 1,
+            minLines = if (isMultiline) 10 else 1,
         )
     }
 }

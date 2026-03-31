@@ -1,7 +1,6 @@
 package com.lonx.lyrico.ui.dialog
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,74 +12,75 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.lonx.lyrico.R
-import com.moriafly.salt.ui.Button
-import com.moriafly.salt.ui.RoundedColumn
-import com.moriafly.salt.ui.SaltTheme
-import com.moriafly.salt.ui.Text
-import com.moriafly.salt.ui.dialog.BasicDialog
-import com.moriafly.salt.ui.outerPadding
 import dev.jeziellago.compose.markdowntext.MarkdownText
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun UpdateDialog(
+    show: Boolean,
     versionName: String,
     releaseNote: String,
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit
 ) {
     val scrollState = rememberScrollState()
-    BasicDialog(
+
+    SuperDialog(
+        show = show,
         onDismissRequest = onDismissRequest,
-    ) {
-        // 标题
-        Text(
-            text = stringResource(id = R.string.dialog_title_update_available, versionName),
-            modifier = Modifier.outerPadding(),
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
+        title = stringResource(
+            id = R.string.dialog_title_update_available,
+            versionName
         )
+    ) {
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = SaltTheme.dimens.padding)
+                .verticalScroll(rememberScrollState())
         ) {
-            RoundedColumn(
-                paddingValues = PaddingValues(0.dp)
+
+            Card(
+                modifier = Modifier.padding(bottom = 12.dp),
+                colors = CardDefaults.defaultColors(
+                    color = MiuixTheme.colorScheme.secondaryContainer
+                )
             ) {
                 MarkdownText(
                     modifier = Modifier
-                        .padding(SaltTheme.dimens.subPadding)
+                        .padding(12.dp)
                         .heightIn(max = 300.dp)
                         .verticalScroll(scrollState),
                     markdown = releaseNote
                 )
             }
-        }
 
-        Row(
-            modifier = Modifier.outerPadding()
-        ) {
-            Button(
-                onClick = onDismissRequest,
-                text = stringResource(id = R.string.cancel),
-                modifier = Modifier.weight(1f),
-                type = com.moriafly.salt.ui.ButtonType.Sub
-            )
-            Spacer(modifier = Modifier.width(SaltTheme.dimens.padding))
-            Button(
-                onClick = {
-                    onDismissRequest()
-                    onConfirm()
-                },
-                text = stringResource(id = R.string.dialog_action_go_update),
-                modifier = Modifier.weight(1f),
-                maxLines = 1
-            )
+            Row {
+                TextButton(
+                    text = stringResource(R.string.cancel),
+                    onClick = onDismissRequest,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Spacer(modifier = Modifier.width(20.dp))
+
+                TextButton(
+                    text = stringResource(R.string.dialog_action_go_update),
+                    onClick = {
+                        onConfirm()
+                        onDismissRequest()
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary()
+                )
+            }
         }
     }
 }

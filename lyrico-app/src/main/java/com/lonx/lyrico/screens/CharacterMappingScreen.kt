@@ -1,16 +1,21 @@
 package com.lonx.lyrico.screens
 
-import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.lonx.lyrico.R
@@ -18,24 +23,24 @@ import com.lonx.lyrico.data.model.CharacterMappingRule
 import com.lonx.lyrico.data.model.ReplacementCharOption
 import com.lonx.lyrico.data.model.toReplacementOption
 import com.lonx.lyrico.viewmodel.BatchRenameViewModel
-import com.moriafly.salt.ui.ItemCheck
-import com.moriafly.salt.ui.ItemDropdown
-import com.moriafly.salt.ui.ItemOuterTip
-import com.moriafly.salt.ui.ItemOuterTitle
-import com.moriafly.salt.ui.RoundedColumn
-import com.moriafly.salt.ui.RoundedColumnType
-import com.moriafly.salt.ui.SaltTheme
-import com.moriafly.salt.ui.Text
-import com.moriafly.salt.ui.UnstableSaltUiApi
-import com.moriafly.salt.ui.rememberScrollState
-import com.moriafly.salt.ui.verticalScroll
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.extra.SuperDropdown
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
-@SuppressLint("LocalContextGetResourceValueCall")
-@OptIn(UnstableSaltUiApi::class)
 @Composable
 @Destination<RootGraph>(route = "character_mapping")
 fun CharacterMappingScreen(
@@ -44,90 +49,109 @@ fun CharacterMappingScreen(
     val viewModel: BatchRenameViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsState()
     val characterMappingConfig = uiState.characterMappingConfig
-    val scrollState = rememberScrollState()
-
-    BasicScreenBox(
-        title = stringResource(R.string.configure_character_mapping),
-        onBack = { navigator.popBackStack() }
-    ) {
+    val topAppBarScrollBehavior = MiuixScrollBehavior()
+    Scaffold(
+        topBar = {
+            SmallTopAppBar(
+                title = stringResource(R.string.configure_character_mapping),
+                navigationIcon = {
+                    IconButton(
+                        modifier = Modifier.padding(start = 12.dp),
+                        onClick = { navigator.popBackStack() }) {
+                        Icon(
+                            imageVector = MiuixIcons.Back,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
+                    }
+                },
+                scrollBehavior = topAppBarScrollBehavior
+            )
+        }
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState)
+                .padding(paddingValues)
         ) {
-            // 显示说明信息
-            ItemOuterTip(
-                text = stringResource(R.string.character_mapping_description)
+            Text(
+                text = stringResource(R.string.character_mapping_description),
+                fontSize = MiuixTheme.textStyles.footnote1.fontSize,
+                color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                modifier = Modifier.padding(12.dp)
             )
-
-            if (characterMappingConfig != null && characterMappingConfig.rules.isNotEmpty()) {
-                characterMappingConfig.rules.forEach { rule ->
-                    CharacterMappingRuleSection(
-                        rule = rule,
-                        onCharacterMappingChanged = { character, replacementChar ->
-                            viewModel.updateCharacterMappingInRule(rule.id, character, replacementChar)
-                        }
-                    )
+            LazyColumn(
+                modifier = Modifier
+                    .scrollEndHaptic()
+                    .overScrollVertical()
+                    .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+                    .fillMaxHeight(),
+                overscrollEffect = null,
+            ) {
+                if (characterMappingConfig != null && characterMappingConfig.rules.isNotEmpty()) {
+                    items(items=characterMappingConfig.rules){ rule ->
+                        CharacterMappingRuleSection(
+                            rule = rule,
+                            onCharacterMappingChanged = { character, replacementChar ->
+                                viewModel.updateCharacterMappingInRule(
+                                    rule.id,
+                                    character,
+                                    replacementChar
+                                )
+                            }
+                        )
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(SaltTheme.dimens.padding))
         }
     }
 }
 
-@OptIn(UnstableSaltUiApi::class)
 @Composable
 private fun CharacterMappingRuleSection(
     rule: CharacterMappingRule,
     onCharacterMappingChanged: (character: String, replacementChar: String?) -> Unit
 ) {
     if (rule.charMappings.isEmpty()) {
-        RoundedColumn {
+        Card(
+            modifier = Modifier.padding(horizontal = 12.dp),
+        ) {
             Text(
                 text = stringResource(R.string.no_character_mappings),
-                modifier = Modifier.padding(SaltTheme.dimens.padding)
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
             )
         }
-    } else {
-        RoundedColumn(
-            type = RoundedColumnType.InList,
-        ) {
-            rule.charMappings.entries.forEachIndexed { _, (character, currentReplacement) ->
+        return
+    }
 
-                val currentOption = currentReplacement.toReplacementOption()
+    val optionLabels = listOf(
+        stringResource(R.string.replacement_not_selected)
+    ) + ReplacementCharOption.entries.map { option ->
+        stringResource(option.labelRes)
+    }
 
-                ItemDropdown(
-                    text = stringResource(R.string.character_to_replace, character),
+    Card(
+        modifier = Modifier
+            .padding(horizontal = 12.dp)
+            .padding(top = 12.dp)
+    ) {
+        rule.charMappings.entries.forEach { (character, currentReplacement) ->
+            val currentOption = currentReplacement.toReplacementOption()
+            val selectedIndex = currentOption?.let { ReplacementCharOption.entries.indexOf(it) + 1 } ?: 0
 
-                    // 🔥 显示
-                    value = currentOption?.let { stringResource(it.labelRes) }
-                        ?: stringResource(R.string.replacement_not_selected),
-
-                    sub = stringResource(R.string.character_replacement_selector_subtitle),
-
-                    content = {
-                        ReplacementCharOption.entries.forEach { option ->
-
-                            ItemCheck(
-                                text = stringResource(option.labelRes),
-
-                                // 🔥 判断选中
-                                state = currentOption == option,
-
-                                onChange = {
-                                    // 🔥 Enum → String
-                                    onCharacterMappingChanged(
-                                        character,
-                                        option.value
-                                    )
-                                    state.dismiss()
-                                }
-                            )
-                        }
+            SuperDropdown(
+                title = stringResource(R.string.character_to_replace, character),
+                summary = stringResource(R.string.character_replacement_selector_subtitle),
+                items = optionLabels,
+                selectedIndex = selectedIndex,
+                onSelectedIndexChange = { index ->
+                    val replacementValue = if (index == 0) {
+                        null
+                    } else {
+                        ReplacementCharOption.entries[index - 1].value
                     }
-                )
-            }
+                    onCharacterMappingChanged(character, replacementValue)
+                }
+            )
         }
     }
 }
