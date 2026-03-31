@@ -79,6 +79,9 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import my.nanihadesuka.compose.LazyColumnScrollbar
+import my.nanihadesuka.compose.ScrollbarSelectionMode
+import my.nanihadesuka.compose.ScrollbarSettings
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.BasicComponentColors
 import top.yukonga.miuix.kmp.basic.Button
@@ -178,6 +181,7 @@ fun SongListScreen(
         }
     }
     var isSearchMode by rememberSaveable { mutableStateOf(false) }
+    val enableIndex = sections.isNotEmpty() && sortInfo.sortBy.supportsIndex
 
     LaunchedEffect(autoScrollSpeed) {
         if (autoScrollSpeed != 0f) {
@@ -389,7 +393,7 @@ fun SongListScreen(
                     Column(
                         modifier = Modifier
                             .windowInsetsPadding(WindowInsets.statusBars)
-                            .padding(vertical = 12.dp)
+                            .padding(top = 11.dp)
                     ) {
                         SearchBar(
                             modifier = Modifier.padding(horizontal = 12.dp),
@@ -497,60 +501,71 @@ fun SongListScreen(
                 topAppBarScrollBehavior = topAppBarScrollBehavior,
                 refreshTexts = refreshTexts
             ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .scrollEndHaptic()
-                        .overScrollVertical()
-                        .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
-                        .fillMaxHeight()
-                        .then(dragSelectionModifier),
+                LazyColumnScrollbar(
                     state = listState,
-                    overscrollEffect = null
+                    settings = ScrollbarSettings.Default.copy(
+                        enabled = !enableIndex,
+                        alwaysShowScrollbar = !enableIndex,
+                        selectionMode = ScrollbarSelectionMode.Full,
+                        thumbUnselectedColor = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                        thumbSelectedColor = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                    )
                 ) {
-                    if (songs.isNotEmpty()){
-                        items(
-                            items = songs,
-                            key = { song -> song.mediaId }
-                        ) { song ->
-                            SongListItem(
-                                song = song,
-                                navigator = navigator,
-                                modifier = Modifier.animateItem(),
-                                isSelectionMode = isSelectionMode,
-                                isSelected = selectedSongIds.containsKey(song.mediaId),
-                                onToggleSelection = { viewModel.toggleSelection(song) },
-                                trailingContent = {
-                                    Box(modifier = Modifier.padding(end = 8.dp)) {
-                                        if (!isSelectionMode) {
-                                            IconButton(onClick = { viewModel.showMenu(song) }) {
-                                                Icon(
-                                                    imageVector = MiuixIcons.More,
-                                                    contentDescription = "More"
+                    LazyColumn(
+                        modifier = Modifier
+                            .scrollEndHaptic()
+                            .overScrollVertical()
+                            .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+                            .fillMaxHeight()
+                            .then(dragSelectionModifier),
+                        state = listState,
+                        overscrollEffect = null
+                    ) {
+                        if (songs.isNotEmpty()) {
+                            items(
+                                items = songs,
+                                key = { song -> song.mediaId }
+                            ) { song ->
+                                SongListItem(
+                                    song = song,
+                                    navigator = navigator,
+                                    modifier = Modifier.animateItem(),
+                                    isSelectionMode = isSelectionMode,
+                                    isSelected = selectedSongIds.contains(song.mediaId),
+                                    onToggleSelection = { viewModel.toggleSelection(song.mediaId) },
+                                    trailingContent = {
+                                        Box(modifier = Modifier.padding(end = 8.dp)) {
+                                            if (!isSelectionMode) {
+                                                IconButton(onClick = { viewModel.showMenu(song) }) {
+                                                    Icon(
+                                                        imageVector = MiuixIcons.More,
+                                                        contentDescription = "More"
+                                                    )
+                                                }
+                                            } else {
+                                                Checkbox(
+                                                    state = if (selectedSongIds.contains(song.mediaId)) ToggleableState.On else ToggleableState.Off,
+                                                    onClick = { viewModel.toggleSelection(song.mediaId) }
                                                 )
                                             }
-                                        } else {
-                                            Checkbox(
-                                                state = if (selectedSongIds.containsKey(song.mediaId)) ToggleableState.On else ToggleableState.Off,
-                                                onClick = { viewModel.toggleSelection(song) }
-                                            )
                                         }
                                     }
-                                }
-                            )
-                        }
-                    }else {
-                        item {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
+                                )
+                            }
+                        } else {
+                            item {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
 
+                                }
                             }
                         }
                     }
                 }
             }
-            if (sections.isNotEmpty() && sortInfo.sortBy.supportsIndex) {
+            if (enableIndex) {
                 AlphabetSideBar(
                     sections = sections,
                     onSectionSelected = { section ->
@@ -707,8 +722,6 @@ fun SongListScreen(
                                 Text(
                                     text = if (uiState.isBatchMatching) {
                                         uiState.currentFile
-                                    } else if (uiState.isSaving) {
-                                        stringResource(R.string.message_saving_tags)
                                     } else {
                                         stringResource(
                                             R.string.batch_matching_total_time,

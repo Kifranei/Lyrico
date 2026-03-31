@@ -5,11 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -19,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -34,10 +34,17 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -49,18 +56,38 @@ fun BatchMatchHistoryScreen(
 ) {
     val viewModel: BatchMatchHistoryViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsState()
+
+    // 使用 remember 缓存 SimpleDateFormat 以提高性能
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+
     val showConfirmDialog = remember { mutableStateOf(false) }
     var selectedHistoryId by remember { mutableStateOf<Long?>(null) }
-
-    BasicScreenBox(
-        title = stringResource(R.string.batch_match_history_title),
-        onBack = { navigator.popBackStack() }
-    ) {
+    val topAppBarScrollBehavior = MiuixScrollBehavior()
+    Scaffold(
+        topBar = {
+            SmallTopAppBar(
+                title = stringResource(R.string.batch_match_history_title),
+                navigationIcon = {
+                    IconButton(
+                        modifier = Modifier.padding(start = 12.dp),
+                        onClick = {
+                            navigator.popBackStack()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Back,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
+                    }
+                },
+                scrollBehavior = topAppBarScrollBehavior
+            )
+        }
+    ) { paddingValues ->
         if (showConfirmDialog.value && selectedHistoryId != null) {
             SuperDialog(
                 title = stringResource(R.string.batch_match_delete_title),
-                show = showConfirmDialog,
+                show = showConfirmDialog.value,
                 onDismissRequest = {
                     showConfirmDialog.value = false
                     selectedHistoryId = null
@@ -101,9 +128,17 @@ fun BatchMatchHistoryScreen(
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 12.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier
+                .scrollEndHaptic()
+                .overScrollVertical()
+                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+                .fillMaxHeight(),
+            contentPadding = PaddingValues(
+                top = paddingValues.calculateTopPadding(),
+                bottom = paddingValues.calculateBottomPadding() + 12.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            overscrollEffect = null,
         ) {
             if (uiState.historyList.isEmpty()) {
                 item {
@@ -121,14 +156,14 @@ fun BatchMatchHistoryScreen(
                     key = { it.id }
                 ) { history ->
                     BatchMatchHistoryCard(
+                        modifier = Modifier.animateItem(),
                         formattedDate = dateFormat.format(Date(history.timestamp)),
-                        statText = stringResource(
+                        summary = stringResource(
                             R.string.batch_match_stat_format,
                             history.successCount,
                             history.failureCount,
                             history.skippedCount
-                        ),
-                        durationText = stringResource(
+                        )+"\n"+stringResource(
                             R.string.batch_match_duration_format,
                             history.durationMillis / 1000.0
                         ),
@@ -148,34 +183,26 @@ fun BatchMatchHistoryScreen(
 
 @Composable
 private fun BatchMatchHistoryCard(
+    modifier: Modifier = Modifier,
     formattedDate: String,
-    statText: String,
-    durationText: String,
+    summary: String,
     onClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.padding(horizontal = 12.dp)
+        modifier = modifier.padding(horizontal = 12.dp)
     ) {
         BasicComponent(
             title = formattedDate,
-            summary = statText,
+            summary = summary,
             endActions = {
                 IconButton(onClick = onDeleteClick) {
                     Icon(
                         painter = painterResource(R.drawable.ic_delete_24dp),
                         contentDescription = stringResource(R.string.common_delete),
-                        modifier = Modifier.size(18.dp),
                         tint = MiuixTheme.colorScheme.error
                     )
                 }
-            },
-            bottomAction = {
-                Text(
-                    text = durationText,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                    fontSize = MiuixTheme.textStyles.body2.fontSize
-                )
             },
             onClick = onClick
         )
