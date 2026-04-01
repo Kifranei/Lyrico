@@ -395,7 +395,8 @@ fun SearchResultsScreen(
                                 lyrics = uiState.lyricsState.content,
                                 date = null,
                                 trackerNumber = null,
-                                picUrl = null
+                                picUrl = null,
+                                lyricsOnly = true
                             )
                         )
                     },
