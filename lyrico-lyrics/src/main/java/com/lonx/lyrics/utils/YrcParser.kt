@@ -3,6 +3,7 @@ package com.lonx.lyrics.utils
 import com.lonx.lyrics.model.LyricsLine
 import com.lonx.lyrics.model.LyricsResult
 import com.lonx.lyrics.model.LyricsWord
+import com.lonx.lyrics.model.isWordByWord
 import java.util.regex.Pattern
 
 object YrcParser {
@@ -33,7 +34,8 @@ object YrcParser {
             tags = emptyMap(), // TODO: parse tags
             original = originalLines,
             translated = translatedLinesAligned,
-            romanization = romanizationLinesAligned
+            romanization = romanizationLinesAligned,
+            isWordByWord = !yrc.isNullOrEmpty() // 网易云的YRC为逐字，LRC为逐行
         )
     }
 

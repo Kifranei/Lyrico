@@ -152,7 +152,8 @@ object KrcParser {
             tags = tags,
             original = origList,
             translated = tsList,
-            romanization = romaList
+            romanization = romaList,
+            isWordByWord = origList.isWordByWord()
         )
     }
 }

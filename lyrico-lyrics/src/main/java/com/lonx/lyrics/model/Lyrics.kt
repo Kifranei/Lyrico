@@ -41,9 +41,13 @@ data class LyricsResult(
     val tags: Map<String, String>,         // 元数据 tags (ar, ti, al, etc.)
     val original: List<LyricsLine>,        // 原始逐字歌词
     val translated: List<LyricsLine>?,     // 翻译 (通常是逐行)
-    val romanization: List<LyricsLine>?    // 罗马音 (逐字)
+    val romanization: List<LyricsLine>?,    // 罗马音 (逐字)
+    val isWordByWord: Boolean = true
 ) : Parcelable
 
+fun List<LyricsLine>.isWordByWord(): Boolean {
+    return this.any { it.words.size > 1 }
+}
 
 @Serializable
 @Parcelize

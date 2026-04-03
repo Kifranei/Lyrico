@@ -4,6 +4,7 @@ import com.lonx.lyrics.model.LyricsData
 import com.lonx.lyrics.model.LyricsLine
 import com.lonx.lyrics.model.LyricsResult
 import com.lonx.lyrics.model.LyricsWord
+import com.lonx.lyrics.model.isWordByWord
 
 object SodaParser {
 
@@ -36,7 +37,8 @@ object SodaParser {
             tags = tags,
             original = original,
             translated = translated,
-            romanization = romanization
+            romanization = romanization,
+            isWordByWord = original.isWordByWord()
         )
     }
 
