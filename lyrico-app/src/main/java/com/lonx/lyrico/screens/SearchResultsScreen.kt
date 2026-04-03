@@ -349,7 +349,7 @@ fun SearchResultsScreen(
                 )
             ) {
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 300.dp)
+                    modifier = Modifier.heightIn(min = 30.dp, max = 300.dp).fillMaxWidth(),
                 ) {
                     when {
                         uiState.lyricsState.isLoading -> item("loading") {
@@ -369,7 +369,7 @@ fun SearchResultsScreen(
                         else -> item("lyrics") {
                             val text = uiState.lyricsState.content
                                 ?.takeIf { it.isNotBlank() }
-                                ?: "no lyrics"
+                                ?: stringResource(R.string.lyrics_empty)
 
                             Text(
                                 modifier = Modifier.padding(12.dp),

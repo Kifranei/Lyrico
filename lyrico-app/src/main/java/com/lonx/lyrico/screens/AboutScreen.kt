@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -182,8 +183,7 @@ fun AboutScreen(
                 errorText != null -> {
                     item {
                         Card(
-                            modifier = Modifier.padding(horizontal = 12.dp),
-                            insideMargin = PaddingValues(16.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp).fillMaxWidth(),
                             colors = CardDefaults.defaultColors(
                                 color = MiuixTheme.colorScheme.errorContainer,
                                 contentColor = MiuixTheme.colorScheme.onErrorContainer

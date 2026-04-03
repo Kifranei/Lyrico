@@ -1,14 +1,12 @@
 package com.lonx.lyrico.utils
 
 import android.annotation.SuppressLint
-import android.util.Log
 import com.github.houbb.opencc4j.util.ZhHkConverterUtil
 import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricFormat.*
 import com.lonx.lyrico.data.model.LyricRenderConfig
 import com.lonx.lyrics.model.LyricsLine
 import com.lonx.lyrics.model.LyricsResult
-import com.lonx.lyrics.model.isWordByWord
 import kotlin.math.abs
 
 object LyricsUtils {
@@ -17,6 +15,7 @@ object LyricsUtils {
 
     // 匹配 TTML 格式: begin="00:01:23.456" 或 end="00:01:23.456"
     private val TTML_TIME_PATTERN = Regex("(begin=\"|end=\")(\\d{2,}):(\\d{2}):(\\d{2})\\.(\\d{2,3})(\")")
+    
     @SuppressLint("DefaultLocale")
     private fun formatTimestamp(millis: Long): String {
         val safeMillis = millis.coerceAtLeast(0L)
@@ -64,13 +63,73 @@ object LyricsUtils {
         return text.isEmpty() || text.matches(Regex("^[\\s/]*$"))
     }
 
+    /**
+     * @param result 原始歌词结果
+     * @param conversionMode 转换模式
+     * @return 转换后的 LyricsResult
+     */
+    fun convertLyricsResult(
+        result: LyricsResult,
+        conversionMode: ConversionMode
+    ): LyricsResult {
+        if (conversionMode == ConversionMode.NONE) return result
+        
+        return result.copy(
+            original = convertLyricsLineList(result.original, conversionMode),
+            translated = result.translated?.let { convertLyricsLineList(it, conversionMode) },
+            romanization = result.romanization?.let { convertLyricsLineList(it, conversionMode) },
+            tags = convertTags(result.tags, conversionMode)
+        )
+    }
+
+    /**
+     * 转换一个 List<LyricsLine> 中的所有文本
+     */
+    private fun convertLyricsLineList(
+        lines: List<LyricsLine>,
+        conversionMode: ConversionMode
+    ): List<LyricsLine> {
+        return lines.map { line ->
+            line.copy(
+                words = line.words.map { word ->
+                    word.copy(text = convertText(word.text, conversionMode))
+                }
+            )
+        }
+    }
+
+    /**
+     * 转换元数据 tags（如歌手、歌名、专辑等）
+     */
+    private fun convertTags(
+        tags: Map<String, String>,
+        conversionMode: ConversionMode
+    ): Map<String, String> {
+        return tags.mapValues { (_, value) ->
+            convertText(value, conversionMode)
+        }
+    }
+
+    /**
+     * 转换单个文本段
+     */
+    private fun convertText(text: String, conversionMode: ConversionMode): String {
+        return when (conversionMode) {
+            ConversionMode.TRADITIONAL_TO_SIMPLIFIED -> ZhHkConverterUtil.toSimple(text)
+            ConversionMode.SIMPLIFIED_TO_TRADITIONAL -> ZhHkConverterUtil.toTraditional(text)
+            else -> text
+        }
+    }
+
     fun formatLrcResult(
         result: LyricsResult,
         config: LyricRenderConfig,
         offset: Long = 0L,
     ): String {
+        val convertedResult = convertLyricsResult(result, config.conversionMode)
+        
         val builder = StringBuilder()
-        val isWordLevel = result.isWordByWord
+        val isWordLevel = convertedResult.isWordByWord
         val isTtml = config.format == TTML
         // 如果是 TTML，先追加 XML 头部和根节点
         if (isTtml) {
@@ -80,14 +139,14 @@ object LyricsUtils {
         }
 
         val romanMap = if (config.showRomanization) {
-            result.romanization?.associateBy { it.start } ?: emptyMap()
+            convertedResult.romanization?.associateBy { it.start } ?: emptyMap()
         } else emptyMap()
 
         val translatedMap = if (config.showTranslation) {
-            result.translated?.associateBy { it.start } ?: emptyMap()
+            convertedResult.translated?.associateBy { it.start } ?: emptyMap()
         } else emptyMap()
 
-        result.original.forEach { line ->
+        convertedResult.original.forEach { line ->
             if (config.removeEmptyLines && isBlankOrPlaceholder(line)) {
                 return@forEach
             }
@@ -109,7 +168,6 @@ object LyricsUtils {
                 builder.append("\n")
                 return@forEach // TTML 处理完毕直接返回下一行
             }
-
 
             val skipOriginal = config.onlyTranslationIfAvailable && matchedTranslation != null
 
@@ -144,13 +202,8 @@ object LyricsUtils {
         if (isTtml) {
             builder.append("    </div>\n  </body>\n</tt>")
         }
-        val lyrics = when (config.conversionMode) {
-            ConversionMode.TRADITIONAL_TO_SIMPLIFIED -> ZhHkConverterUtil.toSimple(builder.toString())
-            ConversionMode.SIMPLIFIED_TO_TRADITIONAL -> ZhHkConverterUtil.toTraditional(builder.toString())
-            else -> builder.toString()
-        }
 
-        return lyrics.trim()
+        return builder.toString().trim()
     }
 
 

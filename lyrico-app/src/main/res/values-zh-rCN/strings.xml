@@ -370,4 +370,5 @@
     <string name="release_to_refresh">松开刷新</string>
     <string name="refreshing">正在刷新</string>
     <string name="refresh_success">刷新成功</string>
+    <string name="lyrics_empty">无歌词</string>
 </resources>

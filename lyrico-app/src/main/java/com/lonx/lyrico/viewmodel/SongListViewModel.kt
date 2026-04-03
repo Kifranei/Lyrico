@@ -34,6 +34,7 @@ import com.lonx.lyrico.utils.UpdateManager
 import com.lonx.lyrics.model.SearchSource
 import com.lonx.lyrics.model.SongSearchResult
 import com.lonx.lyrics.model.Source
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
@@ -454,10 +455,12 @@ class SongListViewModel(
         if (finalMatch.score < 0.35) return@coroutineScope MatchResult(null, BatchMatchResult.FAILURE) // Score too low
 
         try {
-            val lyricsDeferred = async { finalMatch.source.getLyrics(finalMatch.result) }
-            val newLyrics = lyricsDeferred.await()?.let {
-                LyricsUtils.formatLrcResult(result = it, config = lyricConfig)
+            val lyricsDeferred = async(Dispatchers.Default) {
+                finalMatch.source.getLyrics(finalMatch.result)?.let { result ->
+                    LyricsUtils.formatLrcResult(result = result, config = lyricConfig)
+                }
             }
+            val newLyrics = lyricsDeferred.await()
 
             val newTitle = resolveValue(matchConfig, BatchMatchField.TITLE, song.title, finalMatch.result.title)
             val newArtist = resolveValue(matchConfig, BatchMatchField.ARTIST, song.artist, finalMatch.result.artist)
