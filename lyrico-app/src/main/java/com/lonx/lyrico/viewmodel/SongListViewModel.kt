@@ -485,7 +485,12 @@ class SongListViewModel(
                     newLyricsResolved == null && picUrl == null
 
             if (isEffectivelyEmpty) return@coroutineScope MatchResult(null, BatchMatchResult.SKIPPED)
-            return@coroutineScope MatchResult(tagDataToWrite, BatchMatchResult.SUCCESS)
+
+            if (songRepository.writeAudioTagData(song.uri, tagDataToWrite)) {
+                MatchResult(tagDataToWrite, BatchMatchResult.SUCCESS)
+            } else {
+                MatchResult(null, BatchMatchResult.FAILURE) // Write failed
+            }
         } catch (e: Exception) {
             MatchResult(null, BatchMatchResult.FAILURE)
         }
