@@ -15,9 +15,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import android.net.Uri
 import com.lonx.lyrico.R
+import com.lonx.lyrico.data.SharedSelectionManager
 import com.lonx.lyrico.data.repository.SettingsDefaults
 import com.lonx.lyrico.utils.UiMessage
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -38,12 +42,12 @@ data class BatchRenameUiState(
 data class SongForBatchRename(
     val filePath: String,
     val fileName: String,
-    val tagData: AudioTagData?,
-    val fileLastModified: Long = 0L
+    val tagData: AudioTagData?
 )
 
 class BatchRenameViewModel(
     private val settingsRepository: SettingsRepository,
+    private val selectionManager: SharedSelectionManager,
     private val appContext: Context
 ) : ViewModel() {
 
@@ -61,6 +65,15 @@ class BatchRenameViewModel(
         _uiState.value = _uiState.value.copy(
             presetFormats = RenameEngine.getPresetFormats()
         )
+
+        val selectedPaths = selectionManager.selectedUris.value
+        if (selectedPaths.isNotEmpty()) {
+            // 转换数据并推入流中
+            val songList = selectedPaths.map { path ->
+                SongForBatchRename(path, path.substringAfterLast('/'), null)
+            }
+            setSongs(songList)
+        }
 
         /** 同步 characterMappingConfig 到 uiState */
         viewModelScope.launch {
@@ -146,7 +159,7 @@ class BatchRenameViewModel(
     /**
      * 设置歌曲列表
      */
-    fun setSongs(songs: List<SongForBatchRename>) {
+    private fun setSongs(songs: List<SongForBatchRename>) {
 
         songsFlow.value = songs
 
@@ -178,9 +191,6 @@ class BatchRenameViewModel(
 
         if (previews.isEmpty()) return
 
-        val timeMap = currentState.songs.associate {
-            it.filePath to it.fileLastModified
-        }
 
         viewModelScope.launch(Dispatchers.IO) {
 
@@ -193,11 +203,8 @@ class BatchRenameViewModel(
                     )
                 }
 
-                val sortedPreviews = previews.sortedBy { preview ->
-                    timeMap[preview.originalPath] ?: 0L
-                }
 
-                val result = RenameEngine.renameFiles(sortedPreviews)
+                val result = RenameEngine.renameFiles(previews)
 
                 _uiState.update {
                     it.copy(
@@ -269,5 +276,9 @@ class BatchRenameViewModel(
                 updatedMappings
             )
         }
+    }
+    override fun onCleared() {
+        super.onCleared()
+        selectionManager.clearAll()
     }
 }

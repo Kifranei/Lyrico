@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.room.Room
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.lonx.lyrico.data.LyricoDatabase
+import com.lonx.lyrico.data.SharedSelectionManager
 import com.lonx.lyrico.data.repository.BatchMatchHistoryRepository
 import com.lonx.lyrico.data.repository.BatchMatchHistoryRepositoryImpl
 import com.lonx.lyrico.data.repository.GhContributorRepository
@@ -151,6 +152,9 @@ val appModule = module {
             .build()
             .create(SodaApi::class.java)
     }
+
+    // 全局共享一个已选歌曲列表
+    single { SharedSelectionManager() }
     // 歌词源
     single<SearchSource>(named("Qm")) { QmSource(
         api = get()
@@ -193,7 +197,7 @@ val appModule = module {
     single<GhContributorRepository> { GhContributorRepositoryImpl(get(), get()) }
     // ViewModels
     viewModel { AboutViewModel(get(),get(), get()) }
-    viewModel { SongListViewModel(get(), get(), get(),get(), get(), get(), get()) }
+    viewModel { SongListViewModel(get(), get(), get(),get(), get(), get(), get(),get()) }
     viewModel { SettingsViewModel(get(),get()) }
     viewModel { SearchViewModel(get(), get()) }
     viewModel { EditMetadataViewModel(get(), get()) }
@@ -206,6 +210,6 @@ val appModule = module {
             database = get()
         )
     }
-    viewModel { BatchRenameViewModel(get(), androidContext()) }
+    viewModel { BatchRenameViewModel(get(), get(),androidContext()) }
 }
 

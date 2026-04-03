@@ -2,6 +2,7 @@ package com.lonx.lyrico.screens
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.PickVisualMediaRequest
@@ -81,11 +82,12 @@ fun EditMetadataScreen(
     val uiState by viewModel.uiState.collectAsState()
     val originalTagData = uiState.originalTagData
     val editingTagData = uiState.editingTagData
-    val scrollState = rememberScrollState()
+
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-
+    val activity = context as Activity
     // BottomSheet 状态
     var showOffsetSheet by remember { mutableStateOf(false) }
     var showCoverOptionsSheet by remember { mutableStateOf(false) }
@@ -120,9 +122,19 @@ fun EditMetadataScreen(
             val msg = if (success) R.string.msg_save_success else R.string.msg_save_failed
             scope.launch { snackbarHostState.showSnackbar(context.getString(msg)) }
             viewModel.clearSaveStatus()
+            if (success) {
+                if (!navigator.popBackStack()){
+                    activity.finish()
+                }
+            }
         }
     }
 
+    BackHandler {
+        if (!navigator.popBackStack()) {
+            activity.finish()
+        }
+    }
     val topAppBarScrollBehavior = MiuixScrollBehavior()
 
     Scaffold(
@@ -137,7 +149,11 @@ fun EditMetadataScreen(
                 navigationIcon = {
                     IconButton(
                         modifier = Modifier.padding(start = 12.dp),
-                        onClick = { navigator.popBackStack() }
+                        onClick = {
+                            if (!navigator.popBackStack()) {
+                                activity.finish()
+                            }
+                        }
                     ) { Icon(imageVector = MiuixIcons.Back, contentDescription = null) }
                 },
                 actions = {

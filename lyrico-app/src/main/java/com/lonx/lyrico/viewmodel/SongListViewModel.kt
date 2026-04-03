@@ -12,6 +12,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioTagData
+import com.lonx.lyrico.data.SharedSelectionManager
 import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.data.repository.BatchMatchHistoryRepository
@@ -100,6 +101,7 @@ class SongListViewModel(
     private val playbackRepository: PlaybackRepository,
     private val sources: List<SearchSource>,
     private val updateManager: UpdateManager,
+    private val selectionManager: SharedSelectionManager,
     application: Application
 ) : ViewModel() {
 
@@ -604,7 +606,25 @@ class SongListViewModel(
             Intent.createChooser(intent, context.getString(com.lonx.lyrico.R.string.share_chooser_title))
         )
     }
+    /**
+     * 准备跳转到“批量重命名”页面
+     * @return Boolean 返回 true 表示有数据可以跳转，false 表示没有选中数据
+     */
+    fun setSelectionPaths(): Boolean {
+        val selectedIds = _selectedSongIds.value
+        if (selectedIds.isEmpty()) return false
 
+        // 从当前列表中过滤出选中的歌曲
+        val paths = songs.value
+            .filter { it.mediaId in selectedIds }
+            .map { it.filePath }
+            .toSet()
+
+
+        // 存入全局 Manager
+        selectionManager.setUris(paths)
+        return true
+    }
     private fun triggerSync(isAuto: Boolean) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,7 +30,6 @@ import com.lonx.lyrico.data.model.RenamePreview
 import com.ramcosta.composedestinations.generated.destinations.CharacterMappingDestination
 import com.lonx.lyrico.utils.TagField
 import com.lonx.lyrico.viewmodel.BatchRenameViewModel
-import com.lonx.lyrico.viewmodel.SongForBatchRename
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -62,15 +60,12 @@ import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import java.io.File
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 @Destination<RootGraph>(route = "batch_rename")
 fun BatchRenameScreen(
-    navigator: DestinationsNavigator,
-    filePaths: Array<String> = arrayOf(),
-    fileLastModifieds: LongArray = longArrayOf()
+    navigator: DestinationsNavigator
 ) {
     val viewModel: BatchRenameViewModel = koinViewModel()
     val renameFormat by viewModel.renameFormat.collectAsStateWithLifecycle()
@@ -78,15 +73,6 @@ fun BatchRenameScreen(
     val context = LocalContext.current
     val showDropdowns = remember { mutableStateOf(false) }
 
-    LaunchedEffect(filePaths, fileLastModifieds) {
-        if (filePaths.isNotEmpty()) {
-            val songList = filePaths.mapIndexed { index, path ->
-                val lastModified = fileLastModifieds.getOrNull(index) ?: File(path).lastModified()
-                SongForBatchRename(path, path.substringAfterLast('/'), null, lastModified)
-            }
-            viewModel.setSongs(songList)
-        }
-    }
 
     var showPlaceholderInfo by remember { mutableStateOf(false) }
 

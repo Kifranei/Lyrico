@@ -320,18 +320,8 @@ fun SongListScreen(
                             enabled = hasSelection,
                             label = stringResource(R.string.action_batch_rename),
                             onClick = {
-                                val selectedSongs =
-                                    songs.filter { selectedSongIds.contains(it.mediaId) }
-                                if (selectedSongs.isNotEmpty()) {
-                                    val filePaths = selectedSongs.map { it.filePath }.toTypedArray()
-                                    val fileLastModifieds =
-                                        selectedSongs.map { it.fileLastModified }.toLongArray()
-                                    navigator.navigate(
-                                        BatchRenameDestination(
-                                            filePaths = filePaths,
-                                            fileLastModifieds = fileLastModifieds
-                                        )
-                                    )
+                                if (viewModel.setSelectionPaths()) {
+                                    navigator.navigate(BatchRenameDestination)
                                 }
                             },
                             icon = MiuixIcons.Rename
