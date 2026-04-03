@@ -1,12 +1,14 @@
 package com.lonx.lyrico.utils
 
 import android.annotation.SuppressLint
+import android.util.Log
 import com.github.houbb.opencc4j.util.ZhHkConverterUtil
 import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricFormat.*
 import com.lonx.lyrico.data.model.LyricRenderConfig
 import com.lonx.lyrics.model.LyricsLine
 import com.lonx.lyrics.model.LyricsResult
+import com.lonx.lyrics.model.isWordByWord
 import kotlin.math.abs
 
 object LyricsUtils {
@@ -128,17 +130,7 @@ object LyricsUtils {
 
             // 处理音译的非 TTML 输出
             if (matchedRoman != null && !skipOriginal) {
-                when (config.format) {
-                    PLAIN_LRC -> appendLineByLine(builder, matchedRoman, offset)
-                    ENHANCED_LRC -> {
-                        if (isWordLevel) appendEnhancedLine(builder, matchedRoman, offset)
-                        else appendLineByLine(builder, matchedRoman, offset)
-                    }
-                    VERBATIM_LRC -> {
-                        if (isWordLevel) appendWordByWord(builder, matchedRoman, offset)
-                        else appendLineByLine(builder, matchedRoman, offset)
-                    }
-                }
+                appendLineByLine(builder, matchedRoman, offset)
                 builder.append("\n")
             }
 

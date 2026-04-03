@@ -79,10 +79,11 @@ class SodaSource(
 
             val resp = api.getLyrics(trackId)
             val raw = resp.lyric?.content
+            val translations = resp.lyric?.translations?.cn
 
             val lyricsData = LyricsData(
                 original = raw,
-                translated = null,
+                translated = translations,
                 romanization = null,
                 type = "soda"
             )

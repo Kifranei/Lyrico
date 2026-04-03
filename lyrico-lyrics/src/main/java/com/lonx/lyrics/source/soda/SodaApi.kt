@@ -96,7 +96,13 @@ data class SodaTrackV2Response(
 
 @Serializable
 data class SodaLyric(
-    val content: String = ""
+    val content: String = "",
+    val translations: SodaTranslations? = null
+)
+
+@Serializable
+data class SodaTranslations(
+    val cn: String? = null
 )
 interface SodaApi {
 
