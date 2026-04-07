@@ -254,9 +254,14 @@
     <string name="label_lyricist">Lyricist</string>
     <string name="label_comment">Comment</string>
     <string name="label_lyrics">Lyrics</string>
+    <string name="label_copyright">Copyright</string>
+    <string name="label_rating">Rating</string>
+    <string name="group_basic_info">Basic Info</string>
+    <string name="group_track_details">Track Details</string>
+    <string name="group_credits_other">Credits &amp; Others</string>
     <string name="label_file_size">File Size</string>
     <!-- Cover Editor -->
-    <string name="status_modified">Undo</string>
+    <string name="status_modified">Modified</string>
     <string name="cd_cover">Cover Art</string>
     <string name="cd_play">Play</string>
     <!-- Song Menu -->

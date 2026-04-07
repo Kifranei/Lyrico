@@ -262,8 +262,9 @@
     <string name="label_lyrics">歌词</string>
 
     <!-- 封面编辑 -->
+    <string name="group_credits_other">其他信息</string>
     <string name="label_file_size">文件大小</string>
-    <string name="status_modified">撤销修改</string>
+    <string name="status_modified">已修改</string>
     <string name="cd_cover">封面</string>
     <string name="cd_play">播放</string>
 
@@ -371,4 +372,8 @@
     <string name="refreshing">正在刷新</string>
     <string name="refresh_success">刷新成功</string>
     <string name="lyrics_empty">无歌词</string>
+    <string name="label_copyright">版权</string>
+    <string name="label_rating">评级</string>
+    <string name="group_basic_info">基础信息</string>
+    <string name="group_track_details">音轨信息</string>
 </resources>

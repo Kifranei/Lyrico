@@ -112,6 +112,44 @@ object AudioTagReader {
                     "MOOD"
                 )
 
+                val copyright = firstOf(
+                    "COPYRIGHT",
+                    "TCOP",
+                    "CPRO",
+                    "©cpy"
+                )
+
+                var ratingStar: Int? = null
+                val rawRating = firstOf("RATING", "POPM", "RATE")
+                if (rawRating != null) {
+                    if (rawRating.contains("|")) {
+                        val popm = rawRating.split("|").getOrNull(1)?.toIntOrNull() ?: 0
+                        ratingStar = when {
+                            popm >= 255 -> 5
+                            popm >= 196 -> 4
+                            popm >= 128 -> 3
+                            popm >= 64 -> 2
+                            popm > 0 -> 1
+                            else -> 0
+                        }
+                    } else {
+                        val r = rawRating.toIntOrNull() ?: 0
+                        ratingStar = if (r > 5) {
+                            when {
+                                r >= 100 -> 5
+                                r >= 80 -> 4
+                                r >= 60 -> 3
+                                r >= 40 -> 2
+                                r > 0 -> 1
+                                else -> 0
+                            }
+                        } else {
+                            r
+                        }
+                    }
+                    if (ratingStar == 0) ratingStar = null
+                }
+
                 return@withContext AudioTagData(
                     title = firstOf("TITLE"),
                     artist = firstOf("ARTIST"),
@@ -126,6 +164,8 @@ object AudioTagReader {
                     lyricist = lyricist,
                     comment = comment,
                     lyrics = lyrics,
+                    copyright = copyright,
+                    rating = ratingStar,
 
                     durationMilliseconds = audioProps?.length ?: 0,
                     bitrate = audioProps?.bitrate ?: 0,

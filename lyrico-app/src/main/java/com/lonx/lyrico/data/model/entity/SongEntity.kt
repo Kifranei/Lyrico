@@ -109,6 +109,10 @@ data class SongEntity(
     val trackerNumber: String? = null,
     val date: String? = null,
     val lyrics: String? = null,
+    @ColumnInfo(defaultValue = "NULL")
+    val copyright: String? = null,
+    @ColumnInfo(defaultValue = "NULL")
+    val rating: Int? = null,
 
     val durationMilliseconds: Int = 0,
     val bitrate: Int = 0,

@@ -243,6 +243,12 @@ class SongRepositoryImpl(
                 trackerNumber = audioData.trackNumber,
                 date = audioData.date,
                 lyrics = audioData.lyrics,
+                composer = audioData.composer,
+                lyricist = audioData.lyricist,
+                comment = audioData.comment,
+                discNumber = audioData.discNumber,
+                copyright = audioData.copyright,
+                rating = audioData.rating,
                 durationMilliseconds = audioData.durationMilliseconds,
                 bitrate = audioData.bitrate,
                 sampleRate = audioData.sampleRate,
@@ -285,6 +291,8 @@ class SongRepositoryImpl(
                 lyricist = audioTagData.lyricist ?: existingSong.lyricist,
                 comment = audioTagData.comment ?: existingSong.comment,
                 lyrics = audioTagData.lyrics ?: existingSong.lyrics,
+                copyright = audioTagData.copyright ?: existingSong.copyright,
+                rating = audioTagData.rating ?: existingSong.rating,
                 rawProperties = audioTagData.rawProperties.toString(),
                 fileLastModified = lastModified
             ).withSortKeysUpdated()
@@ -345,6 +353,22 @@ class SongRepositoryImpl(
             updateTag("COMMENT", audioTagData.comment, listOf("COMM", "DESCRIPTION"))
             updateTag("LYRICIST", audioTagData.lyricist, listOf("TEXT", "WRITER", "LYRICS BY"))
             updateTag("LYRICS", audioTagData.lyrics, listOf("UNSYNCED LYRICS", "USLT", "LYRIC", "LYRICSENG"))
+            updateTag("COPYRIGHT", audioTagData.copyright, listOf("TCOP", "CPRO", "©cpy"))
+
+            val ext = uriString.substringAfterLast(".").uppercase()
+            val star = audioTagData.rating ?: 0
+            if (star in 1..5) {
+                if (ext == "MP3") {
+                    val popmVal = when(star) { 1->1; 2->64; 3->128; 4->196; 5->255; else->0 }
+                    updateTag("POPM", "no@email|$popmVal|0", listOf("RATING", "RATE"))
+                } else if (ext == "FLAC" || ext == "OGG") {
+                    updateTag("RATING", (star * 20).toString(), listOf("POPM", "RATE"))
+                } else {
+                    updateTag("RATE", (star * 20).toString(), listOf("RATING", "POPM"))
+                }
+            } else if (star == 0) {
+                updateTag("POPM", null, listOf("RATING", "RATE"))
+            }
 
             AudioTagWriter.writeTags(pfdDescriptor, updates)
 
