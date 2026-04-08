@@ -32,7 +32,7 @@ data class EditMetadataUiState(
     val editingTagData: AudioTagData? = null,
 
     val isEditing: Boolean = false,
-
+    val fileName: String? = null,
     /**
      * 编辑态封面（只要不为 null，就代表用户替换过封面）
      */
@@ -42,7 +42,13 @@ data class EditMetadataUiState(
     val saveSuccess: Boolean? = null,
     val originalCover: Any? = null,
     val picture: AudioPicture? = null,
-    val permissionIntentSender: IntentSender? = null
+    val permissionIntentSender: IntentSender? = null,
+    
+    /**
+     * 歌词导出导入状态
+     */
+    val exportLyricsResult: Boolean? = null,
+    val importLyricsResult: Boolean? = null
 )
 
 class EditMetadataViewModel(
@@ -85,6 +91,7 @@ class EditMetadataViewModel(
                         ),
                         originalTagData = audioTagData,
 
+                        fileName = song?.fileName?.substringBeforeLast( "."),
                         // 如果当前没有在编辑，才重置 editingTagData
                         editingTagData = if (state.isEditing) state.editingTagData else audioTagData,
 
@@ -271,7 +278,6 @@ class EditMetadataViewModel(
 
     /**
      * 保存元数据
-     * 核心修改：处理 RecoverableSecurityException
      */
     fun saveMetadata() {
         val uriString = _uiState.value.songInfo?.uriString ?: return
@@ -333,6 +339,97 @@ class EditMetadataViewModel(
 
     fun clearSaveStatus() {
         _uiState.update { it.copy(saveSuccess = null) }
+    }
+
+    /**
+     * 检测歌词格式：LRC 或 TTML
+     * 返回 "lrc" 或 "ttml"
+     */
+    private fun getLyricsMimeType(lyrics: String?): String {
+        if (lyrics.isNullOrBlank()) return "lrc"
+        
+        // 检测 TTML 格式
+        if (lyrics.contains("begin=") && lyrics.contains("end=") && lyrics.contains("<?xml")) {
+            return "ttml"
+        }
+        
+        // 检测 LRC 格式时间戳 [mm:ss.xxx] 或 <mm:ss.xxx>
+        if (Regex("[\\[<]\\d{1,2}:\\d{2}\\.\\d{2,3}[>\\]]").containsMatchIn(lyrics)) {
+            return "lrc"
+        }
+        
+        // 默认返回 lrc
+        return "lrc"
+    }
+
+
+    /**
+     * 获取导出歌词的默认文件名
+     */
+    fun getLyricsFileName(): String? {
+        val lyrics = _uiState.value.editingTagData?.lyrics ?: return null
+        val format = getLyricsMimeType(lyrics)
+        val fileExtension = if (format == "ttml") ".ttml" else ".lrc"
+        val fileName = _uiState.value.fileName ?:""
+        return "$fileName$fileExtension"
+    }
+
+
+    /**
+     * 导出歌词
+     */
+    fun exportLyrics(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val lyrics = _uiState.value.editingTagData?.lyrics
+                if (lyrics.isNullOrBlank()) {
+                    _uiState.update { it.copy(exportLyricsResult = false) }
+                    return@launch
+                }
+
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(lyrics.toByteArray(Charsets.UTF_8))
+                }
+                _uiState.update { it.copy(exportLyricsResult = true) }
+                Log.d(TAG, "歌词导出成功: ${uri.path}")
+            } catch (e: Exception) {
+                Log.e(TAG, "导出歌词失败", e)
+                _uiState.update { it.copy(exportLyricsResult = false) }
+            }
+        }
+    }
+
+    /**
+     * 导入歌词文件
+     */
+    fun importLyrics(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val lyrics = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    inputStream.bufferedReader(Charsets.UTF_8).readText()
+                }
+
+                if (!lyrics.isNullOrBlank()) {
+                    updateTag { copy(lyrics = lyrics) }
+                    _uiState.update { it.copy(importLyricsResult = true) }
+                    Log.d(TAG, "歌词导入成功")
+                } else {
+                    _uiState.update { it.copy(importLyricsResult = false) }
+                    Log.w(TAG, "歌词导入失败: 文件内容为空")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "导入歌词失败", e)
+                _uiState.update { it.copy(importLyricsResult = false) }
+            }
+        }
+    }
+
+    fun clearExportLyricsStatus() {
+        _uiState.update { it.copy(exportLyricsResult = null) }
+    }
+
+    fun clearImportLyricsStatus() {
+        _uiState.update { it.copy(importLyricsResult = null) }
     }
 
     fun play(context: Context) {

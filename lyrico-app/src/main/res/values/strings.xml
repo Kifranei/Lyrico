@@ -241,10 +241,16 @@
     <string name="action_undo_changes">Undo changes</string>
     <string name="action_back">Back</string>
     <string name="action_search">Search</string>
+    <string name="action_export_lyrics">Export</string>
+    <string name="action_import_lyrics">Import</string>
 
     <!-- Snackbar Messages -->
     <string name="msg_save_success">Save successful</string>
     <string name="msg_save_failed">Save failed</string>
+    <string name="msg_export_lyrics_success">Lyrics exported successfully</string>
+    <string name="msg_export_lyrics_failed">Failed to export lyrics</string>
+    <string name="msg_import_lyrics_success">Lyrics imported successfully</string>
+    <string name="msg_import_lyrics_failed">Failed to import lyrics</string>
 
     <!-- Metadata Labels -->
     <string name="edit_metadata_default_title">Edit Metadata</string>

@@ -1,7 +1,6 @@
 package com.lonx.lyrico.data.repository
 
 import com.lonx.audiotag.model.AudioTagData
-import com.lonx.lyrico.data.model.RenamePreview
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.viewmodel.SortBy
 import com.lonx.lyrico.viewmodel.SortOrder

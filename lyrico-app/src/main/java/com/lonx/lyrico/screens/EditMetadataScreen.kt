@@ -121,6 +121,18 @@ fun EditMetadataScreen(
         else scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.permission_denied_cannot_save)) }
     }
 
+    // 导入歌词文件选择器
+    val lyricsFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.importLyrics(context, it) }
+    }
+
+    // 导出歌词文件选择器
+    val exportLyricsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("*/*")
+    ) { uri -> uri?.let { viewModel.exportLyrics(context, it) } }
+
     // 事件监听
     onLyricsResult.onResult { result -> viewModel.updateMetadataFromSearchResult(result) }
 
@@ -143,6 +155,22 @@ fun EditMetadataScreen(
                     activity.finish()
                 }
             }
+        }
+    }
+
+    LaunchedEffect(uiState.exportLyricsResult) {
+        uiState.exportLyricsResult?.let { success ->
+            val msg = if (success) R.string.msg_export_lyrics_success else R.string.msg_export_lyrics_failed
+            scope.launch { snackbarHostState.showSnackbar(context.getString(msg)) }
+            viewModel.clearExportLyricsStatus()
+        }
+    }
+
+    LaunchedEffect(uiState.importLyricsResult) {
+        uiState.importLyricsResult?.let { success ->
+            val msg = if (success) R.string.msg_import_lyrics_success else R.string.msg_import_lyrics_failed
+            scope.launch { snackbarHostState.showSnackbar(context.getString(msg)) }
+            viewModel.clearImportLyricsStatus()
         }
     }
 
@@ -385,23 +413,73 @@ fun EditMetadataScreen(
                             isModified = editingTagData?.lyrics != originalTagData?.lyrics,
                             onRevert = { viewModel.updateTag { copy(lyrics = originalTagData?.lyrics ?: "") } },
                             actionButtons = {
-                                Box(
+                                Row(
                                     modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(MiuixTheme.colorScheme.primary)
-                                        .clickable {
-                                            viewModel.prepareLyricsOffset()
-                                            showOffsetSheet = true
-                                        }
-                                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                                    contentAlignment = Alignment.Center
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
                                 ) {
-                                    Text(
-                                        text = stringResource(R.string.offset_adjust_hint),
-                                        fontSize = 11.sp,
-                                        color = MiuixTheme.colorScheme.onPrimary,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                                    // 偏移调整按钮
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(MiuixTheme.colorScheme.primary)
+                                            .clickable {
+                                                viewModel.prepareLyricsOffset()
+                                                showOffsetSheet = true
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.offset_adjust_hint),
+                                            fontSize = 11.sp,
+                                            color = MiuixTheme.colorScheme.onPrimary,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+
+                                    // 导出按钮
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(MiuixTheme.colorScheme.tertiaryContainer)
+                                            .clickable {
+                                                val fileName = viewModel.getLyricsFileName()
+                                                if (fileName != null){
+                                                    exportLyricsLauncher.launch(fileName)
+                                                }
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.action_export_lyrics),
+                                            fontSize = 11.sp,
+                                            color = MiuixTheme.colorScheme.onTertiaryContainer,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+
+                                    // 导入按钮
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(MiuixTheme.colorScheme.tertiaryContainer)
+                                            .clickable {
+                                                lyricsFileLauncher.launch(arrayOf("*/*"))
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.action_import_lyrics),
+                                            fontSize = 11.sp,
+                                            color = MiuixTheme.colorScheme.onTertiaryContainer,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 }
                             },
                             isMultiline = true

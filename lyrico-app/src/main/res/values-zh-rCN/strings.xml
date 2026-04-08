@@ -247,10 +247,16 @@
     <string name="action_undo_changes">撤销修改</string>
     <string name="action_back">返回</string>
     <string name="action_search">搜索</string>
+    <string name="action_export_lyrics">导出</string>
+    <string name="action_import_lyrics">导入</string>
 
     <!-- 提示消息 -->
     <string name="msg_save_success">保存成功</string>
     <string name="msg_save_failed">保存失败</string>
+    <string name="msg_export_lyrics_success">歌词导出成功</string>
+    <string name="msg_export_lyrics_failed">歌词导出失败</string>
+    <string name="msg_import_lyrics_success">歌词导入成功</string>
+    <string name="msg_import_lyrics_failed">歌词导入失败</string>
 
     <!-- 元数据标签 -->
     <string name="edit_metadata_default_title">编辑元数据</string>
