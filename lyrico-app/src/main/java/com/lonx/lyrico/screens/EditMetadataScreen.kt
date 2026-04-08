@@ -29,6 +29,7 @@ import com.lonx.lyrico.viewmodel.EditMetadataViewModel
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -368,43 +369,6 @@ fun EditMetadataScreen(
                                 isModified = editingTagData?.comment != originalTagData?.comment,
                                 onRevert = { viewModel.updateTag { copy(comment = originalTagData?.comment ?: "") } }
                             )
-                            // Rating
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.label_rating),
-                                    style = MiuixTheme.textStyles.body2
-                                )
-                                Spacer(modifier = Modifier.weight(1f))
-                                val currentRating = editingTagData?.rating ?: 0
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    for (i in 1..5) {
-                                        val icon = if (i <= currentRating) painterResource(R.drawable.ic_filled_star_24dp) else painterResource(R.drawable.ic_outline_star_24dp)
-                                        androidx.compose.material3.Icon(
-                                            painter = icon,
-                                            contentDescription = "Star $i",
-                                            tint = if (i <= currentRating) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                                            modifier = Modifier
-                                                .size(28.dp)
-                                                .clickable {
-                                                    viewModel.updateTag { copy(rating = if (currentRating == i) 0 else i) }
-                                                }
-                                        )
-                                    }
-                                    if (editingTagData?.rating != originalTagData?.rating) {
-                                        IconButton(onClick = { viewModel.updateTag { copy(rating = originalTagData?.rating) } }) {
-                                            Icon(imageVector = MiuixIcons.Undo, contentDescription = "Undo")
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
@@ -538,7 +502,7 @@ private fun CoverSection(
     coverUri: Any?,
     title: String,
     artist: String,
-    rating: Int,
+    rating: Int?,
     isModified: Boolean,
     onCoverClick: () -> Unit,
     onRevertCoverClick: () -> Unit,
@@ -547,32 +511,33 @@ private fun CoverSection(
     val surfaceVariant = MiuixTheme.colorScheme.surfaceVariant
     val onSurface = MiuixTheme.colorScheme.onSurface
     val onSurfaceDim = MiuixTheme.colorScheme.onSurfaceVariantSummary
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Box(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
             ) {
-                // Background blurred cover
+
                 AsyncImage(
                     model = coverUri,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
+                        .matchParentSize()
                         .graphicsLayer { alpha = 0.15f }
                 )
-                // Gradient overlay
+
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp)
+                        .matchParentSize()
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
@@ -585,11 +550,11 @@ private fun CoverSection(
                 )
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .matchParentSize()
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Cover art
+
                     Box(
                         modifier = Modifier
                             .size(160.dp)
@@ -605,7 +570,7 @@ private fun CoverSection(
                             model = coverUri,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.matchParentSize(),
                             placeholder = rememberTintedPainter(
                                 painter = painterResource(id = R.drawable.ic_album_24dp),
                                 tint = LyricoColors.coverPlaceholderIcon
@@ -615,17 +580,17 @@ private fun CoverSection(
                                 tint = LyricoColors.coverPlaceholderIcon
                             )
                         )
-                        // Edit overlay hint
+
+                        // 编辑提示
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .matchParentSize()
                                 .background(
                                     Brush.verticalGradient(
                                         colors = listOf(
                                             Color.Transparent,
                                             Color.Black.copy(alpha = 0.4f)
-                                        ),
-                                        startY = 200f
+                                        )
                                     )
                                 ),
                             contentAlignment = Alignment.BottomCenter
@@ -638,7 +603,7 @@ private fun CoverSection(
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
                         }
-                        // Modified indicator
+
                         androidx.compose.animation.AnimatedVisibility(
                             visible = isModified,
                             enter = scaleIn() + fadeIn(),
@@ -650,7 +615,9 @@ private fun CoverSection(
                             Box(
                                 modifier = Modifier
                                     .clip(CircleShape)
-                                    .background(LyricoColors.modifiedBadgeBackground.copy(alpha = 0.95f))
+                                    .background(
+                                        LyricoColors.modifiedBadgeBackground.copy(alpha = 0.95f)
+                                    )
                                     .clickable { onRevertCoverClick() }
                                     .padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
@@ -663,8 +630,9 @@ private fun CoverSection(
                             }
                         }
                     }
+
                     Spacer(modifier = Modifier.width(16.dp))
-                    // Song info
+
                     Column(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.Center
@@ -688,25 +656,33 @@ private fun CoverSection(
                             )
                         }
 
+                        Spacer(modifier = Modifier.height(6.dp))
 
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             for (i in 1..5) {
-                                val isFilled = i <= rating
+                                val isFilled = rating?.let { i <= it }
                                 Icon(
                                     painter = painterResource(
-                                        if (isFilled) R.drawable.ic_filled_star_24dp
+                                        if (isFilled == true) R.drawable.ic_filled_star_24dp
                                         else R.drawable.ic_outline_star_24dp
                                     ),
                                     contentDescription = null,
-                                    tint = if (isFilled) MiuixTheme.colorScheme.primary
-                                    else onSurfaceDim.copy(alpha = 0.4f),
+                                    tint = if (isFilled == true)
+                                        MiuixTheme.colorScheme.primary
+                                    else
+                                        onSurfaceDim.copy(alpha = 0.4f),
                                     modifier = Modifier
                                         .size(24.dp)
-                                        .clickable {
-                                            onRatingChange(if (rating == i) 0 else i)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            onRatingChange(
+                                                if (rating == i) 0 else i
+                                            )
                                         }
                                 )
                             }

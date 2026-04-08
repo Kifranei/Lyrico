@@ -365,4 +365,22 @@
     <string name="refreshing">Refreshing</string>
     <string name="refresh_success">Refresh successfully</string>
     <string name="lyrics_empty">Lyrics is empty</string>
+
+    <!-- Batch Edit -->
+    <string name="batch_edit_title">Batch Edit</string>
+    <string name="batch_edit_song_count">%d songs selected</string>
+    <string name="batch_edit_add_field">Add Field</string>
+    <string name="batch_edit_select_fields">Select Fields to Edit</string>
+    <string name="batch_edit_no_fields">No fields added yet.\nTap the \"Add\" button to select fields to edit.</string>
+    <string name="batch_edit_saving_progress">Saving: %1$d / %2$d</string>
+    <string name="batch_edit_result_summary">Success: %1$d / Total: %2$d, Failed: %3$d</string>
+    <string name="batch_edit_success_title">Batch Edit Successful</string>
+    <string name="batch_edit_finished_title">Batch Edit Completed</string>
+    <string name="batch_edit_cover_change">Change Cover</string>
+    <string name="batch_edit_cover_remove">Remove Cover</string>
+    <string name="batch_edit_cover_revert">Revert Cover</string>
+    <string name="batch_edit_cover_hint">Tap to select cover image</string>
+    <string name="batch_edit_field_remove_hint">Remove this field</string>
+    <string name="batch_edit_info_summary">Learn how to use batch edit</string>
+    <string name="batch_edit_info_content">Batch Edit Guide:\n\n• All fields display \"&lt;keep&gt;\" by default, meaning that field will not be modified\n• After editing a field, it will be updated to all selected songs\n• Click the undo button on the right side of a field to restore it to \"&lt;keep&gt;\" state\n• For rating, click stars to set a new rating, or click \"Undo\" to keep unchanged\n• Cover images can be changed or removed by tapping\n• Click \"Save\" to write the changes to all selected songs\' file tags</string>
 </resources>

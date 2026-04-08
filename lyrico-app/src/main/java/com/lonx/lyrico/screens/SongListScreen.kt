@@ -69,6 +69,7 @@ import com.lonx.lyrico.viewmodel.SortInfo
 import com.lonx.lyrico.viewmodel.SortOrder
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.BatchEditDestination
 import com.ramcosta.composedestinations.generated.destinations.BatchMatchHistoryDetailDestination
 import com.ramcosta.composedestinations.generated.destinations.BatchRenameDestination
 import com.ramcosta.composedestinations.generated.destinations.EditMetadataDestination
@@ -88,6 +89,7 @@ import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBarDisplayMode
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
@@ -293,7 +295,9 @@ fun SongListScreen(
                 ) {
                     val hasSelection = selectedSongIds.isNotEmpty()
 
-                    FloatingNavigationBar {
+                    FloatingNavigationBar(
+                        mode = FloatingNavigationBarDisplayMode.IconAndText
+                    ) {
                         FloatingNavigationBarItem(
                             selected = hasSelection,
                             enabled = hasSelection,
@@ -313,6 +317,17 @@ fun SongListScreen(
                             enabled = hasSelection,
                             label = stringResource(R.string.action_batch_match),
                             onClick = { viewModel.openBatchMatchConfig() },
+                            icon = MiuixIcons.Edit
+                        )
+                        FloatingNavigationBarItem(
+                            selected = hasSelection,
+                            enabled = hasSelection,
+                            label = stringResource(R.string.batch_edit_title),
+                            onClick = {
+                                if (viewModel.setSelectionUris()) {
+                                    navigator.navigate(BatchEditDestination())
+                                }
+                            },
                             icon = MiuixIcons.Edit
                         )
                         FloatingNavigationBarItem(

@@ -1,6 +1,5 @@
 package com.lonx.lyrico.di
 
-import android.app.Application
 import androidx.room.Room
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.lonx.lyrico.data.LyricoDatabase
@@ -22,6 +21,7 @@ import com.lonx.lyrico.utils.UpdateManager
 import com.lonx.lyrico.utils.UpdateManagerImpl
 import com.lonx.lyrico.viewmodel.AboutViewModel
 import com.lonx.lyrico.viewmodel.BatchMatchHistoryViewModel
+import com.lonx.lyrico.viewmodel.BatchEditViewModel
 import com.lonx.lyrico.viewmodel.BatchRenameViewModel
 import com.lonx.lyrico.viewmodel.EditMetadataViewModel
 import com.lonx.lyrico.viewmodel.FolderManagerViewModel
@@ -211,5 +211,6 @@ val appModule = module {
         )
     }
     viewModel { BatchRenameViewModel(get(), get(),androidContext()) }
+    viewModel { BatchEditViewModel(get(), get()) }
 }
 

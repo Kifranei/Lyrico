@@ -628,6 +628,22 @@ class SongListViewModel(
         selectionManager.setUris(paths)
         return true
     }
+    fun setSelectionUris(): Boolean {
+        val selectedIds = _selectedSongIds.value
+        if (selectedIds.isEmpty()) return false
+
+        // 从当前列表中过滤出选中的歌曲
+        val uris = songs.value
+            .filter { it.mediaId in selectedIds }
+            .map { it.uri }
+            .toSet()
+
+
+        Log.d(TAG, "setSelectionUris: $uris")
+        // 存入全局 Manager
+        selectionManager.setUris(uris)
+        return true
+    }
     private fun triggerSync(isAuto: Boolean) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
