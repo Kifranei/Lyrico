@@ -1,6 +1,7 @@
 package com.lonx.lyrico.screens
 
 import android.annotation.SuppressLint
+import android.content.ClipData
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -32,8 +33,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import kotlinx.coroutines.launch
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
@@ -58,12 +63,14 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.extra.SuperBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -83,14 +90,21 @@ fun SearchResultsScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
 
     val searchKeyword by remember { derivedStateOf { uiState.searchKeyword } }
-
+    val clipboardManager = LocalClipboardManager.current
     // 获取源列表
     val sources = uiState.availableSources
 
     val resultsBySourceId = uiState.searchResults
 
-    val previewSheetState = remember(uiState.lyricsState.song) {
-        mutableStateOf(uiState.lyricsState.song != null)
+    var showLyricsSheet by remember { mutableStateOf(false) }
+
+    /**
+     * 当有歌词数据时，自动打开bottom sheet
+     */
+    LaunchedEffect(uiState.lyricsState.song) {
+        if (uiState.lyricsState.song != null) {
+            showLyricsSheet = true
+        }
     }
 
     /**
@@ -324,104 +338,135 @@ fun SearchResultsScreen(
 
     /**
      * 歌词 BottomSheet
-     * 只要 lyricsState.song != null 即显示
+     * 使用独立的状态控制显示隐藏，保证动画流畅
      */
 
-    SuperBottomSheet(
-        show = uiState.lyricsState.song != null,
-        onDismissRequest = {
-            viewModel.clearLyrics()
-        },
-        title = uiState.lyricsState.song?.title
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(bottom = 32.dp)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
+    val lyricsText = uiState.lyricsState.content
+    if (showLyricsSheet && uiState.lyricsState.song != null) {
+        val song = uiState.lyricsState.song!!
+        SuperBottomSheet(
+            show = true,
+            onDismissRequest = {
+                showLyricsSheet = false
+                viewModel.clearLyrics()
+            },
+            title = song.title
         ) {
-            Card(
+            Column(
                 modifier = Modifier
-                    .padding(bottom = 12.dp)
-                    .fillMaxWidth(),
-                colors = CardDefaults.defaultColors(
-                    color = MiuixTheme.colorScheme.secondaryContainer,
-                )
+                    .padding(bottom = 32.dp)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
             ) {
-                LazyColumn(
-                    modifier = Modifier.heightIn(min = 30.dp, max = 300.dp).fillMaxWidth(),
+                Card(
+                    modifier = Modifier
+                        .padding(bottom = 12.dp)
+                        .fillMaxWidth(),
+                    colors = CardDefaults.defaultColors(
+                        color = MiuixTheme.colorScheme.secondaryContainer,
+                    )
                 ) {
-                    when {
-                        uiState.lyricsState.isLoading -> item("loading") {
-                            CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                    Box {
+                        LazyColumn(
+                            modifier = Modifier
+                                .heightIn(min = 30.dp, max = 300.dp)
+                                .fillMaxWidth(),
+                        ) {
+                            when {
+                                uiState.lyricsState.isLoading -> item("loading") {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                                    }
+                                }
+
+                                uiState.lyricsState.error != null -> item("error") {
+                                    Text(
+                                        modifier = Modifier.padding(12.dp),
+                                        text = uiState.lyricsState.error!!,
+                                        style = MiuixTheme.textStyles.body2
+                                    )
+                                }
+
+                                else -> item("lyrics") {
+                                    val text = lyricsText
+                                        ?.takeIf { it.isNotBlank() }
+                                        ?: stringResource(R.string.lyrics_empty)
+
+                                    Text(
+                                        modifier = Modifier.padding(12.dp),
+                                        text = text,
+                                        style = MiuixTheme.textStyles.body2
+                                    )
+                                }
+                            }
                         }
-
-                        uiState.lyricsState.error != null -> item("error") {
-                            val errorMsg = uiState.lyricsState.error!!
-
-                            Text(
-                                modifier = Modifier.padding(12.dp),
-                                text = errorMsg,
-                                style = MiuixTheme.textStyles.body1
-                            )
-                        }
-
-                        else -> item("lyrics") {
-                            val text = uiState.lyricsState.content
-                                ?.takeIf { it.isNotBlank() }
-                                ?: stringResource(R.string.lyrics_empty)
-
-                            Text(
-                                modifier = Modifier.padding(12.dp),
-                                text = text,
-                                style = MiuixTheme.textStyles.footnote1
-                            )
+                        if (!lyricsText.isNullOrBlank()) {
+                            IconButton(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(lyricsText))
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp)
+                                    .background(
+                                        color = MiuixTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                        shape = CircleShape
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Copy,
+                                    contentDescription = "复制歌词"
+                                )
+                            }
                         }
                     }
                 }
-            }
-            Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                TextButton(
-                    enabled = uiState.lyricsState.content != null && uiState.lyricsState.content != "",
-                    text = stringResource(R.string.apply_lyrics_only_action),
-                    onClick = {
-                        resultNavigator.navigateBack(
-                            LyricsSearchResult(
-                                title = null,
-                                artist = null,
-                                album = null,
-                                lyrics = uiState.lyricsState.content,
-                                date = null,
-                                trackerNumber = null,
-                                picUrl = null,
-                                lyricsOnly = true
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    TextButton(
+                        enabled = lyricsText != null && lyricsText != "",
+                        text = stringResource(R.string.apply_lyrics_only_action),
+                        onClick = {
+                            resultNavigator.navigateBack(
+                                LyricsSearchResult(
+                                    title = null,
+                                    artist = null,
+                                    album = null,
+                                    lyrics = lyricsText,
+                                    date = null,
+                                    trackerNumber = null,
+                                    picUrl = null,
+                                    lyricsOnly = true
+                                )
                             )
-                        )
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(20.dp))
-                TextButton(
-                    enabled = uiState.lyricsState.content != null && uiState.lyricsState.content != "",
-                    text = stringResource(R.string.apply_action),
-                    onClick = {
-                        resultNavigator.navigateBack(
-                            LyricsSearchResult(
-                                title = uiState.lyricsState.song?.title,
-                                artist = uiState.lyricsState.song?.artist,
-                                album = uiState.lyricsState.song?.album,
-                                lyrics = uiState.lyricsState.content,
-                                date = uiState.lyricsState.song?.date,
-                                trackerNumber = uiState.lyricsState.song?.trackerNumber,
-                                picUrl = uiState.lyricsState.song?.picUrl
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(20.dp))
+                    TextButton(
+                        enabled = lyricsText != null && lyricsText != "",
+                        text = stringResource(R.string.apply_action),
+                        onClick = {
+                            resultNavigator.navigateBack(
+                                LyricsSearchResult(
+                                    title = song.title,
+                                    artist = song.artist,
+                                    album = song.album,
+                                    lyrics = uiState.lyricsState.content,
+                                    date = song.date,
+                                    trackerNumber = song.trackerNumber,
+                                    picUrl = song.picUrl
+                                )
                             )
-                        )
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.textButtonColorsPrimary(),
-                )
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.textButtonColorsPrimary(),
+                    )
+                }
             }
         }
     }

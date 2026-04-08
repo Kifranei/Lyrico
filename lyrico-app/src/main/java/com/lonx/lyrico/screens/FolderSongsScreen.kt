@@ -75,12 +75,6 @@ fun FolderSongsScreen(
             ),
             overscrollEffect = null,
         ) {
-            item {
-                FolderSongsOverviewCard(
-                    folderPath = folderPath,
-                    songCount = songs.size
-                )
-            }
 
             if (songs.isEmpty()) {
                 item {
@@ -98,25 +92,6 @@ fun FolderSongsScreen(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun FolderSongsOverviewCard(
-    folderPath: String,
-    songCount: Int
-) {
-    Card(
-        modifier = Modifier.padding(horizontal = 12.dp),
-        colors = CardDefaults.defaultColors(
-            color = MiuixTheme.colorScheme.surfaceContainer,
-            contentColor = MiuixTheme.colorScheme.onBackground
-        )
-    ) {
-        BasicComponent(
-            title = stringResource(R.string.folder_song_count_format, songCount),
-            summary = folderPath
-        )
     }
 }
 

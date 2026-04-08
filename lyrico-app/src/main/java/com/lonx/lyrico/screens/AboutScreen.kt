@@ -183,7 +183,7 @@ fun AboutScreen(
                 errorText != null -> {
                     item {
                         Card(
-                            modifier = Modifier.padding(horizontal = 12.dp).fillMaxWidth(),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth(),
                             colors = CardDefaults.defaultColors(
                                 color = MiuixTheme.colorScheme.errorContainer,
                                 contentColor = MiuixTheme.colorScheme.onErrorContainer
@@ -200,7 +200,7 @@ fun AboutScreen(
                 contributors.isEmpty() -> {
                     item {
                         Card(
-                            modifier = Modifier.padding(horizontal = 12.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth()
                         ) {
                             BasicComponent(
                                 title = stringResource(R.string.about_no_contributors)

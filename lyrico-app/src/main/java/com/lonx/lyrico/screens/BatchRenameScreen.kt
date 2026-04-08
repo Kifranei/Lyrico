@@ -125,7 +125,7 @@ fun BatchRenameScreen(
             item {
                 SmallTitle(text = stringResource(id = R.string.rename_format))
                 Card(
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     TextField(
                         modifier = Modifier.padding(12.dp),
@@ -208,7 +208,7 @@ fun BatchRenameScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Text(
                             text = stringResource(id = R.string.preview_empty_tip),
@@ -223,7 +223,7 @@ fun BatchRenameScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         uiState.previews.forEachIndexed { index, preview ->
                             PreviewItem(preview = preview)
@@ -237,7 +237,7 @@ fun BatchRenameScreen(
 
             uiState.errorMessage?.let {
                 item {
-                    Card(modifier = Modifier.padding(horizontal = 12.dp)) {
+                    Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth()) {
                         it.asString(context)?.let { text ->
                             Text(
                                 text = text, fontSize = MiuixTheme.textStyles.footnote1.fontSize,

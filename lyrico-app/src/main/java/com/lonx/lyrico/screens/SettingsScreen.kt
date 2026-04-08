@@ -121,7 +121,7 @@ fun SettingsScreen(
 
     val themeModeItems = ThemeMode.entries.map { stringResource(it.labelRes) }
     val selectedThemeModeIndex =
-        ThemeMode.entries.indexOf(settingsUiState.themeMode).coerceAtLeast(0)
+        ThemeMode.entries.indexOf(themeMode).coerceAtLeast(0)
 
     val lyricFormatItems = LyricFormat.entries.map { stringResource(it.labelRes) }
     val selectedLyricFormatIndex = LyricFormat.entries.indexOf(lyricFormat).coerceAtLeast(0)
