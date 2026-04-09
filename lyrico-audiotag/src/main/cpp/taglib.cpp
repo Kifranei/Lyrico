@@ -31,8 +31,18 @@ TagLib::File* createFileFromContent(TagLib::IOStream *stream,
     else if (TagLib::RIFF::WAV::File::isSupported(stream))
         file = new TagLib::RIFF::WAV::File(stream, readAudioProperties, audioPropertiesStyle);
 
+    if (!file) {
+        stream->seek(0);
+        file = new TagLib::MPEG::File(stream, readAudioProperties, audioPropertiesStyle);
+    }
+
     if (file) {
         if (file->isValid()) {
+            return file;
+        }
+        bool hasTags = (file->tag() && !file->tag()->isEmpty()) || !file->properties().isEmpty();
+
+        if (hasTags) {
             return file;
         }
         delete file;
