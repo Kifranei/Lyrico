@@ -181,7 +181,10 @@ fun SongListScreen(
     }
     var initialDragIndex by remember { mutableStateOf<Int?>(null) }
     var currentDragIndex by remember { mutableStateOf<Int?>(null) }
+    var initialDragY by remember { mutableStateOf<Float?>(null) }
+    var currentDragY by remember { mutableStateOf<Float?>(null) }
     var autoScrollSpeed by remember { mutableFloatStateOf(0f) }
+
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val sectionIndexMap = remember(songs, sortInfo) {
@@ -211,6 +214,23 @@ fun SongListScreen(
         if (autoScrollSpeed != 0f) {
             while (isActive) {
                 listState.scrollBy(autoScrollSpeed)
+                currentDragY?.let { y ->
+                    val viewportHeight = listState.layoutInfo.viewportSize.height.toFloat()
+                    val clampedY = y.coerceIn(0f, viewportHeight - 1f)
+                    val itemInfo = listState.layoutInfo.visibleItemsInfo.find {
+                        clampedY >= it.offset && clampedY <= (it.offset + it.size)
+                    }
+                    if (itemInfo != null && initialDragIndex != null) {
+                        if (itemInfo.index != currentDragIndex) {
+                            currentDragIndex = itemInfo.index
+                            viewModel.updateDragSelection(
+                                initialDragIndex!!,
+                                currentDragIndex!!,
+                                songs
+                            )
+                        }
+                    }
+                }
                 delay(16) // 大约 60 帧的刷新率
             }
         }
@@ -219,6 +239,8 @@ fun SongListScreen(
         Modifier.pointerInput(songs, isSelectionMode) {
             detectDragGesturesAfterLongPress(
                 onDragStart = { offset ->
+                    initialDragY = offset.y
+                    currentDragY = offset.y
                     val itemInfo = listState.layoutInfo.visibleItemsInfo.find {
                         offset.y >= it.offset && offset.y <= (it.offset + it.size)
                     }
@@ -230,18 +252,35 @@ fun SongListScreen(
                 },
                 onDrag = { change, _ ->
                     val y = change.position.y
-                    val viewportHeight = listState.layoutInfo.viewportSize.height
-                    val topThreshold = 150f
-                    val bottomThreshold = viewportHeight - 150f
+                    currentDragY = y
 
-                    autoScrollSpeed = when {
-                        y < topThreshold -> -(topThreshold - y) * 0.2f
-                        y > bottomThreshold -> (y - bottomThreshold) * 0.2f
-                        else -> 0f
+                    // 基于起始点的距离计算滚动方向和速度
+                    if (initialDragY != null) {
+                        val dragDistance = y - initialDragY!!
+
+                        // 参数调优
+                        val deadZone = 180f // 缓冲死区：滑动超出起点的这部分距离内，不自动滚动，只做普通框选
+                        val speedFactor = 0.15f // 速度乘数：决定超出死区后滚动的快慢
+                        val maxSpeed = 60f // 最大滚动速度限制（像素/帧）
+
+                        autoScrollSpeed = when {
+                            dragDistance > deadZone -> {
+                                // 向下滑动，超出死区，列表向下滚动
+                                ((dragDistance - deadZone) * speedFactor).coerceAtMost(maxSpeed)
+                            }
+                            dragDistance < -deadZone -> {
+                                // 向上滑动，超出死区，列表向上滚动
+                                ((dragDistance + deadZone) * speedFactor).coerceAtLeast(-maxSpeed)
+                            }
+                            else -> 0f
+                        }
                     }
 
+                    // 更新选中状态
+                    val viewportHeight = listState.layoutInfo.viewportSize.height.toFloat()
+                    val clampedY = y.coerceIn(0f, viewportHeight - 1f)
                     val itemInfo = listState.layoutInfo.visibleItemsInfo.find {
-                        y >= it.offset && y <= (it.offset + it.size)
+                        clampedY >= it.offset && clampedY <= (it.offset + it.size)
                     }
                     if (itemInfo != null && initialDragIndex != null) {
                         if (itemInfo.index != currentDragIndex) {
@@ -257,12 +296,16 @@ fun SongListScreen(
                 onDragEnd = {
                     initialDragIndex = null
                     currentDragIndex = null
+                    initialDragY = null
+                    currentDragY = null
                     autoScrollSpeed = 0f
                     viewModel.endDragSelection()
                 },
                 onDragCancel = {
                     initialDragIndex = null
                     currentDragIndex = null
+                    initialDragY = null
+                    currentDragY = null
                     autoScrollSpeed = 0f
                     viewModel.endDragSelection()
                 }
