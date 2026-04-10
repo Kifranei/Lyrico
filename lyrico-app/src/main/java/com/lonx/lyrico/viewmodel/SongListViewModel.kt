@@ -22,6 +22,7 @@ import com.lonx.lyrico.data.model.BatchMatchField
 import com.lonx.lyrico.data.model.BatchMatchHistory
 import com.lonx.lyrico.data.model.BatchMatchMode
 import com.lonx.lyrico.data.model.BatchMatchResult
+import com.lonx.lyrico.data.model.LocalSearchType
 import com.lonx.lyrico.data.model.LyricRenderConfig
 import com.lonx.lyrico.data.model.entity.BatchMatchRecordEntity
 import com.lonx.lyrico.data.model.entity.SongEntity
@@ -136,6 +137,8 @@ class SongListViewModel(
 
     private val _selectedSongIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedSongIds = _selectedSongIds.asStateFlow()
+    private val _searchType = MutableStateFlow(LocalSearchType.ALL)
+    val searchType = _searchType.asStateFlow()
     private val _isSelectionMode = MutableStateFlow(false)
     val isSelectionMode = _isSelectionMode.asStateFlow()
     private val _sheetState = MutableStateFlow(SheetUiState())
@@ -144,16 +147,17 @@ class SongListViewModel(
     // 使用 flatMapLatest，一旦输入新搜索词，会自动取消上一次尚未完成的数据库查询
     val songs: StateFlow<List<SongEntity>> = combine(
         sortInfo,
-        _uiState.map { it.searchQuery }.distinctUntilChanged()
-    ) { sort, query ->
-        Pair(sort, query)
-    }.flatMapLatest { (sort, query) ->
+        _uiState.map { it.searchQuery }.distinctUntilChanged(),
+        searchType
+    ) { sort, query, type ->
+        Triple(sort, query, type) // 组合成 Triple
+    }.flatMapLatest { (sort, query, type) ->
         if (query.isBlank()) {
             // 没有搜索词，返回全部歌曲（应用排序）
             songRepository.getAllSongsSorted(sort.sortBy, sort.order)
         } else {
-            // 有搜索词，进行搜索
-            songRepository.searchSongs(query)
+            // 有搜索词，将 query 和当前的 searchType 一起传给 Repository
+            songRepository.searchSongs(query, type)
         }
     }.onEach {
         // 数据库查询出结果后，关闭 isSearching 状态
@@ -204,8 +208,12 @@ class SongListViewModel(
             )
         }
     }
+    fun onSearchTypeChanged(type: LocalSearchType) {
+        _searchType.value = type
+    }
     fun clearSearch() {
-        onSearchQueryChanged("")
+        _uiState.update { it.copy(searchQuery = "") }
+        _searchType.value = LocalSearchType.ALL
     }
     /**
      * 触发滑动选择的起点

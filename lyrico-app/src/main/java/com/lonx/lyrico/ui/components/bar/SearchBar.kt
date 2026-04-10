@@ -151,8 +151,8 @@ fun SearchBar(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "",
-    actionText: String = "取消",
-    onActionClick: () -> Unit,
+    actions: @Composable (() -> Unit)? = null,
+    trailingIcon: @Composable (() -> Unit)? = null,
     onSearch: ((String) -> Unit)? = null,
 ) {
     Row(
@@ -165,27 +165,9 @@ fun SearchBar(
             onValueChange = onValueChange,
             placeholder = placeholder,
             onSearch = onSearch,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            trailingIcon = trailingIcon
         )
-
-        AnimatedVisibility(
-            visible = true,
-            enter = expandHorizontally() + slideInHorizontally { it },
-            exit = shrinkHorizontally() + slideOutHorizontally { it }
-        ) {
-            Text(
-                text = actionText,
-                modifier = Modifier
-                    .padding(start = 12.dp)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
-                        onActionClick()
-                    },
-                style = MiuixTheme.textStyles.main,
-                color = MiuixTheme.colorScheme.primary
-            )
-        }
+        actions?.invoke()
     }
 }

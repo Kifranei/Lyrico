@@ -14,6 +14,7 @@ import com.lonx.audiotag.rw.AudioTagReader
 import com.lonx.audiotag.rw.AudioTagWriter
 import com.lonx.lyrico.data.LyricoDatabase
 import com.lonx.lyrico.data.exception.RequiresUserPermissionException
+import com.lonx.lyrico.data.model.LocalSearchType
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.model.SongFile
 import com.lonx.lyrico.data.utils.SongQueryBuilder
@@ -27,7 +28,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.IOException
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -264,8 +264,8 @@ class SongRepositoryImpl(
         }
     }
 
-    override fun searchSongs(query: String): Flow<List<SongEntity>> {
-        return songDao.searchSongsByAll(query)
+    override fun searchSongs(query: String, type: LocalSearchType): Flow<List<SongEntity>> {
+        return songDao.searchSongsByType(query, type.value)
     }
 
     override suspend fun updateSongMetadata(

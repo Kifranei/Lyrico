@@ -389,4 +389,9 @@
     <string name="batch_edit_field_remove_hint">Remove this field</string>
     <string name="batch_edit_info_summary">Learn how to use batch edit</string>
     <string name="batch_edit_info_content">Batch Edit Guide:\n\n• All fields display \"&lt;keep&gt;\" by default, meaning that field will not be modified\n• After editing a field, it will be updated to all selected songs\n• Click the undo button on the right side of a field to restore it to \"&lt;keep&gt;\" state\n• For rating, click stars to set a new rating, or click \"Undo\" to keep unchanged\n• Cover images can be changed or removed by tapping\n• Click \"Save\" to write the changes to all selected songs\' file tags</string>
+    <string name="search_type_all">All</string>
+    <string name="search_type_title">Title</string>
+    <string name="search_type_artist">Artist</string>
+    <string name="search_type_album">Album</string>
+    <string name="search_type_filename">File Name</string>
 </resources>

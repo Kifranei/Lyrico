@@ -400,4 +400,9 @@
     <string name="batch_edit_field_remove_hint">移除此标签</string>
     <string name="batch_edit_info_summary">了解批量编辑的使用方法</string>
     <string name="batch_edit_info_content">批量编辑说明：\n\n• 所有字段默认显示"&lt;keep&gt;"，表示该字段不会被修改\n• 编辑字段内容后，该字段将被更新到所有选中的歌曲\n• 点击字段右侧的撤销按钮可以恢复到"&lt;keep&gt;"状态\n• 对于评分字段，点击星星可以设置新的评分，或点击"撤销"按钮不修改\n• 封面图片可以点击来更换或移除\n• 点击「保存」按钮后，修改会写入所有选中歌曲的文件标签</string>
+    <string name="search_type_all">全部</string>
+    <string name="search_type_title">标题</string>
+    <string name="search_type_artist">艺术家</string>
+    <string name="search_type_album">专辑</string>
+    <string name="search_type_filename">文件名</string>
 </resources>

@@ -80,6 +80,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.lonx.lyrico.BuildConfig
 import com.lonx.lyrico.R
+import com.lonx.lyrico.data.model.LocalSearchType
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.model.entity.getUri
 import com.lonx.lyrico.ui.components.DropdownItem
@@ -126,6 +127,8 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.TabRow
+import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
@@ -144,6 +147,7 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.window.WindowDialog
+import top.yukonga.miuix.kmp.window.WindowListPopup
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -165,6 +169,7 @@ fun SongListScreen(
     val uiState by viewModel.uiState.collectAsState()
     val sortInfo by viewModel.sortInfo.collectAsState()
     val songs by viewModel.songs.collectAsState()
+    val searchType by viewModel.searchType.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState(initial = false)
     val selectedSongIds by viewModel.selectedSongIds.collectAsState()
     val allSelected = selectedSongIds.size == songs.size
@@ -268,10 +273,12 @@ fun SongListScreen(
                                 // 向下滑动，超出死区，列表向下滚动
                                 ((dragDistance - deadZone) * speedFactor).coerceAtMost(maxSpeed)
                             }
+
                             dragDistance < -deadZone -> {
                                 // 向上滑动，超出死区，列表向上滚动
                                 ((dragDistance + deadZone) * speedFactor).coerceAtLeast(-maxSpeed)
                             }
+
                             else -> 0f
                         }
                     }
@@ -464,7 +471,7 @@ fun SongListScreen(
                     Column(
                         modifier = Modifier
                             .windowInsetsPadding(WindowInsets.statusBars)
-                            .padding(top = 11.dp)
+                            .padding(vertical = 4.dp)
                     ) {
                         SearchBar(
                             modifier = Modifier.padding(horizontal = 12.dp),
@@ -473,13 +480,33 @@ fun SongListScreen(
                                 viewModel.onSearchQueryChanged(it)
                             },
                             placeholder = stringResource(id = R.string.local_search_hint),
-                            actionText = stringResource(id = R.string.action_close),
-                            onActionClick = {
-                                isSearchMode = false
-                                viewModel.clearSearch()
+                            actions = {
+                                TextButton(
+                                    onClick = {
+                                        isSearchMode = false
+                                        viewModel.clearSearch()
+                                    }
+                                ) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.action_close
+                                        ),
+                                        color = MiuixTheme.colorScheme.primary,
+                                        style = MiuixTheme.textStyles.main
+                                    )
+                                }
                             },
                             onSearch = {
                                 viewModel.onSearchQueryChanged(uiState.searchQuery)
+                            }
+                        )
+                        TabRow(
+                            modifier = Modifier.padding(vertical = 4.dp, horizontal = 12.dp),
+                            itemSpacing = 4.dp,
+                            tabs = LocalSearchType.entries.map { stringResource(it.labelRes) },
+                            selectedTabIndex = LocalSearchType.entries.indexOf(searchType),
+                            onTabSelected = {
+                                viewModel.onSearchTypeChanged(LocalSearchType.entries[it])
                             }
                         )
                     }

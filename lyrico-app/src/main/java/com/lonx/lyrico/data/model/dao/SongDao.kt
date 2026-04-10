@@ -92,27 +92,41 @@ interface SongDao {
 
     /**
      * 全字段搜索
-     * 优化：LIKE 匹配前后加 %，逻辑保持不变
      */
     @Query("""
         SELECT s.* FROM songs AS s
         INNER JOIN folders AS f ON s.folderId = f.id
         WHERE f.isIgnored = 0 AND (
-            s.title LIKE '%' || :query || '%' 
-            OR s.artist LIKE '%' || :query || '%'
-            OR s.album LIKE '%' || :query || '%'
+            (:searchType = 'ALL' AND (
+                s.title LIKE '%' || :query || '%' 
+                OR s.artist LIKE '%' || :query || '%'
+                OR s.album LIKE '%' || :query || '%'
+                OR s.fileName LIKE '%' || :query || '%'
+            ))
+            OR (:searchType = 'TITLE' AND s.title LIKE '%' || :query || '%')
+            OR (:searchType = 'ARTIST' AND s.artist LIKE '%' || :query || '%')
+            OR (:searchType = 'ALBUM' AND s.album LIKE '%' || :query || '%')
+            OR (:searchType = 'FILE_NAME' AND s.fileName LIKE '%' || :query || '%')
         )
         ORDER BY 
             CASE 
-                WHEN s.title LIKE :query || '%' THEN 1       -- 优先匹配：标题以此开头
-                WHEN s.title LIKE '%' || :query || '%' THEN 2 -- 其次：标题包含
-                WHEN s.artist LIKE '%' || :query || '%' THEN 3 -- 再次：艺术家包含
-                WHEN s.album LIKE '%' || :query || '%' THEN 4  -- 最后：专辑包含
-                WHEN s.fileName LIKE '%' || :query || '%' THEN 5
-                ELSE 6 
-            END
+                WHEN :searchType = 'ALL' THEN
+                    CASE 
+                        WHEN s.title LIKE :query || '%' THEN 1
+                        WHEN s.title LIKE '%' || :query || '%' THEN 2
+                        WHEN s.artist LIKE '%' || :query || '%' THEN 3
+                        WHEN s.album LIKE '%' || :query || '%' THEN 4
+                        ELSE 5 
+                    END
+                WHEN :searchType = 'TITLE' THEN CASE WHEN s.title LIKE :query || '%' THEN 1 ELSE 2 END
+                WHEN :searchType = 'ARTIST' THEN CASE WHEN s.artist LIKE :query || '%' THEN 1 ELSE 2 END
+                WHEN :searchType = 'ALBUM' THEN CASE WHEN s.album LIKE :query || '%' THEN 1 ELSE 2 END
+                WHEN :searchType = 'FILE_NAME' THEN CASE WHEN s.fileName LIKE :query || '%' THEN 1 ELSE 2 END
+                ELSE 1
+            END,
+            s.title ASC
     """)
-    fun searchSongsByAll(query: String): Flow<List<SongEntity>>
+    fun searchSongsByType(query: String, searchType: String): Flow<List<SongEntity>>
 
     /**
      * 获取所有歌曲 (默认排序)

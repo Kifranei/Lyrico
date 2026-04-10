@@ -27,6 +27,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -129,11 +130,20 @@ fun SearchResultsScreen(
                     value = searchKeyword,
                     onValueChange = viewModel::onKeywordChanged,
                     placeholder = stringResource(id = R.string.search_lyrics_placeholder),
-                    actionText = stringResource(id = R.string.action_search),
-                    onActionClick = {
-                        viewModel.performSearch()
-                        keyboardController?.hide()
-                    },
+                    actions = {
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                keyboardController?.hide()
+                                viewModel.performSearch()
+                            }
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.action_search),
+                                style = MiuixTheme.textStyles.main,
+                                color = MiuixTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 )
             }
         }
