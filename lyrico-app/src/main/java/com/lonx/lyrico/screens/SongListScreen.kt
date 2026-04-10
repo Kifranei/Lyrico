@@ -8,13 +8,18 @@ import android.provider.MediaStore
 import android.text.format.Formatter
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -157,7 +162,9 @@ private val SECTIONS_ASC = listOf(
 ) + ('A'..'Z').map { it.toString() } + listOf("#")
 
 private val SECTIONS_DESC = SECTIONS_ASC.asReversed()
-
+enum class TopBarState {
+    Selection, Search, Default
+}
 @SuppressLint("LocalContextGetResourceValueCall")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -420,164 +427,195 @@ fun SongListScreen(
                 }
             },
             topBar = {
-                if (isSelectionMode) {
-                    SmallTopAppBar(
-                        title = "",
-                        scrollBehavior = topAppBarScrollBehavior,
-                        navigationIcon = {
-                            Text(
-                                text = stringResource(
-                                    R.string.selection_mode_selected_count,
-                                    selectedSongIds.size
+                val topBarState = when {
+                    isSelectionMode -> TopBarState.Selection
+                    isSearchMode -> TopBarState.Search
+                    else -> TopBarState.Default
+                }
+
+                AnimatedContent(
+                    targetState = topBarState,
+                    label = "TopBarAnimation",
+                    transitionSpec = {
+                        // 定义过渡动画：淡入淡出 + 轻微的垂直滑动 + 尺寸自适应平滑过渡
+                        val animationDuration = 300
+                        val enter = fadeIn(tween(animationDuration)) +
+                                slideInVertically(
+                                    animationSpec = tween(animationDuration, easing = FastOutSlowInEasing),
+                                    initialOffsetY = { -it / 3 } // 从上方 1/3 处滑入
                                 )
-                            )
-                        },
-                        actions = {
-                            TextButton(
-                                onClick = {
-                                    if (allSelected) {
-                                        viewModel.deselectAll()
-                                    } else {
-                                        viewModel.selectAll(songs)
-                                    }
-                                }
-                            ) {
-                                Text(
-                                    text = stringResource(
-                                        if (allSelected) {
-                                            R.string.action_deselect_all
-                                        } else {
-                                            R.string.action_select_all
-                                        }
-                                    ),
-                                    color = MiuixTheme.colorScheme.primary
+                        val exit = fadeOut(tween(animationDuration)) +
+                                slideOutVertically(
+                                    animationSpec = tween(animationDuration, easing = FastOutSlowInEasing),
+                                    targetOffsetY = { -it / 3 } // 向上方 1/3 处滑出
                                 )
-                            }
-                            TextButton(
-                                onClick = {
-                                    viewModel.exitSelectionMode()
-                                }
-                            ) {
-                                Text(
-                                    text = stringResource(
-                                        R.string.action_close
-                                    ),
-                                    color = MiuixTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    )
-                } else if (isSearchMode) {
-                    Column(
-                        modifier = Modifier
-                            .windowInsetsPadding(WindowInsets.statusBars)
-                            .padding(vertical = 8.dp)
-                    ) {
-                        SearchBar(
-                            modifier = Modifier.padding(horizontal = 12.dp),
-                            value = uiState.searchQuery,
-                            onValueChange = {
-                                viewModel.onSearchQueryChanged(it)
-                            },
-                            placeholder = stringResource(id = R.string.local_search_hint),
-                            actions = {
-                                TextButton(
-                                    onClick = {
-                                        isSearchMode = false
-                                        viewModel.clearSearch()
-                                    }
-                                ) {
+
+                        (enter togetherWith exit).using(
+                            // SizeTransform 保证了如果搜索栏和默认导航栏高度不同时，高度变化也是平滑的
+                            SizeTransform(clip = false)
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { state ->
+                    when (state) {
+                        TopBarState.Selection -> {
+                            SmallTopAppBar(
+                                title = "",
+                                scrollBehavior = topAppBarScrollBehavior,
+                                navigationIcon = {
                                     Text(
                                         text = stringResource(
-                                            R.string.action_close
-                                        ),
-                                        color = MiuixTheme.colorScheme.primary,
-                                        style = MiuixTheme.textStyles.main
+                                            R.string.selection_mode_selected_count,
+                                            selectedSongIds.size
+                                        )
                                     )
-                                }
-                            },
-                            onSearch = {
-                                viewModel.onSearchQueryChanged(uiState.searchQuery)
-                            }
-                        )
-                    }
-                } else {
-                    SmallTopAppBar(
-                        title = stringResource(R.string.song_list_title, songs.size),
-                        scrollBehavior = topAppBarScrollBehavior,
-                        navigationIcon = {
-                            IconButton(
-                                onClick = { navigator.navigate(SettingsDestination()) }
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Settings,
-                                    contentDescription = null
-                                )
-                            }
-                        },
-                        actions = {
-                            IconButton(onClick = { isSearchMode = true }) {
-                                Icon(
-                                    imageVector = MiuixIcons.Search,
-                                    contentDescription = stringResource(R.string.cd_search)
-                                )
-                            }
-                            Box {
-                                IconButton(
-                                    onClick = { sortOrderDropdownExpanded = true }
-                                ) {
-                                    Icon(
-                                        imageVector = MiuixIcons.Sort,
-                                        contentDescription = stringResource(R.string.cd_sort)
-                                    )
-                                }
-                                OverlayListPopup(
-                                    show = sortOrderDropdownExpanded,
-                                    popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
-                                    onDismissRequest = { sortOrderDropdownExpanded = false }
-                                ) {
-                                    ListPopupColumn {
-                                        val sortTypes = SortBy.entries.toList()
-                                        sortTypes.forEach { type ->
-                                            val isSelected = sortInfo.sortBy == type
-                                            DropdownItem(
-                                                text = stringResource(type.labelRes),
-                                                optionSize = sortTypes.size + 1,
-                                                index = sortTypes.indexOf(type),
-                                                isSelected = isSelected,
-                                                iconPainter = if (isSelected) {
-                                                    if (sortInfo.order == SortOrder.ASC) {
-                                                        painterResource(R.drawable.ic_arrow_down_24dp)
-                                                    } else {
-                                                        painterResource(R.drawable.ic_arrow_up_24dp)
-                                                    }
-                                                } else null,
-                                                onSelectedIndexChange = {
-                                                    val newOrder = if (isSelected) {
-                                                        if (sortInfo.order == SortOrder.ASC) SortOrder.DESC else SortOrder.ASC
-                                                    } else {
-                                                        SortOrder.ASC
-                                                    }
-                                                    viewModel.onSortChange(SortInfo(type, newOrder))
-                                                }
-                                            )
-                                        }
-                                        HorizontalDivider()
-                                        SwitchPreference(
-                                            title = stringResource(R.string.show_scroll_top_button),
-                                            summary = stringResource(R.string.show_scroll_top_button_hint),
-                                            checked = showScrollTopButton,
-                                            onCheckedChange = {
-                                                viewModel.setScrollToTopButtonEnabled(
-                                                    it
-                                                )
+                                },
+                                actions = {
+                                    TextButton(
+                                        onClick = {
+                                            if (allSelected) {
+                                                viewModel.deselectAll()
+                                            } else {
+                                                viewModel.selectAll(songs)
                                             }
+                                        }
+                                    ) {
+                                        Text(
+                                            text = stringResource(
+                                                if (allSelected) {
+                                                    R.string.action_deselect_all
+                                                } else {
+                                                    R.string.action_select_all
+                                                }
+                                            ),
+                                            color = MiuixTheme.colorScheme.primary
+                                        )
+                                    }
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.exitSelectionMode()
+                                        }
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.action_close),
+                                            color = MiuixTheme.colorScheme.primary
                                         )
                                     }
                                 }
+                            )
+                        }
+
+                        TopBarState.Search -> {
+                            Column(
+                                modifier = Modifier
+                                    .windowInsetsPadding(WindowInsets.statusBars)
+                                    .padding(vertical = 8.dp)
+                            ) {
+                                SearchBar(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    value = uiState.searchQuery,
+                                    onValueChange = {
+                                        viewModel.onSearchQueryChanged(it)
+                                    },
+                                    placeholder = stringResource(id = R.string.local_search_hint),
+                                    actions = {
+                                        TextButton(
+                                            onClick = {
+                                                isSearchMode = false
+                                                viewModel.clearSearch()
+                                            }
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.action_close),
+                                                color = MiuixTheme.colorScheme.primary,
+                                                style = MiuixTheme.textStyles.main
+                                            )
+                                        }
+                                    },
+                                    onSearch = {
+                                        viewModel.onSearchQueryChanged(uiState.searchQuery)
+                                    }
+                                )
                             }
                         }
-                    )
+
+                        TopBarState.Default -> {
+                            SmallTopAppBar(
+                                title = stringResource(R.string.song_list_title, songs.size),
+                                scrollBehavior = topAppBarScrollBehavior,
+                                navigationIcon = {
+                                    IconButton(
+                                        onClick = { navigator.navigate(SettingsDestination()) }
+                                    ) {
+                                        Icon(
+                                            imageVector = MiuixIcons.Settings,
+                                            contentDescription = null
+                                        )
+                                    }
+                                },
+                                actions = {
+                                    IconButton(onClick = { isSearchMode = true }) {
+                                        Icon(
+                                            imageVector = MiuixIcons.Search,
+                                            contentDescription = stringResource(R.string.cd_search)
+                                        )
+                                    }
+                                    Box {
+                                        IconButton(
+                                            onClick = { sortOrderDropdownExpanded = true }
+                                        ) {
+                                            Icon(
+                                                imageVector = MiuixIcons.Sort,
+                                                contentDescription = stringResource(R.string.cd_sort)
+                                            )
+                                        }
+                                        OverlayListPopup(
+                                            show = sortOrderDropdownExpanded,
+                                            popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
+                                            onDismissRequest = { sortOrderDropdownExpanded = false }
+                                        ) {
+                                            ListPopupColumn {
+                                                val sortTypes = SortBy.entries.toList()
+                                                sortTypes.forEach { type ->
+                                                    val isSelected = sortInfo.sortBy == type
+                                                    DropdownItem(
+                                                        text = stringResource(type.labelRes),
+                                                        optionSize = sortTypes.size + 1,
+                                                        index = sortTypes.indexOf(type),
+                                                        isSelected = isSelected,
+                                                        iconPainter = if (isSelected) {
+                                                            if (sortInfo.order == SortOrder.ASC) {
+                                                                painterResource(R.drawable.ic_arrow_down_24dp)
+                                                            } else {
+                                                                painterResource(R.drawable.ic_arrow_up_24dp)
+                                                            }
+                                                        } else null,
+                                                        onSelectedIndexChange = {
+                                                            val newOrder = if (isSelected) {
+                                                                if (sortInfo.order == SortOrder.ASC) SortOrder.DESC else SortOrder.ASC
+                                                            } else {
+                                                                SortOrder.ASC
+                                                            }
+                                                            viewModel.onSortChange(SortInfo(type, newOrder))
+                                                        }
+                                                    )
+                                                }
+                                                HorizontalDivider()
+                                                SwitchPreference(
+                                                    title = stringResource(R.string.show_scroll_top_button),
+                                                    summary = stringResource(R.string.show_scroll_top_button_hint),
+                                                    checked = showScrollTopButton,
+                                                    onCheckedChange = {
+                                                        viewModel.setScrollToTopButtonEnabled(it)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             }
         ) { paddingValues ->
