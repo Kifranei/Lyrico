@@ -9,9 +9,7 @@ on:
       - 'lyrico-lyrics/**'
       - 'gradle/**'
       - 'build.gradle'
-      - 'build.gradle.kts'
       - 'settings.gradle'
-      - 'settings.gradle.kts'
       - 'gradle.properties'
       - 'gradlew'
       - '.github/workflows/build-debug.yml'
@@ -45,7 +43,6 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-
       - name: 🔐 赋予 gradlew 执行权限
         run: chmod +x gradlew
 
@@ -55,37 +52,9 @@ jobs:
       - name: 🛠️ 构建 Debug APK
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: 📤 上传 ARM64-v8a APK
+      - name: 📤 上传 APK
         uses: actions/upload-artifact@v4
         with:
-          name: Lyrico-debug-arm64-debug
-          path: lyrico-app/build/outputs/apk/debug/lyrico-app-arm64-v8a-debug.apk
-          retention-days: 30
-
-      - name: 📤 上传 ARMv7 APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Lyrico-debug-armv7-debug
-          path: lyrico-app/build/outputs/apk/debug/lyrico-app-armeabi-v7a-debug.apk
-          retention-days: 30
-
-      - name: 📤 上传 x86 APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Lyrico-debug-x86-debug
-          path: lyrico-app/build/outputs/apk/debug/lyrico-app-x86-debug.apk
-          retention-days: 30
-
-      - name: 📤 上传 x86_64 APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Lyrico-debug-x86_64-debug
-          path: lyrico-app/build/outputs/apk/debug/lyrico-app-x86_64-debug.apk
-          retention-days: 30
-
-      - name: 📤 上传 Universal APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Lyrico-debug-universal-debug
-          path: lyrico-app/build/outputs/apk/debug/lyrico-app-universal-debug.apk
+          name: Lyrico-debug
+          path: lyrico-app/build/outputs/apk/debug/*.apk
           retention-days: 30
