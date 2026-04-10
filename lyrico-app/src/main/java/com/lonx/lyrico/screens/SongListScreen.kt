@@ -471,7 +471,7 @@ fun SongListScreen(
                     Column(
                         modifier = Modifier
                             .windowInsetsPadding(WindowInsets.statusBars)
-                            .padding(vertical = 4.dp)
+                            .padding(vertical = 8.dp)
                     ) {
                         SearchBar(
                             modifier = Modifier.padding(horizontal = 12.dp),
@@ -498,15 +498,6 @@ fun SongListScreen(
                             },
                             onSearch = {
                                 viewModel.onSearchQueryChanged(uiState.searchQuery)
-                            }
-                        )
-                        TabRow(
-                            modifier = Modifier.padding(vertical = 4.dp, horizontal = 12.dp),
-                            itemSpacing = 4.dp,
-                            tabs = LocalSearchType.entries.map { stringResource(it.labelRes) },
-                            selectedTabIndex = LocalSearchType.entries.indexOf(searchType),
-                            onTabSelected = {
-                                viewModel.onSearchTypeChanged(LocalSearchType.entries[it])
                             }
                         )
                     }
@@ -597,6 +588,31 @@ fun SongListScreen(
                 topAppBarScrollBehavior = topAppBarScrollBehavior,
                 refreshTexts = refreshTexts
             ) {
+                AnimatedVisibility(
+                    visible = isSearchMode,
+                    enter = slideInVertically(
+                        initialOffsetY = { -it }
+                    ) + fadeIn(),
+
+                    exit = slideOutVertically(
+                        targetOffsetY = { -it }
+                    ) + fadeOut()
+                ){
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                            .padding(bottom = 12.dp)
+                    ) {
+                        TabRowWithContour(
+                            tabs = LocalSearchType.entries.map { stringResource(it.labelRes) },
+                            selectedTabIndex = LocalSearchType.entries.indexOf(searchType),
+                            onTabSelected = {
+                                viewModel.onSearchTypeChanged(LocalSearchType.entries[it])
+                            }
+                        )
+                    }
+                }
                 LazyColumnScrollbar(
                     state = listState,
                     settings = ScrollbarSettings.Default.copy(
