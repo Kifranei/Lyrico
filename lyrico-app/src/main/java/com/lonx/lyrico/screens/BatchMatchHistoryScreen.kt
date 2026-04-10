@@ -39,12 +39,12 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import top.yukonga.miuix.kmp.window.WindowDialog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -69,7 +69,6 @@ fun BatchMatchHistoryScreen(
                 title = stringResource(R.string.batch_match_history_title),
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 12.dp),
                         onClick = {
                             navigator.popBackStack()
                         }
@@ -85,7 +84,7 @@ fun BatchMatchHistoryScreen(
         }
     ) { paddingValues ->
         if (showConfirmDialog.value && selectedHistoryId != null) {
-            SuperDialog(
+            WindowDialog(
                 title = stringResource(R.string.batch_match_delete_title),
                 show = showConfirmDialog.value,
                 onDismissRequest = {

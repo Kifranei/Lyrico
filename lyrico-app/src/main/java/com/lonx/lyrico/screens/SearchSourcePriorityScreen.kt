@@ -82,7 +82,6 @@ fun SearchSourcePriorityScreen(
                 title = stringResource(id = R.string.search_source_priority),
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 12.dp),
                         onClick = { navigator.navigateUp() }
                     ) {
                         Icon(

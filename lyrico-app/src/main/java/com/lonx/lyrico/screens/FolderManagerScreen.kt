@@ -57,9 +57,6 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.extra.SuperBottomSheet
-import top.yukonga.miuix.kmp.extra.SuperDialog
-import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.AddFolder
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -67,9 +64,12 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Show
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -111,7 +111,6 @@ fun FolderManagerScreen(
                 title = stringResource(R.string.folder_manager_title),
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 12.dp),
                         onClick = { navigator.navigateUp() }) {
                         Icon(
                             imageVector = MiuixIcons.Back,
@@ -121,7 +120,6 @@ fun FolderManagerScreen(
                 },
                 actions = {
                     IconButton(
-                        modifier = Modifier.padding(end = 12.dp),
                         onClick = { folderPickerLauncher.launch(null) }
                     ) {
                         Icon(
@@ -135,7 +133,7 @@ fun FolderManagerScreen(
         }
     ) { paddingValues ->
         currentFolder?.let { folder ->
-            SuperDialog(
+            WindowDialog(
                 title = stringResource(R.string.dialog_remove_folder_title),
                 show = showConfirmDialog.value,
                 onDismissRequest = { showConfirmDialog.value = false }
@@ -181,7 +179,7 @@ fun FolderManagerScreen(
         }
 
         currentFolder?.let { folder ->
-            SuperBottomSheet(
+            WindowBottomSheet(
                 show = showSheet,
                 onDismissRequest = {
                     showSheet = false
@@ -439,7 +437,7 @@ fun FolderActionSheetContent(
                     color = MiuixTheme.colorScheme.secondaryContainer,
                 )
             ) {
-                SuperSwitch(
+                SwitchPreference(
                     title = stringResource(R.string.folder_action_enable),
                     summary = stringResource(R.string.folder_action_enable_sub),
                     checked = !folder.isIgnored,

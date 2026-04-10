@@ -69,8 +69,7 @@ import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.extra.SuperArrow
-import top.yukonga.miuix.kmp.extra.SuperBottomSheet
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Ok
@@ -81,6 +80,7 @@ import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
 
 
 @SuppressLint("LocalContextGetResourceValueCall")
@@ -192,7 +192,6 @@ fun EditMetadataScreen(
                 title = titleText,
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 12.dp),
                         onClick = {
                             if (!navigator.popBackStack()) {
                                 activity.finish()
@@ -214,7 +213,6 @@ fun EditMetadataScreen(
 
                     // 保存按钮
                     IconButton(
-                        modifier = Modifier.padding(end = 12.dp),
                         onClick = { viewModel.saveMetadata() },
                         enabled = !uiState.isSaving
                     ) {
@@ -491,7 +489,7 @@ fun EditMetadataScreen(
     }
 
     // 封面操作
-    SuperBottomSheet(
+    WindowBottomSheet(
         show = showCoverOptionsSheet,
         onDismissRequest = { showCoverOptionsSheet = false }
     ) {
@@ -507,7 +505,7 @@ fun EditMetadataScreen(
                 Card(
                     colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.secondaryContainer)
                 ) {
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.label_change_cover),
                         onClick = {
                             showCoverOptionsSheet = false
@@ -518,7 +516,7 @@ fun EditMetadataScreen(
                             )
                         }
                     )
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.label_remove_cover),
                         onClick = {
                             showCoverOptionsSheet = false
@@ -526,7 +524,7 @@ fun EditMetadataScreen(
                         }
                     )
                     if (uiState.coverUri != null || uiState.originalCover != null) {
-                        SuperArrow(
+                        ArrowPreference(
                             title = stringResource(R.string.label_save_cover),
                             onClick = {
                                 showCoverOptionsSheet = false
@@ -540,7 +538,7 @@ fun EditMetadataScreen(
     }
 
     // 偏移调整 BottomSheet
-    SuperBottomSheet(
+    WindowBottomSheet(
         show = showOffsetSheet,
         onDismissRequest = { showOffsetSheet = false }
     ) {

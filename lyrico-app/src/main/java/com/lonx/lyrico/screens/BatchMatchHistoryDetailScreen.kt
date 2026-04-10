@@ -39,9 +39,9 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
-import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
@@ -68,7 +68,6 @@ fun BatchMatchHistoryDetailScreen(
                 title = stringResource(R.string.batch_match_history_detail),
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 12.dp),
                         onClick = { navigator.popBackStack() },
                     ) {
                         Icon(imageVector = MiuixIcons.Back, contentDescription = null)
@@ -157,7 +156,7 @@ private fun BatchMatchRecordCard(
     Card(
         modifier = Modifier.padding(horizontal = 12.dp)
     ) {
-        SuperArrow(
+        ArrowPreference(
             title = fileName,
             summary = record.filePath,
             onClick = if (isNavigable) onClick else null

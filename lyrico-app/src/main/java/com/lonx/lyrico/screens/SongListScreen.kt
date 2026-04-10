@@ -21,7 +21,21 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -30,12 +44,25 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.runtime.*
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -43,23 +70,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.state.ToggleableState
-import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.lonx.lyrico.BuildConfig
 import com.lonx.lyrico.R
-import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.model.entity.getUri
 import com.lonx.lyrico.ui.components.DropdownItem
 import com.lonx.lyrico.ui.components.bar.SearchBar
+import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.ui.dialog.BatchMatchConfigDialog
 import com.lonx.lyrico.ui.theme.LyricoColors
 import com.lonx.lyrico.utils.coil.CoverRequest
@@ -102,13 +127,7 @@ import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.extra.SuperArrow
-import top.yukonga.miuix.kmp.extra.SuperBottomSheet
-import top.yukonga.miuix.kmp.extra.SuperDialog
-import top.yukonga.miuix.kmp.extra.SuperListPopup
-import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.More
@@ -117,9 +136,14 @@ import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.icon.extended.Sort
+import top.yukonga.miuix.kmp.overlay.OverlayListPopup
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import top.yukonga.miuix.kmp.window.WindowDialog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -143,6 +167,7 @@ fun SongListScreen(
     val songs by viewModel.songs.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState(initial = false)
     val selectedSongIds by viewModel.selectedSongIds.collectAsState()
+    val allSelected = selectedSongIds.size == songs.size
     val showScrollTopButton by viewModel.showScrollTopButton.collectAsStateWithLifecycle()
     val batchMatchConfig by viewModel.batchMatchConfig.collectAsState()
     var sortOrderDropdownExpanded by remember { mutableStateOf(false) }
@@ -351,7 +376,6 @@ fun SongListScreen(
                         scrollBehavior = topAppBarScrollBehavior,
                         navigationIcon = {
                             Text(
-                                modifier = Modifier.padding(start = 12.dp),
                                 text = stringResource(
                                     R.string.selection_mode_selected_count,
                                     selectedSongIds.size
@@ -359,34 +383,36 @@ fun SongListScreen(
                             )
                         },
                         actions = {
-                            val parentState = when {
-                                selectedSongIds.isEmpty() -> ToggleableState.Off
-                                selectedSongIds.size == songs.size -> ToggleableState.On
-                                else -> ToggleableState.Indeterminate
-                            }
-
-                            IconButton(onClick = {}) {
-                                Checkbox(
-                                    state = parentState,
-                                    onClick = {
-                                        when (parentState) {
-                                            ToggleableState.On -> viewModel.deselectAll()
-                                            ToggleableState.Off,
-                                            ToggleableState.Indeterminate -> viewModel.selectAll(
-                                                songs
-                                            )
-                                        }
+                            TextButton(
+                                onClick = {
+                                    if (allSelected) {
+                                        viewModel.deselectAll()
+                                    } else {
+                                        viewModel.selectAll(songs)
                                     }
+                                }
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        if (allSelected) {
+                                            R.string.action_deselect_all
+                                        } else {
+                                            R.string.action_select_all
+                                        }
+                                    ),
+                                    color = MiuixTheme.colorScheme.primary
                                 )
                             }
-
-                            IconButton(
-                                modifier = Modifier.padding(end = 12.dp),
-                                onClick = { viewModel.exitSelectionMode() }
+                            TextButton(
+                                onClick = {
+                                    viewModel.exitSelectionMode()
+                                }
                             ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Close,
-                                    contentDescription = null
+                                Text(
+                                    text = stringResource(
+                                        R.string.action_close
+                                    ),
+                                    color = MiuixTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -420,7 +446,6 @@ fun SongListScreen(
                         scrollBehavior = topAppBarScrollBehavior,
                         navigationIcon = {
                             IconButton(
-                                modifier = Modifier.padding(start = 12.dp),
                                 onClick = { navigator.navigate(SettingsDestination()) }
                             ) {
                                 Icon(
@@ -438,7 +463,6 @@ fun SongListScreen(
                             }
                             Box {
                                 IconButton(
-                                    modifier = Modifier.padding(end = 12.dp),
                                     onClick = { sortOrderDropdownExpanded = true }
                                 ) {
                                     Icon(
@@ -446,7 +470,7 @@ fun SongListScreen(
                                         contentDescription = stringResource(R.string.cd_sort)
                                     )
                                 }
-                                SuperListPopup(
+                                OverlayListPopup(
                                     show = sortOrderDropdownExpanded,
                                     popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
                                     onDismissRequest = { sortOrderDropdownExpanded = false }
@@ -478,7 +502,7 @@ fun SongListScreen(
                                             )
                                         }
                                         HorizontalDivider()
-                                        SuperSwitch(
+                                        SwitchPreference(
                                             title = stringResource(R.string.show_scroll_top_button),
                                             summary = stringResource(R.string.show_scroll_top_button_hint),
                                             checked = showScrollTopButton,
@@ -583,7 +607,7 @@ fun SongListScreen(
             }
             val song = sheetUiState.menuSong
 
-            SuperBottomSheet(
+            WindowBottomSheet(
                 show = song != null,
                 onDismissRequest = { viewModel.dismissAll() }
             ) {
@@ -615,7 +639,7 @@ fun SongListScreen(
                 }
             }
             val detailSong = sheetUiState.detailSong
-            SuperBottomSheet(
+            WindowBottomSheet(
                 show = detailSong != null,
                 onDismissRequest = { viewModel.dismissDetail() },
             ) {
@@ -624,7 +648,7 @@ fun SongListScreen(
                 }
             }
 
-            SuperDialog(
+            WindowDialog(
                 title = stringResource(R.string.dialog_delete_file_title),
                 show = uiState.showDeleteDialog && sheetUiState.menuSong != null,
                 summary = stringResource(
@@ -655,7 +679,7 @@ fun SongListScreen(
                 }
             }
             // 批量删除确认对话框
-            SuperDialog(
+            WindowDialog(
                 show = uiState.showBatchDeleteDialog,
                 onDismissRequest = { viewModel.dismissBatchDeleteDialog() },
                 summary = stringResource(
@@ -696,7 +720,7 @@ fun SongListScreen(
                 }
             )
 
-            SuperDialog(
+            WindowDialog(
                 show = uiState.isBatchMatching || uiState.batchProgress != null,
                 onDismissRequest = {
                     if (!uiState.isBatchMatching) viewModel.closeBatchMatchDialog()
@@ -1132,20 +1156,20 @@ fun SongMenuBottomSheetContent(
                     color = MiuixTheme.colorScheme.secondaryContainer,
                 )
             ) {
-                SuperArrow(
+                ArrowPreference(
                     title = stringResource(R.string.menu_action_play),
                     summary = stringResource(R.string.menu_action_play_sub),
                     onClick = { onPlay() }
                 )
-                SuperArrow(
+                ArrowPreference(
                     title = stringResource(R.string.menu_action_info),
                     onClick = { showInfo() }
                 )
-                SuperArrow(
+                ArrowPreference(
                     title = stringResource(R.string.menu_action_share),
                     onClick = { onShare() }
                 )
-                SuperArrow(
+                ArrowPreference(
                     title = stringResource(R.string.menu_action_delete),
                     summary = stringResource(R.string.menu_action_delete_sub),
                     titleColor = BasicComponentColors(

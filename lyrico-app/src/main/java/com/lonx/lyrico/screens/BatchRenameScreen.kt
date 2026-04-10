@@ -50,16 +50,16 @@ import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.extra.SuperDialog
-import top.yukonga.miuix.kmp.extra.SuperListPopup
-import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.ListView
 import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.overlay.OverlayListPopup
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
@@ -83,7 +83,6 @@ fun BatchRenameScreen(
                 title = stringResource(id = R.string.batch_rename_title),
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 12.dp),
                         onClick = { if (!uiState.isRenamingInProgress) navigator.popBackStack() }) {
                         Icon(
                             imageVector = MiuixIcons.Back,
@@ -141,7 +140,7 @@ fun BatchRenameScreen(
                                         contentDescription = null
                                     )
                                 }
-                                SuperListPopup(
+                                OverlayListPopup(
                                     show = showDropdowns.value,
                                     popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
                                     onDismissRequest = { showDropdowns.value = false },
@@ -171,7 +170,7 @@ fun BatchRenameScreen(
                         fontSize = MiuixTheme.textStyles.footnote1.fontSize,
                         color = MiuixTheme.colorScheme.onSurfaceVariantActions
                     )
-                    SuperSwitch(
+                    SwitchPreference(
                         title = stringResource(id = R.string.format_preset_show_placeholders),
                         checked = showPlaceholderInfo,
                         onCheckedChange = { showPlaceholderInfo = it }
@@ -279,7 +278,7 @@ fun BatchRenameScreen(
                         }
                     }
                 }
-            SuperDialog(
+            WindowDialog(
                 show = true,
                 title =  stringResource(
                     if (result.isSuccessful)

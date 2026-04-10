@@ -69,16 +69,16 @@ import top.yukonga.miuix.kmp.basic.SpinnerEntry
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.extra.SuperArrow
-import top.yukonga.miuix.kmp.extra.SuperDialog
-import top.yukonga.miuix.kmp.extra.SuperDropdown
-import top.yukonga.miuix.kmp.extra.SuperSpinner
-import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
+import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import top.yukonga.miuix.kmp.window.WindowDialog
 import kotlin.math.roundToInt
 
 @SuppressLint("LocalContextGetResourceValueCall")
@@ -102,7 +102,6 @@ fun SettingsScreen(
     val onlyTranslationIfAvailable = settingsUiState.onlyTranslationIfAvailable
     val removeEmptyLines = settingsUiState.removeEmptyLines
     val ignoreShortAudio = settingsUiState.ignoreShortAudio
-    val scrollState = rememberScrollState()
     val folders = folderUiState.folders
     val totalFolders = folders.size
     val conversionMode = settingsUiState.conversionMode
@@ -210,7 +209,6 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_title),
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 12.dp),
                         onClick = { navigator.popBackStack() }
                     ) {
                         Icon(
@@ -223,7 +221,7 @@ fun SettingsScreen(
             )
         }
     ) { paddingValues ->
-        SuperDialog(
+        WindowDialog(
             title = stringResource(R.string.clear_cache),
             show = showClearCacheDialog.value,
             onDismissRequest = { showClearCacheDialog.value = false }
@@ -261,7 +259,7 @@ fun SettingsScreen(
                 }
             }
         }
-        SuperDialog(
+        WindowDialog(
             show = showSearchLimitConfigDialog.value,
             title = stringResource(R.string.search_limit),
             onDismissRequest = {
@@ -331,7 +329,7 @@ fun SettingsScreen(
             item(key = "appearance"){
                 SmallTitle(text = stringResource(R.string.section_appearance))
                 Card(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    SuperDropdown(
+                    WindowDropdownPreference(
                         title = stringResource(R.string.theme_mode),
                         items = themeModeItems,
                         selectedIndex = selectedThemeModeIndex,
@@ -339,7 +337,7 @@ fun SettingsScreen(
                             settingsViewModel.setThemeMode(ThemeMode.entries[index])
                         }
                     )
-                    SuperSwitch(
+                    SwitchPreference(
                         title = stringResource(R.string.monet),
                         checked = monetEnable,
                         onCheckedChange = {
@@ -367,7 +365,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        SuperSpinner(
+                        WindowSpinnerPreference(
                             items = options,
                             selectedIndex = currentSelectedIndex,
                             title = stringResource(R.string.key_color),
@@ -393,12 +391,12 @@ fun SettingsScreen(
                     } else {
                         stringResource(R.string.folder_manage_hint)
                     }
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.folder_manager),
                         summary = folderSummary,
                         onClick = { navigator.navigate(FolderManagerDestination()) }
                     )
-                    SuperSwitch(
+                    SwitchPreference(
                         title = stringResource(R.string.ignore_short_audio),
                         checked = ignoreShortAudio,
                         onCheckedChange = { settingsViewModel.setIgnoreShortAudio(it) }
@@ -412,12 +410,12 @@ fun SettingsScreen(
                     val searchSourceSummary = searchSourceOrder
                         .map { stringResource(it.labelRes) }
                         .joinToString(" > ")
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.search_source_priority),
                         summary = searchSourceSummary,
                         onClick = { navigator.navigate(SearchSourcePriorityDestination()) }
                     )
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.search_limit),
                         endActions = {
                             Text(
@@ -456,7 +454,7 @@ fun SettingsScreen(
             item(key = "lyrics"){
                 SmallTitle(text = stringResource(R.string.section_lyrics))
                 Card(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    SuperDropdown(
+                    WindowDropdownPreference(
                         title = stringResource(R.string.lyric_mode),
                         items = lyricFormatItems,
                         selectedIndex = selectedLyricFormatIndex,
@@ -464,20 +462,20 @@ fun SettingsScreen(
                             settingsViewModel.setLyricFormat(LyricFormat.entries[index])
                         }
                     )
-                    SuperSwitch(
+                    SwitchPreference(
                         title = stringResource(R.string.roma),
                         summary = stringResource(R.string.roma_hint),
                         checked = romaEnabled,
                         onCheckedChange = { settingsViewModel.setRomaEnabled(it) }
                     )
-                    SuperSwitch(
+                    SwitchPreference(
                         title = stringResource(R.string.translation),
                         summary = stringResource(R.string.translation_hint),
                         checked = translationEnabled,
                         onCheckedChange = { settingsViewModel.setTranslationEnabled(it) }
                     )
                     AnimatedVisibility(visible = translationEnabled) {
-                        SuperSwitch(
+                        SwitchPreference(
                             title = stringResource(R.string.only_translation_if_available),
                             summary = stringResource(R.string.only_translation_if_available_hint),
                             enabled = translationEnabled,
@@ -485,13 +483,13 @@ fun SettingsScreen(
                             onCheckedChange = { settingsViewModel.setOnlyTranslationIfAvailable(it) }
                         )
                     }
-                    SuperSwitch(
+                    SwitchPreference(
                         title = stringResource(R.string.remove_empty_lines),
                         summary = stringResource(R.string.remove_empty_lines_hint),
                         checked = removeEmptyLines,
                         onCheckedChange = { settingsViewModel.setRemoveEmptyLines(it) }
                     )
-                    SuperDropdown(
+                    WindowDropdownPreference(
                         title = stringResource(R.string.conversion_mode),
                         items = conversionModeItems,
                         selectedIndex = selectedConversionModeIndex,
@@ -505,7 +503,7 @@ fun SettingsScreen(
             item(key = "metadata"){
                 SmallTitle(text = stringResource(R.string.section_metadata))
                 Card(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    SuperDropdown(
+                    WindowDropdownPreference(
                         title = stringResource(R.string.artist_separator),
                         summary = stringResource(R.string.artist_separator_hint),
                         items = artistSeparatorItems,
@@ -520,7 +518,7 @@ fun SettingsScreen(
             item(key = "backup"){
                 SmallTitle(text = stringResource(R.string.section_backup))
                 Card(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.export_config),
                         summary = stringResource(R.string.export_config_hint),
                         onClick = {
@@ -528,7 +526,7 @@ fun SettingsScreen(
                             exportLauncher.launch("lyrico_settings_backup_${currentTime}.json")
                         }
                     )
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.import_config),
                         summary = stringResource(R.string.import_config_hint),
                         onClick = {
@@ -541,7 +539,7 @@ fun SettingsScreen(
             item(key = "other"){
                 SmallTitle(text = stringResource(R.string.section_other))
                 Card(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.batch_match_history),
                         summary = stringResource(R.string.batch_match_history_hint),
                         onClick = { navigator.navigate(BatchMatchHistoryDestination()) }
@@ -550,14 +548,14 @@ fun SettingsScreen(
                         R.string.cache_size_label,
                         Formatter.formatFileSize(context, settingsUiState.totalCacheSize)
                     )
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.clear_cache),
                         summary = cacheSummary,
                         onClick = { showClearCacheDialog.value = true },
                         holdDownState = showClearCacheDialog.value
                     )
                     if (BuildConfig.DEBUG) {
-                        SuperArrow(
+                        ArrowPreference(
                             title = stringResource(R.string.clear_songs),
                             onClick = {
                                 scope.launch {
@@ -577,7 +575,7 @@ fun SettingsScreen(
                             }
                         )
                     }
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.about),
                         onClick = { navigator.navigate(AboutDestination()) }
                     )

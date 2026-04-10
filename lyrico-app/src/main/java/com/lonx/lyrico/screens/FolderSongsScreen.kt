@@ -51,7 +51,6 @@ fun FolderSongsScreen(
                 title = folderPath.substringAfterLast("/"),
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 12.dp),
                         onClick = { navigator.popBackStack() }) {
                         Icon(
                             imageVector = MiuixIcons.Back,

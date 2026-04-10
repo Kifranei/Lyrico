@@ -9,7 +9,7 @@ plugins {
 android {
     namespace = "com.lonx.lyrico"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     splits {
@@ -93,7 +93,8 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.compose.destinations.core)
-    implementation(libs.miuix.android)
+    implementation(libs.miuix.preference.android)
+    implementation(libs.miuix.ui.android)
     implementation(libs.miuix.icons.android)
     implementation(libs.shapes)
     implementation(libs.coil.compose)
@@ -101,7 +102,6 @@ dependencies {
     implementation(libs.reorderable)
     implementation(libs.compose.markdown)
     implementation(libs.lazycolumnscrollbar)
-
     // AndroidX
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

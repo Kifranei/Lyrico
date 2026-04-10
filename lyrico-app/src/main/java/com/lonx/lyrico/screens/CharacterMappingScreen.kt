@@ -34,9 +34,9 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.extra.SuperDropdown
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -56,7 +56,6 @@ fun CharacterMappingScreen(
                 title = stringResource(R.string.configure_character_mapping),
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 12.dp),
                         onClick = { navigator.popBackStack() }) {
                         Icon(
                             imageVector = MiuixIcons.Back,
@@ -138,7 +137,7 @@ private fun CharacterMappingRuleSection(
             val currentOption = currentReplacement.toReplacementOption()
             val selectedIndex = currentOption?.let { ReplacementCharOption.entries.indexOf(it) + 1 } ?: 0
 
-            SuperDropdown(
+            WindowDropdownPreference(
                 title = stringResource(R.string.character_to_replace, character),
                 summary = stringResource(R.string.character_replacement_selector_subtitle),
                 items = optionLabels,

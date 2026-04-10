@@ -68,11 +68,11 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.extra.SuperBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -344,7 +344,7 @@ fun SearchResultsScreen(
     val lyricsText = uiState.lyricsState.content
     if (showLyricsSheet && uiState.lyricsState.song != null) {
         val song = uiState.lyricsState.song!!
-        SuperBottomSheet(
+        WindowBottomSheet(
             show = true,
             onDismissRequest = {
                 showLyricsSheet = false

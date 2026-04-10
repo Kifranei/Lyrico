@@ -45,10 +45,10 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.extra.SuperArrow
-import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -80,7 +80,6 @@ fun AboutScreen(
                 title = stringResource(R.string.about_title),
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 12.dp),
                         onClick = { navigator.popBackStack() }
                     ) {
                         Icon(
@@ -114,7 +113,7 @@ fun AboutScreen(
                         title = stringResource(R.string.about_app_version),
                         summary = "${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})"
                     )
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.about_project_url),
                         summary = stringResource(R.string.about_project_url_sub),
                         endActions = {
@@ -131,7 +130,7 @@ fun AboutScreen(
                             )
                         }
                     )
-                    SuperArrow(
+                    ArrowPreference(
                         title = "Telegram",
                         summary = TELEGRAM_GROUP_LINK,
                         endActions = {
@@ -145,13 +144,13 @@ fun AboutScreen(
                             viewModel.openBrowser(context, TELEGRAM_GROUP_LINK)
                         }
                     )
-                    SuperSwitch(
+                    SwitchPreference(
                         title = stringResource(R.string.about_auto_check_update),
                         summary = stringResource(R.string.about_auto_check_update_sub),
                         checked = checkUpdateEnabled,
                         onCheckedChange = viewModel::setCheckUpdateEnabled
                     )
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.about_check_update),
                         summary = stringResource(
                             updateEffect.messageRes,
@@ -219,7 +218,7 @@ fun AboutScreen(
                                 .padding(horizontal = 12.dp)
                                 .padding(top = if (index == 0) 0.dp else 12.dp)
                         ) {
-                            SuperArrow(
+                            ArrowPreference(
                                 title = contributor.login,
                                 summary = stringResource(
                                     R.string.about_contribution_count,

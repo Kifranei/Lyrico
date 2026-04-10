@@ -564,9 +564,6 @@ class SongListViewModel(
     fun selectAll(songs: List<SongEntity>) {
         _selectedSongIds.value = songs.map { it.mediaId }.toSet()
     }
-    fun isAllSelected(songs: List<SongEntity>): Boolean {
-        return songs.isNotEmpty() && _selectedSongIds.value.size == songs.size
-    }
 
     fun showBatchDeleteDialog() {
         _uiState.update { it.copy(showBatchDeleteDialog = true) }

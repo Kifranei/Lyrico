@@ -2,6 +2,7 @@ package com.lonx.lyrico.ui.dialog
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,7 +16,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.lonx.lyrico.R
@@ -40,9 +41,9 @@ import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.extra.SuperArrow
-import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowDialog
 import kotlin.math.roundToInt
 
 @OptIn( ExperimentalMaterial3Api::class)
@@ -67,7 +68,7 @@ fun BatchMatchConfigDialog(
         config = config.copy(fields = currentMap)
     }
 
-    SuperDialog(
+    WindowDialog(
         show = show,
         onDismissRequest = { onDismissRequest(config) },
         title = stringResource(R.string.batch_match_config_title)
@@ -123,7 +124,7 @@ fun BatchMatchConfigDialog(
                 val tempConcurrency = remember(config.concurrency) {
                     mutableIntStateOf(config.concurrency)
                 }
-                SuperArrow(
+                ArrowPreference(
                     title = stringResource(R.string.batch_match_config_concurrency),
                     endActions = {
                         Text(
@@ -193,11 +194,12 @@ private fun BatchMatchFieldItem(
     onModeToggle: () -> Unit
 ) {
     BasicComponent(
+        insideMargin = PaddingValues(0.dp),
         modifier = Modifier.fillMaxWidth(),
         startAction = {
             Checkbox(
-                checked = isSelected,
-                onCheckedChange = { onCheckedChange(!isSelected) }
+                state = if (isSelected) ToggleableState.On else ToggleableState.Off,
+                onClick = { onCheckedChange(!isSelected) }
             )
         },
         onClick =  {

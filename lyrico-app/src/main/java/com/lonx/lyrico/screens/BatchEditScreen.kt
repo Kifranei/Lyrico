@@ -64,9 +64,9 @@ import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.extra.SuperArrow
-import top.yukonga.miuix.kmp.extra.SuperBottomSheet
-import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.window.WindowDialog
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
@@ -103,7 +103,6 @@ fun BatchEditScreen(
                 title = stringResource(R.string.batch_edit_title),
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 12.dp),
                         onClick = {
                             if (!uiState.isSaving) navigator.popBackStack()
                         }
@@ -124,7 +123,6 @@ fun BatchEditScreen(
                         )
                     }
                     IconButton(
-                        modifier = Modifier.padding(end = 12.dp),
                         onClick = { viewModel.saveBatchEdit() },
                         enabled = !uiState.isSaving
                     ) {
@@ -324,7 +322,7 @@ fun BatchEditScreen(
     }
 
     // 封面操作 BottomSheet
-    SuperBottomSheet(
+    WindowBottomSheet(
         show = showCoverOptionsSheet,
         onDismissRequest = { showCoverOptionsSheet = false }
     ) {
@@ -340,7 +338,7 @@ fun BatchEditScreen(
                 Card(
                     colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.secondaryContainer)
                 ) {
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.batch_edit_cover_change),
                         onClick = {
                             showCoverOptionsSheet = false
@@ -351,7 +349,7 @@ fun BatchEditScreen(
                             )
                         }
                     )
-                    SuperArrow(
+                    ArrowPreference(
                         title = stringResource(R.string.batch_edit_cover_remove),
                         onClick = {
                             showCoverOptionsSheet = false
@@ -359,7 +357,7 @@ fun BatchEditScreen(
                         }
                     )
                     if (uiState.coverUri != null || uiState.removeCover) {
-                        SuperArrow(
+                        ArrowPreference(
                             title = stringResource(R.string.batch_edit_cover_revert),
                             onClick = {
                                 showCoverOptionsSheet = false
@@ -373,7 +371,7 @@ fun BatchEditScreen(
     }
 
     // 批量编辑说明对话框
-    SuperDialog(
+    WindowDialog(
         show = showInfoDialog,
         title = stringResource(R.string.batch_edit_info_summary),
         onDismissRequest = { showInfoDialog = false }
@@ -400,7 +398,7 @@ fun BatchEditScreen(
 
     // 保存结果对话框
     uiState.saveResultMessage?.let { message ->
-        SuperDialog(
+        WindowDialog(
             show = true,
             title = stringResource(
                 if (uiState.saveSuccess == true)

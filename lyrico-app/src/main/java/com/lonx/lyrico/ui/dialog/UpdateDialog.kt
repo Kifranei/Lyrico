@@ -19,8 +19,8 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 @Composable
 fun UpdateDialog(
@@ -32,7 +32,7 @@ fun UpdateDialog(
 ) {
     val scrollState = rememberScrollState()
 
-    SuperDialog(
+    WindowDialog(
         show = show,
         onDismissRequest = onDismissRequest,
         title = stringResource(
