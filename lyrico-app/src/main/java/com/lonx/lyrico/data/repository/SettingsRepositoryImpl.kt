@@ -56,6 +56,8 @@ object SettingsDefaults {
 
     // 搜索源顺序默认值
     val SEARCH_SOURCE_ORDER = Source.entries.toList()
+    // 启用的搜索源默认值（默认启用所有源）
+    val DEFAULT_ENABLED_SEARCH_SOURCES = Source.entries.toSet()
     const val SEARCH_PAGE_SIZE = 10
 
     val THEME_MODE = ThemeMode.AUTO
@@ -82,6 +84,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         val TRANSLATION_ENABLED = booleanPreferencesKey("translation_enabled")
         val IGNORE_SHORT_AUDIO = booleanPreferencesKey("ignore_short_audio")
         val SEARCH_SOURCE_ORDER = stringPreferencesKey("search_source_order")
+        val ENABLED_SEARCH_SOURCES = stringPreferencesKey("enabled_search_sources")
         val SEARCH_PAGE_SIZE = intPreferencesKey("search_page_size")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val MONET_ENABLE = booleanPreferencesKey("monet_enable")
@@ -153,6 +156,16 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
     override val searchSourceOrder: Flow<List<Source>>
         get() = context.settingsDataStore.data.map { preferences ->
             preferences[PreferencesKeys.SEARCH_SOURCE_ORDER].toSourceList()
+        }
+
+    override val enabledSearchSources: Flow<Set<Source>>
+        get() = context.settingsDataStore.data.map { preferences ->
+            val enabledCsv = preferences[PreferencesKeys.ENABLED_SEARCH_SOURCES]
+            if (enabledCsv.isNullOrBlank()) {
+                Source.entries.toSet()
+            } else {
+                enabledCsv.split(",").mapNotNull { Source.fromNameOrNull(it) }.toSet()
+            }
         }
 
     override val searchPageSize: Flow<Int>
@@ -257,12 +270,13 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
     private data class SearchPart(
         val separator: String,
         val searchSourceOrder: List<Source>,
+        val enabledSearchSources: Set<Source>,
         val searchPageSize: Int
     )
 
     private val searchPartFlow =
-        combine(separator, searchSourceOrder, searchPageSize) { sep, order, size ->
-            SearchPart(sep, order, size)
+        combine(separator, searchSourceOrder, enabledSearchSources, searchPageSize) { sep, order, enabled, size ->
+            SearchPart(sep, order, enabled, size)
         }
 
     private data class UiPart(
@@ -299,6 +313,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                 onlyTranslationIfAvailable = lyric.onlyTranslationIfAvailable,
                 separator = search.separator,
                 searchSourceOrder = search.searchSourceOrder,
+                enabledSearchSources = search.enabledSearchSources,
                 searchPageSize = search.searchPageSize,
                 themeMode = ui.themeMode,
                 monetEnable = ui.monetEnable,
@@ -369,6 +384,13 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         context.settingsDataStore.edit { preferences ->
             preferences[PreferencesKeys.SEARCH_SOURCE_ORDER] =
                 sources.toSourceCsv()
+        }
+    }
+
+    override suspend fun saveEnabledSearchSources(sources: Set<Source>) {
+        context.settingsDataStore.edit { preferences ->
+            val csv = sources.joinToString(",") { it.name }
+            preferences[PreferencesKeys.ENABLED_SEARCH_SOURCES] = csv
         }
     }
 
@@ -480,6 +502,8 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
 
             searchSourceOrder = (prefs[PreferencesKeys.SEARCH_SOURCE_ORDER] ?: SettingsDefaults.SEARCH_SOURCE_ORDER.toSourceCsv()).toSourceList().map { it.name },
 
+            enabledSearchSources = (prefs[PreferencesKeys.ENABLED_SEARCH_SOURCES] ?: SettingsDefaults.SEARCH_SOURCE_ORDER.toSourceCsv()).split(",").mapNotNull { Source.fromNameOrNull(it) }.map { it.name },
+
             searchPageSize = prefs[PreferencesKeys.SEARCH_PAGE_SIZE]
                 ?: SettingsDefaults.SEARCH_PAGE_SIZE,
 
@@ -523,6 +547,19 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                 backup.searchSourceOrder?.let { list ->
                     prefs[PreferencesKeys.SEARCH_SOURCE_ORDER] = list.toSourceList().toSourceCsv()
                 }
+                
+                // 处理启用的搜索源：如果为null或为空，默认启用所有源
+                if (backup.enabledSearchSources.isNullOrEmpty()) {
+                    // 默认启用所有源
+                    val defaultEnabledCsv = SettingsDefaults.DEFAULT_ENABLED_SEARCH_SOURCES.joinToString(",") { it.name }
+                    prefs[PreferencesKeys.ENABLED_SEARCH_SOURCES] = defaultEnabledCsv
+                } else {
+                    // 使用导入的启用源列表，直接映射而不补齐缺失源
+                    val validSources = backup.enabledSearchSources.mapNotNull { Source.fromNameOrNull(it) }
+                    val csv = validSources.joinToString(",") { it.name }
+                    prefs[PreferencesKeys.ENABLED_SEARCH_SOURCES] = csv
+                }
+                
                 backup.searchPageSize?.let { prefs[PreferencesKeys.SEARCH_PAGE_SIZE] = it }
                 backup.themeMode?.let { prefs[PreferencesKeys.THEME_MODE] = it }
                 backup.monetEnable?.let { prefs[PreferencesKeys.MONET_ENABLE] = it }

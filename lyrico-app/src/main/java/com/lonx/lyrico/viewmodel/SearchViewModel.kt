@@ -59,10 +59,12 @@ class SearchViewModel(
         try {
             val settings = settingsRepository.settingsFlow.first()
             val sourcesOrder = settings.searchSourceOrder
+            val enabledSources = settings.enabledSearchSources
+            val filteredOrder = sourcesOrder.filter { it in enabledSources }
 
             _uiState.update { it.copy(
-                availableSources = sourcesOrder,
-                selectedSearchSource = sourcesOrder.firstOrNull(),
+                availableSources = filteredOrder,
+                selectedSearchSource = filteredOrder.firstOrNull(),
                 isInitializing = false
             ) }
         } catch (e: Exception) {

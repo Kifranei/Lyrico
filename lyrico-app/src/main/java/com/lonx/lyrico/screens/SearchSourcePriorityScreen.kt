@@ -36,7 +36,6 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -46,6 +45,7 @@ import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -61,6 +61,11 @@ fun SearchSourcePriorityScreen(
     // 维护本地列表状态用于实时排序
     var currentList by remember(uiState.searchSourceOrder) {
         mutableStateOf(uiState.searchSourceOrder)
+    }
+
+    // 维护启用/禁用状态
+    var enabledSources by remember(uiState.enabledSearchSources) {
+        mutableStateOf(uiState.enabledSearchSources)
     }
 
     val lazyListState = rememberLazyListState()
@@ -124,6 +129,7 @@ fun SearchSourcePriorityScreen(
                         key = source.labelRes
                     ) { isDragging ->
                         val interactionSource = remember { MutableInteractionSource() }
+                        val isEnabled = enabledSources.contains(source)
 
                         Card(
                             modifier = Modifier
@@ -135,6 +141,7 @@ fun SearchSourcePriorityScreen(
                                     },
                                     onDragStopped = {
                                         viewModel.setSearchSourceOrder(currentList)
+                                        viewModel.setEnabledSearchSources(enabledSources)
                                     },
                                     interactionSource = interactionSource
                                 )
@@ -143,6 +150,22 @@ fun SearchSourcePriorityScreen(
                                 modifier = Modifier.background(if (isDragging) MiuixTheme.colorScheme.secondary else MiuixTheme.colorScheme.background),
                                 index = index,
                                 source = source,
+                                isEnabled = isEnabled,
+                                onEnabledChanged = { newState ->
+                                    // 不允许禁用最后一个启用的源
+                                    if (!newState && enabledSources.size == 1) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.Reject)
+                                        return@ReorderableSourceItem
+                                    }
+                                    
+                                    enabledSources = if (newState) {
+                                        enabledSources + source
+                                    } else {
+                                        enabledSources - source
+                                    }
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.setEnabledSearchSources(enabledSources)
+                                },
                                 showDivider = index != currentList.lastIndex
                             )
                         }
@@ -161,12 +184,16 @@ fun ReorderableSourceItem(
     modifier: Modifier = Modifier,
     index: Int,
     source: Source,
+    isEnabled: Boolean = true,
+    onEnabledChanged: (Boolean) -> Unit = {},
     showDivider: Boolean = false
 ) {
     Column() {
-        BasicComponent(
+        SwitchPreference(
             modifier = modifier,
             title = stringResource(id = source.labelRes),
+            checked = isEnabled,
+            onCheckedChange = onEnabledChanged,
             startAction = {
                 Box(
                     modifier = Modifier

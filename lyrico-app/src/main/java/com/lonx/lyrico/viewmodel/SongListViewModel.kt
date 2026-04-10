@@ -120,6 +120,19 @@ class SongListViewModel(
     private val searchSourceOrder: StateFlow<List<Source>> = settingsRepository.searchSourceOrder
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    private val enabledSearchSources: StateFlow<Set<Source>> = settingsRepository.enabledSearchSources
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /**
+     * 已启用的搜索源，按优先级排序
+     */
+    val enabledSourceOrder: StateFlow<List<Source>> = combine(
+        searchSourceOrder,
+        enabledSearchSources
+    ) { order, enabled ->
+        order.filter { it in enabled }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     private val separator = settingsRepository.separator
         .stateIn(viewModelScope, SharingStarted.Eagerly, "/")
 
@@ -306,7 +319,7 @@ class SongListViewModel(
         batchMatchJob = viewModelScope.launch {
             val startTime = System.currentTimeMillis()
             val songsToMatch = songs.value.filter { it.mediaId in selectedIds }
-            val currentOrder = searchSourceOrder.value
+            val currentOrder = enabledSourceOrder.value
             val total = songsToMatch.size
 
             _uiState.update { it.copy(

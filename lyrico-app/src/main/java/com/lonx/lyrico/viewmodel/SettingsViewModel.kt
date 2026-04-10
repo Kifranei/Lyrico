@@ -36,6 +36,7 @@ data class SettingsUiState(
     val translationEnabled: Boolean = false,
     val ignoreShortAudio: Boolean = false,
     val searchSourceOrder: List<Source> = emptyList(),
+    val enabledSearchSources: Set<Source> = emptySet(),
     val searchPageSize: Int = 20,
     val themeMode: ThemeMode = ThemeMode.AUTO,
     val monetEnable: Boolean = false,
@@ -45,7 +46,13 @@ data class SettingsUiState(
     val categorizedCacheSize: Map<CacheCategory, Long> = emptyMap(),
     val totalCacheSize: Long = 0L,
     val conversionMode: ConversionMode = ConversionMode.NONE
-)
+) {
+    /**
+     * 返回按优先级排序且启用的搜索源列表
+     */
+    val filteredSearchSources: List<Source>
+        get() = searchSourceOrder.filter { it in enabledSearchSources }
+}
 sealed class SettingsEvent {
     data class ShowToast(val message: UiMessage) : SettingsEvent()
 }
@@ -67,6 +74,7 @@ class SettingsViewModel(
             translationEnabled = settings.translationEnabled,
             separator = settings.separator.toArtistSeparator(),
             searchSourceOrder = settings.searchSourceOrder,
+            enabledSearchSources = settings.enabledSearchSources,
             searchPageSize = settings.searchPageSize,
             themeMode = settings.themeMode,
             ignoreShortAudio = settings.ignoreShortAudio,
@@ -157,6 +165,12 @@ class SettingsViewModel(
     fun setSearchSourceOrder(sources: List<Source>) {
         viewModelScope.launch {
             settingsRepository.saveSearchSourceOrder(sources)
+        }
+    }
+
+    fun setEnabledSearchSources(sources: Set<Source>) {
+        viewModelScope.launch {
+            settingsRepository.saveEnabledSearchSources(sources)
         }
     }
     fun setSearchPageSize(size: Int) {

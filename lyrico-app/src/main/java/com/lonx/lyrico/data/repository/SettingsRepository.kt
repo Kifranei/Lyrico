@@ -25,7 +25,8 @@ data class SettingsSnapshot(
     val onlyTranslationIfAvailable: Boolean,
     val removeEmptyLines: Boolean,
     val showScrollTopButton: Boolean,
-    val conversionMode: ConversionMode
+    val conversionMode: ConversionMode,
+    val enabledSearchSources: Set<Source> = Source.entries.toSet()
 )
 
 interface SettingsRepository {
@@ -45,6 +46,7 @@ interface SettingsRepository {
     val checkUpdateEnabled: Flow<Boolean>
     val ignoreShortAudio: Flow<Boolean>
     val searchSourceOrder: Flow<List<Source>>
+    val enabledSearchSources: Flow<Set<Source>>
     val searchPageSize: Flow<Int>
     val themeMode: Flow<ThemeMode>
     val keyColor: Flow<KeyColor>
@@ -69,6 +71,7 @@ interface SettingsRepository {
     suspend fun saveIgnoreShortAudio(enabled: Boolean)
     suspend fun saveLastScanTime(time: Long)
     suspend fun saveSearchSourceOrder(sources: List<Source>)
+    suspend fun saveEnabledSearchSources(sources: Set<Source>)
     suspend fun saveSearchPageSize(size: Int)
     suspend fun saveThemeMode(mode: ThemeMode)
     suspend fun saveKeyColor(selectedKeyColor: KeyColor)
