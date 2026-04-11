@@ -333,8 +333,6 @@ class SongRepositoryImpl(
             fun updateTag(standardKey: String, value: String?, aliases: List<String>) {
                 if (value != null) {
                     updates[standardKey] = value
-                } else {
-                    updates[standardKey] = ""
                 }
 
                 aliases.forEach { aliasKey ->
