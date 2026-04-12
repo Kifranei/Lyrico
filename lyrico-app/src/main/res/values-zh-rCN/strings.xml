@@ -405,4 +405,5 @@
     <string name="search_type_artist">艺术家</string>
     <string name="search_type_album">专辑</string>
     <string name="search_type_filename">文件名</string>
+    <string name="action_scroll_to_top">返回顶部</string>
 </resources>

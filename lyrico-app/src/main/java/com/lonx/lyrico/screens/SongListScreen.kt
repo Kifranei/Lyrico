@@ -12,6 +12,9 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -20,7 +23,9 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -118,7 +123,6 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Checkbox
-import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarDisplayMode
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
@@ -132,9 +136,10 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
-import top.yukonga.miuix.kmp.basic.TabRow
+import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TopAppBarDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
@@ -152,7 +157,6 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.window.WindowDialog
-import top.yukonga.miuix.kmp.window.WindowListPopup
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -221,7 +225,15 @@ fun SongListScreen(
     }
     var isSearchMode by rememberSaveable { mutableStateOf(false) }
     val enableIndex = sections.isNotEmpty() && sortInfo.sortBy.supportsIndex
-
+    val topPadding by animateDpAsState(
+        targetValue = if (isSearchMode) {
+            135.dp
+        } else {
+            TopAppBarDefaults.SmallTopAppBarCenterHeight + 12.dp
+        },
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "backToTopPadding"
+    )
     LaunchedEffect(autoScrollSpeed) {
         if (autoScrollSpeed != 0f) {
             while (isActive) {
@@ -346,29 +358,6 @@ fun SongListScreen(
     Box {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            floatingActionButton = {
-                AnimatedVisibility(
-                    visible = showFab,
-                    enter = fadeIn() + scaleIn(),
-                    exit = fadeOut() + scaleOut()
-                ) {
-                    FloatingActionButton(
-                        modifier = Modifier.padding(16.dp),
-                        onClick = {
-                            scope.launch {
-                                listState.animateScrollToItem(0)
-                            }
-                        },
-                        shape = CircleShape
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_arrow_up_24dp),
-                            contentDescription = stringResource(R.string.cd_sort),
-                            tint = MiuixTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
-            },
             floatingToolbar = {
                 AnimatedVisibility(
                     visible = isSelectionMode,
@@ -949,6 +938,46 @@ fun SongListScreen(
                             colors = ButtonDefaults.textButtonColorsPrimary(),
                         )
                     }
+                }
+            }
+        }
+        AnimatedVisibility(
+            visible = showFab,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(top = topPadding)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .height(38.dp)
+                    .clip(CircleShape)
+                    .clickable {
+                        scope.launch { listState.animateScrollToItem(0) }
+                    },
+                shape = CircleShape,
+                color = MiuixTheme.colorScheme.primary,
+                shadowElevation = 4.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_arrow_up_24dp),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MiuixTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.action_scroll_to_top),
+                        style = MiuixTheme.textStyles.button,
+                        color = MiuixTheme.colorScheme.onPrimary
+                    )
                 }
             }
         }
