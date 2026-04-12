@@ -16,7 +16,7 @@ import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.data.repository.SongRepositoryImpl
 import com.lonx.lyrico.data.repository.UpdateRepository
 import com.lonx.lyrico.data.repository.UpdateRepositoryImpl
-import com.lonx.lyrico.utils.MusicScanner
+import com.lonx.lyrico.utils.MediaScanner
 import com.lonx.lyrico.utils.UpdateManager
 import com.lonx.lyrico.utils.UpdateManagerImpl
 import com.lonx.lyrico.viewmodel.AboutViewModel
@@ -178,7 +178,7 @@ val appModule = module {
     single<SettingsRepository> { SettingsRepositoryImpl(androidContext()) }
     single<UpdateRepository> { UpdateRepositoryImpl(get(), get()) }
     single<UpdateManager> { UpdateManagerImpl(get(), get()) }
-    single { MusicScanner(androidContext()) }
+    single { MediaScanner(androidContext()) }
     
 
     // 数据库和存储库

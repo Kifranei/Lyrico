@@ -19,13 +19,15 @@ import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.model.SongFile
 import com.lonx.lyrico.data.utils.SongQueryBuilder
 import com.lonx.lyrico.data.utils.SortKeyUtils
-import com.lonx.lyrico.utils.MusicScanner
+import com.lonx.lyrico.utils.MediaScanner
 import com.lonx.lyrico.viewmodel.SortBy
 import com.lonx.lyrico.viewmodel.SortInfo
 import com.lonx.lyrico.viewmodel.SortOrder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import okhttp3.OkHttpClient
@@ -37,17 +39,19 @@ import okhttp3.Request
 class SongRepositoryImpl(
     private val database: LyricoDatabase,
     private val context: Context,
-    private val musicScanner: MusicScanner,
+    private val mediaScanner: MediaScanner,
     private val settingsRepository: SettingsRepository,
     private val okHttpClient: OkHttpClient,
 ) : SongRepository {
 
     private val songDao = database.songDao()
     private val folderDao = database.folderDao()
+    private val syncMutex = Mutex()
 
     private val songQueryBuilder = SongQueryBuilder
     private companion object {
         const val TAG = "SongRepository"
+        const val BATCH_SIZE = 50
     }
 
     override suspend fun deleteSong(song: SongEntity) {
@@ -93,94 +97,97 @@ class SongRepositoryImpl(
     }
 
     override suspend fun synchronize(fullRescan: Boolean) {
-        withContext(Dispatchers.IO) {
-            Log.d(TAG, "开始同步数据库与设备文件 (Uri模式)... (全量扫描: $fullRescan)")
+        syncMutex.withLock {
+            withContext(Dispatchers.IO) {
+                Log.d(TAG, "开始同步数据库与设备文件 (Uri模式)... (全量扫描: $fullRescan)")
 
-            val ignoreShortAudio = settingsRepository.ignoreShortAudio.first()
-            val minDuration = 60_000L
+                val ignoreShortAudio = settingsRepository.ignoreShortAudio.first()
+                val minDuration = 60_000L
 
-            val dbSyncInfos = songDao.getAllSyncInfo()
-            val dbSongMap = dbSyncInfos.associateBy { it.uri }
-            val dbUris = dbSongMap.keys.toMutableSet()
+                val dbSyncInfos = songDao.getAllSyncInfo()
+                val dbSongMap = dbSyncInfos.associateBy { it.uri }
 
-            val deviceUris = mutableSetOf<String>()
-            val folderIdCache = mutableMapOf<String, Long>()
-            val impactedFolderIds = mutableSetOf<Long>()
+                val deviceUris = mutableSetOf<String>()
+                val folderIdCache = mutableMapOf<String, Long>()
+                val impactedFolderIds = mutableSetOf<Long>()
 
-            val batchBuffer = mutableListOf<SongEntity>()
-            val BATCH_SIZE = 20
+                // 在内存中收集所有需要变更的数据（涉及文件 I/O，不在事务中执行）
+                val songsToUpsert = mutableListOf<SongEntity>()
 
-            suspend fun flushBatch() {
-                if (batchBuffer.isEmpty()) return
-                database.withTransaction {
-                    songDao.upsertAll(batchBuffer)
-                }
-                batchBuffer.clear()
-                Log.d(TAG, "已提交一批歌曲到数据库")
-            }
-
-            suspend fun resolveFolderId(path: String): Long {
-                // 即使使用 Uri，我们仍需要 Path 来进行逻辑上的文件夹分组
-                // 如果 SongFile 不再提供 path，需要从 MediaStore 查询 BUCKET_DISPLAY_NAME 或 RELATIVE_PATH
-                val folderPath = path.substringBeforeLast("/").trimEnd('/')
-                return folderIdCache.getOrPut(folderPath) {
-                    folderDao.upsertAndGetId(folderPath)
-                }.also { impactedFolderIds.add(it) }
-            }
-
-            musicScanner.scanMusicFiles().collect { deviceSong ->
-                if (ignoreShortAudio && deviceSong.duration <= minDuration) {
-                    return@collect
+                suspend fun resolveFolderId(path: String): Long {
+                    val folderPath = path.substringBeforeLast("/").trimEnd('/')
+                    return folderIdCache.getOrPut(folderPath) {
+                        folderDao.upsertAndGetId(folderPath)
+                    }.also { impactedFolderIds.add(it) }
                 }
 
-                val deviceUriString = deviceSong.uri.toString()
-                deviceUris.add(deviceUriString)
+                val deviceSongs = mediaScanner.querySongs()
+                Log.d(TAG, "MediaStore 查询完成，共 ${deviceSongs.size} 首")
 
-                val dbInfo = dbSongMap[deviceUriString]
-                // 判断是否更新：全量扫描 OR 数据库无此记录 OR 文件修改时间变了
-                val needsUpdate = fullRescan || dbInfo == null || dbInfo.fileLastModified != deviceSong.lastModified || dbInfo.filePath != deviceSong.filePath
+                for (deviceSong in deviceSongs) {
+                    if (ignoreShortAudio && deviceSong.duration <= minDuration) {
+                        continue
+                    }
 
-                if (needsUpdate) {
-                    // 仍然使用 uriString 来归类文件夹
-                    val folderId = resolveFolderId(deviceSong.filePath)
-                    val entity = extractSongMetadata(
-                        deviceSong, // 传入 SongFile 对象
-                        folderId,
-                        existingId = dbInfo?.id ?: 0L
-                    )
-                    if (entity != null) {
-                        batchBuffer.add(entity)
+                    val deviceUriString = deviceSong.uri.toString()
+                    deviceUris.add(deviceUriString)
+
+                    val dbInfo = dbSongMap[deviceUriString]
+                    val needsUpdate = fullRescan || dbInfo == null
+                            || dbInfo.fileLastModified != deviceSong.lastModified
+                            || dbInfo.filePath != deviceSong.filePath
+
+                    if (needsUpdate) {
+                        try {
+                            val folderId = resolveFolderId(deviceSong.filePath)
+                            val entity = extractSongMetadata(
+                                deviceSong,
+                                folderId,
+                                existingId = dbInfo?.id ?: 0L
+                            )
+                            if (entity != null) {
+                                songsToUpsert.add(entity)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "处理歌曲失败: ${deviceSong.fileName}", e)
+                        }
                     }
                 }
 
-                if (batchBuffer.size >= BATCH_SIZE) {
-                    flushBatch()
+                // 计算需要删除的 URI
+                val deletedUris = dbSongMap.keys - deviceUris
+                if (deletedUris.isNotEmpty()) {
+                    val folderIdsOfDeletedSongs = dbSyncInfos
+                        .filter { it.uri in deletedUris }
+                        .map { it.folderId }
+                    impactedFolderIds.addAll(folderIdsOfDeletedSongs)
                 }
-            }
 
-            flushBatch()
+                // 单一事务中执行所有数据库写入操作
+                // Room 仅在事务提交时触发一次表失效重查询，避免 CursorWindow 的并发重查询溢出
+                Log.d(TAG, "准备提交: ${songsToUpsert.size} 条更新, ${deletedUris.size} 条删除")
+                database.withTransaction {
+                    if (songsToUpsert.isNotEmpty()) {
+                        songsToUpsert.chunked(BATCH_SIZE).forEach { chunk ->
+                            songDao.upsertAll(chunk)
+                        }
+                    }
 
-            val deletedUris = dbUris - deviceUris
-            if (deletedUris.isNotEmpty()) {
-                Log.d(TAG, "正在从数据库清理 ${deletedUris.size} 条记录")
+                    if (deletedUris.isNotEmpty()) {
+                        deletedUris.chunked(BATCH_SIZE).forEach { chunk ->
+                            songDao.deleteByUris(chunk.toList())
+                        }
+                    }
 
-                val folderIdsOfDeletedSongs = dbSyncInfos
-                    .filter { it.uri in deletedUris }
-                    .map { it.folderId }
-                impactedFolderIds.addAll(folderIdsOfDeletedSongs)
-
-                deletedUris.chunked(BATCH_SIZE).forEach { chunk ->
-                    songDao.deleteByUris(chunk)
+                    impactedFolderIds.forEach { folderId ->
+                        folderDao.refreshSongCount(folderId)
+                    }
+                    folderDao.performPostScanCleanup()
                 }
-            }
 
-            impactedFolderIds.forEach { folderId ->
-                folderDao.refreshSongCount(folderId)
+                settingsRepository.saveLastScanTime(System.currentTimeMillis())
+                Log.d(TAG, "同步全部完成。")
             }
-            folderDao.performPostScanCleanup()
-
-            settingsRepository.saveLastScanTime(System.currentTimeMillis())
-            Log.d(TAG, "同步全部完成。")
         }
     }
 
