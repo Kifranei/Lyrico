@@ -53,6 +53,8 @@ interface SettingsRepository {
     val monetEnable: Flow<Boolean>
     val onlyTranslationIfAvailable: Flow<Boolean>
     val removeEmptyLines: Flow<Boolean>
+
+    val lyricRenderConfigFlow: Flow<LyricRenderConfig>
     val settingsFlow: Flow<SettingsSnapshot>
     val showScrollTopButton : Flow<Boolean>
 

@@ -2,34 +2,32 @@ package com.lonx.lyrico.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lonx.lyrico.data.model.ConversionMode
+import com.lonx.lyrico.data.model.LyricFormat
 import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.utils.LyricsUtils
+import com.lonx.lyrics.model.LyricsResult
 import com.lonx.lyrics.model.SearchSource
 import com.lonx.lyrics.model.SongSearchResult
 import com.lonx.lyrics.model.Source
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlin.collections.plus
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * 歌词相关 UI 状态
- * 代表“当前选中的歌曲及其歌词加载状态”
+ * 歌词 UI 状态
  */
 data class LyricsUiState(
     val song: SongSearchResult? = null,
+    val lyricsResult: LyricsResult? = null,
     val content: String? = null,
     val isLoading: Boolean = false,
     val error: String? = null
 )
-
-
+/**
+ * 搜索 UI 状态
+ */
 data class SearchUiState(
     val searchKeyword: String = "",
     val searchResults: Map<String, List<SongSearchResult>> = emptyMap(),
@@ -41,110 +39,151 @@ data class SearchUiState(
     val isInitializing: Boolean = true
 )
 
+/**
+ * 内部：搜索状态拆分
+ */
+private data class SearchSourceState(
+    val keyword: String = "",
+    val results: Map<String, List<SongSearchResult>> = emptyMap(),
+    val isSearching: Boolean = false,
+    val error: String? = null
+)
+
 class SearchViewModel(
     private val sources: List<SearchSource>,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(SearchUiState())
-    val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
-    init {
-        // 初始加载配置
-        viewModelScope.launch {
-            loadSettings()
-        }
-    }
 
-    private suspend fun loadSettings() {
-        try {
-            val settings = settingsRepository.settingsFlow.first()
-            val sourcesOrder = settings.searchSourceOrder
-            val enabledSources = settings.enabledSearchSources
-            val filteredOrder = sourcesOrder.filter { it in enabledSources }
+    private val searchState = MutableStateFlow(SearchSourceState())
+    private val lyricsState = MutableStateFlow(LyricsUiState())
 
-            _uiState.update { it.copy(
-                availableSources = filteredOrder,
-                selectedSearchSource = filteredOrder.firstOrNull(),
-                isInitializing = false
-            ) }
-        } catch (e: Exception) {
-            _uiState.update { it.copy(isInitializing = false, searchError = "加载配置失败") }
+    private val selectedSourceId = MutableStateFlow<Source?>(null)
+
+    val lyricConfigFlow =
+        settingsRepository.lyricRenderConfigFlow
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5000),
+                null
+            )
+    private val renderedLyricsFlow =
+        combine(
+            lyricsState,
+            lyricConfigFlow.filterNotNull()
+        ) { lyricsState, config ->
+
+            val raw = lyricsState.lyricsResult
+
+            val rendered = if (raw != null) {
+                LyricsUtils.formatLrcResult(
+                    result = raw,
+                    config = config
+                )
+            } else null
+
+            lyricsState.copy(content = rendered)
         }
-    }
-    /**
-     * 搜索结果缓存：
-     * Keyword -> (Source -> Results)
-     */
+    private val settingsFlow =
+        settingsRepository.settingsFlow
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5000),
+                null
+            )
+
+
+    val uiState: StateFlow<SearchUiState> =
+        combine(
+            searchState,
+            settingsFlow,
+            renderedLyricsFlow,
+            selectedSourceId
+        ) { search, settings, renderedLyrics, selectedId ->
+
+            val sourcesOrder = settings?.searchSourceOrder.orEmpty()
+            val enabledSources = settings?.enabledSearchSources.orEmpty()
+
+            val filteredSources = sourcesOrder.filter { it in enabledSources }
+
+            val selectedSource =
+                filteredSources.find { it == selectedId }
+                    ?: filteredSources.firstOrNull()
+
+            SearchUiState(
+                searchKeyword = search.keyword,
+                searchResults = search.results,
+                isSearching = search.isSearching,
+                searchError = search.error,
+
+                availableSources = filteredSources,
+                selectedSearchSource = selectedSource,
+
+                lyricsState = renderedLyrics,
+                isInitializing = settings == null
+            )
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            SearchUiState()
+        )
+
+
     private val searchResultCache =
         mutableMapOf<String, MutableMap<Source, List<SongSearchResult>>>()
 
-    /**
-     * 当前搜索协程任务
-     */
     private var searchJob: Job? = null
-
-    /**
-     * 当前歌词加载协程任务
-     */
     private var lyricsJob: Job? = null
 
-    // -------------------------------------------------------------------------
-    // 搜索相关
-    // -------------------------------------------------------------------------
 
-    /**
-     * 当搜索框关键字发生变化时调用
-     * 仅更新状态，不触发实际搜索（避免频繁网络请求）
-     */
+
     fun onKeywordChanged(keyword: String) {
-        _uiState.update { it.copy(searchKeyword = keyword) }
+        searchState.update { it.copy(keyword = keyword) }
+    }
+    private suspend fun getLyricsResult(song: SongSearchResult): LyricsResult? {
+        val impl = findSource(song.source) ?: return null
+        return impl.getLyrics(song)
     }
 
-    /**
-     * 当用户选择新的搜索源时调用
-     * 如果存在关键词，会优先尝试从缓存加载结果
-     */
     fun onSearchSourceSelected(source: Source) {
-        _uiState.update { it.copy(selectedSearchSource = source) }
+        selectedSourceId.value = source
 
-        val keyword = _uiState.value.searchKeyword
-        if (keyword.isNotBlank()) {
-            val cached = getCachedResults(keyword, source)
-            if (cached != null) {
-                // 已有缓存，将其合并到 map 中
-                _uiState.update {
-                    it.copy(
-                        searchResults = it.searchResults + (source.name to cached),
-                        searchError = null
-                    )
-                }
-            } else {
-                performSearch()
+        val keyword = searchState.value.keyword
+        if (keyword.isBlank()) return
+
+        val cached = getCachedResults(keyword, source)
+        if (cached != null) {
+            searchState.update {
+                it.copy(
+                    results = it.results + (source.name to cached),
+                    error = null
+                )
             }
+        } else {
+            performSearch()
         }
     }
 
-    /**
-     * 触发搜索操作
-     *
-     * @param keywordOverride 可选关键字：
-     * - null：使用当前状态中的 keyword
-     * - 非 null：更新 keyword 并执行搜索
-     */
     fun performSearch(keywordOverride: String? = null) {
-        val keyword = keywordOverride ?: uiState.value.searchKeyword
+        val keyword = keywordOverride ?: searchState.value.keyword
         if (keyword.isBlank()) return
 
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            if (_uiState.value.isInitializing) {
-                _uiState.filter { !it.isInitializing }.first()
+
+            val settings = settingsFlow.filterNotNull().first()
+
+            val source =
+                selectedSourceId.value
+                    ?: settings.searchSourceOrder.firstOrNull { it in settings.enabledSearchSources }
+
+            if (source == null) return@launch
+
+            if (selectedSourceId.value == null) {
+                selectedSourceId.value = source
             }
 
-            // 2. 此时获取的 source 一定是设置里的第一个（或者是用户刚切的）
-            val currentSource = _uiState.value.selectedSearchSource ?: return@launch
-
-            executeSearch(keyword, currentSource, keywordOverride != null)
+            executeSearch(keyword, source, keywordOverride != null)
         }
     }
 
@@ -154,26 +193,32 @@ class SearchViewModel(
     private suspend fun executeSearch(
         keyword: String,
         source: Source,
-        shouldUpdateKeyword: Boolean
+        updateKeyword: Boolean
     ) {
-        _uiState.update { it.copy(isSearching = true, searchError = null) }
+        searchState.update { it.copy(isSearching = true, error = null) }
+
         try {
-            if (shouldUpdateKeyword) {
-                _uiState.update { it.copy(searchKeyword = keyword) }
+            if (updateKeyword) {
+                searchState.update { it.copy(keyword = keyword) }
             }
 
             val results = searchFromSource(keyword, source)
             cacheSearchResults(keyword, source, results)
 
-            _uiState.update {
+            searchState.update {
                 it.copy(
-                    searchResults = it.searchResults + (source.name to results),
+                    results = it.results + (source.name to results),
                     isSearching = false
                 )
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            _uiState.update { it.copy(searchError = e.message, isSearching = false) }
+            searchState.update {
+                it.copy(
+                    error = e.message,
+                    isSearching = false
+                )
+            }
         }
     }
 
@@ -197,56 +242,39 @@ class SearchViewModel(
         )
     }
 
-    /**
-     * 清空搜索结果
-     */
-    private fun clearSearchResults() {
-        _uiState.update {
-            it.copy(
-                searchResults = emptyMap(),
-                isSearching = false,
-                searchError = null
-            )
-        }
-    }
+    // -------------------------------------------------------------------------
+    // 歌词逻辑
+    // -------------------------------------------------------------------------
 
     /**
      * 加载指定歌曲的歌词
      * 同一时间只允许一个歌词加载任务
      */
-    fun loadLyrics(song: SongSearchResult,offset: Long = 0L) {
+    fun loadLyrics(song: SongSearchResult) {
         lyricsJob?.cancel()
 
         lyricsJob = viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    lyricsState = LyricsUiState(
-                        song = song,
-                        isLoading = true
-                    )
-                )
-            }
+            lyricsState.value = LyricsUiState(
+                song = song,
+                isLoading = true
+            )
 
             try {
-                val lyrics = loadFormattedLyrics(song, offset)
+                val lyricsResult = getLyricsResult(song)
 
-                _uiState.update {
+                lyricsState.update {
                     it.copy(
-                        lyricsState = it.lyricsState.copy(
-                            content = lyrics ?: "暂无歌词",
-                            isLoading = false
-                        )
+                        lyricsResult = lyricsResult,
+                        isLoading = false,
+                        error = if (lyricsResult == null) "暂无歌词" else null
                     )
                 }
-            } catch (e: CancellationException) {
-                throw e
+
             } catch (e: Exception) {
-                _uiState.update {
+                lyricsState.update {
                     it.copy(
-                        lyricsState = it.lyricsState.copy(
-                            error = "加载失败: ${e.message}",
-                            isLoading = false
-                        )
+                        error = e.message,
+                        isLoading = false
                     )
                 }
             }
@@ -256,8 +284,8 @@ class SearchViewModel(
     /**
      * 直接获取歌词 (用于列表页"应用"按钮)
      */
-    suspend fun fetchLyrics(song: SongSearchResult, offset: Long = 0L): String? {
-        return loadFormattedLyrics(song, offset)
+    suspend fun fetchLyrics(song: SongSearchResult): String? {
+        return loadFormattedLyrics(song)
     }
 
     /**
@@ -266,17 +294,14 @@ class SearchViewModel(
      */
     fun clearLyrics() {
         lyricsJob?.cancel()
-        _uiState.update {
-            it.copy(lyricsState = LyricsUiState())
-        }
+        lyricsState.value = LyricsUiState()
     }
 
     /**
      * 加载并格式化歌词内容
      */
     private suspend fun loadFormattedLyrics(
-        song: SongSearchResult,
-        offset: Long = 0L
+        song: SongSearchResult
     ): String? {
         val sourceImpl = findSource(song.source) ?: return null
         val lyricsResult = sourceImpl.getLyrics(song) ?: return null
@@ -285,8 +310,7 @@ class SearchViewModel(
 
         return LyricsUtils.formatLrcResult(
             result = lyricsResult,
-            config = config,
-            offset = offset
+            config = config
         )
 
     }
@@ -322,5 +346,41 @@ class SearchViewModel(
         source: Source
     ): List<SongSearchResult>? {
         return searchResultCache[keyword]?.get(source)
+    }
+
+    fun setLyricFormat(format: LyricFormat) {
+        viewModelScope.launch {
+            settingsRepository.saveLyricDisplayMode(format)
+        }
+    }
+
+    fun setRomaEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.saveRomaEnabled(enabled)
+        }
+    }
+
+    fun setTranslationEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.saveTranslationEnabled(enabled)
+        }
+    }
+
+    fun setOnlyTranslationIfAvailable(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.saveOnlyTranslationIfAvailable(enabled)
+        }
+    }
+
+    fun setRemoveEmptyLines(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.saveRemoveEmptyLines(enabled)
+        }
+    }
+
+    fun setConversionMode(mode: ConversionMode) {
+        viewModelScope.launch {
+            settingsRepository.saveConversionMode(mode)
+        }
     }
 }

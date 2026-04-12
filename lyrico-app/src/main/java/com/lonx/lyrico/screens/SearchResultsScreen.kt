@@ -1,46 +1,66 @@
 package com.lonx.lyrico.screens
 
 import android.annotation.SuppressLint
-import android.content.ClipData
 import android.view.HapticFeedbackConstants
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import kotlinx.coroutines.launch
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -48,9 +68,11 @@ import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.size.Size
 import com.lonx.lyrico.R
-import com.lonx.lyrico.ui.components.rememberTintedPainter
+import com.lonx.lyrico.data.model.ConversionMode
+import com.lonx.lyrico.data.model.LyricFormat
 import com.lonx.lyrico.data.model.LyricsSearchResult
 import com.lonx.lyrico.ui.components.bar.SearchBar
+import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.ui.theme.LyricoColors
 import com.lonx.lyrico.ui.theme.isDarkTheme
 import com.lonx.lyrico.viewmodel.SearchViewModel
@@ -58,6 +80,8 @@ import com.lonx.lyrics.model.SongSearchResult
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.result.ResultBackNavigator
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -72,6 +96,8 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 
@@ -86,35 +112,42 @@ fun SearchResultsScreen(
     val viewModel: SearchViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsState()
 
+    val showLyricRenderConfigBottomSheet = remember { mutableStateOf(false) }
+    val lyricConfig by viewModel.lyricConfigFlow.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    val searchKeyword by remember { derivedStateOf { uiState.searchKeyword } }
+
     val clipboardManager = LocalClipboardManager.current
-    // 获取源列表
-    val sources = uiState.availableSources
-
-    val resultsBySourceId = uiState.searchResults
-
-    var showLyricsSheet by remember { mutableStateOf(false) }
+    val pagerState = rememberPagerState { uiState.availableSources.size }
 
     /**
-     * 当有歌词数据时，自动打开bottom sheet
+     * 外部 keyword 触发搜索
      */
-    LaunchedEffect(uiState.lyricsState.song) {
-        if (uiState.lyricsState.song != null) {
-            showLyricsSheet = true
+    LaunchedEffect(keyword) {
+        keyword?.let { viewModel.performSearch(it) }
+    }
+
+    /**
+     * ViewModel → Pager 同步
+     */
+    LaunchedEffect(uiState.selectedSearchSource) {
+        val index = uiState.availableSources.indexOf(uiState.selectedSearchSource)
+        if (index >= 0 && pagerState.currentPage != index) {
+            pagerState.animateScrollToPage(index)
         }
     }
 
     /**
-     * 外部传入 keyword 时，触发一次搜索
+     * Pager → ViewModel 同步
      */
-    LaunchedEffect(keyword) {
-        keyword?.let {
-            viewModel.performSearch(it)
-        }
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }
+            .collectLatest { page ->
+                val source = uiState.availableSources.getOrNull(page)
+                source?.let { viewModel.onSearchSourceSelected(it) }
+            }
     }
 
     Scaffold(
@@ -127,7 +160,7 @@ fun SearchResultsScreen(
             ) {
                 SearchBar(
                     modifier = Modifier.padding(horizontal = 12.dp),
-                    value = searchKeyword,
+                    value = uiState.searchKeyword,
                     onValueChange = viewModel::onKeywordChanged,
                     placeholder = stringResource(id = R.string.search_lyrics_placeholder),
                     actions = {
@@ -143,6 +176,17 @@ fun SearchResultsScreen(
                                 color = MiuixTheme.colorScheme.primary
                             )
                         }
+                        IconButton(
+                            onClick = {
+                                showLyricRenderConfigBottomSheet.value = true
+                            }
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Settings,
+                                contentDescription = null,
+                                tint = MiuixTheme.colorScheme.primary
+                            )
+                        }
                     }
                 )
             }
@@ -154,34 +198,23 @@ fun SearchResultsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            val tabs = remember(sources) { sources.map { it.labelRes } }
 
-            val pagerState = rememberPagerState(
-                pageCount = { sources.size }
-            )
-
-
-            LaunchedEffect(uiState.selectedSearchSource) {
-                val targetIndex = sources.indexOfFirst { it.id == uiState.selectedSearchSource?.id }
-                if (targetIndex >= 0 && pagerState.currentPage != targetIndex) {
-                    pagerState.animateScrollToPage(targetIndex)
+            /**
+             * 初始化 loading
+             */
+            if (uiState.isInitializing) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
                 }
+                return@Column
             }
 
-            LaunchedEffect(pagerState) {
-                snapshotFlow { pagerState.currentPage }
-                    .collect { page ->
-                        // 从 StateFlow 直接读取最新状态，避免闭包捕获过时的 sources
-                        val currentState = viewModel.uiState.value
-                        val currentSources = currentState.availableSources
-                        val source = currentSources.getOrNull(page)
-                        // 仅当 ID 不同时更新，避免死循环
-                        if (source != null && source.id != currentState.selectedSearchSource?.id) {
-                            viewModel.onSearchSourceSelected(source)
-                        }
-                    }
-            }
-
+            /**
+             * Tabs
+             */
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -189,7 +222,7 @@ fun SearchResultsScreen(
                     .padding(bottom = 12.dp)
             ) {
                 TabRowWithContour(
-                    tabs = tabs.map { stringResource(it) },
+                    tabs = uiState.availableSources.map { stringResource(id = it.labelRes) },
                     selectedTabIndex = pagerState.currentPage,
                     onTabSelected = { index ->
                         scope.launch {
@@ -200,144 +233,102 @@ fun SearchResultsScreen(
             }
 
             /**
-             * 搜索结果区域
+             * Pager
              */
             HorizontalPager(
                 state = pagerState,
-                beyondViewportPageCount = 1,
-                modifier = Modifier.fillMaxSize(),
-                key = { index -> sources.getOrNull(index)?.id ?: index }
+                modifier = Modifier.fillMaxSize()
             ) { page ->
 
-                val source = sources.getOrNull(page)
+                val source = uiState.availableSources.getOrNull(page)
 
-                val resultsForPage = remember(resultsBySourceId, source) {
-                    if (source != null) {
-                        resultsBySourceId[source.name] ?: emptyList()
-                    } else {
-                        emptyList()
-                    }
-                }
+                val results =
+                    uiState.searchResults[source?.name] ?: emptyList()
 
                 when {
-                    uiState.isSearching && source?.id == uiState.selectedSearchSource?.id -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                    uiState.isSearching && source == uiState.selectedSearchSource -> {
+                        Box(Modifier.fillMaxSize(), Alignment.Center) {
+                            CircularProgressIndicator()
                         }
                     }
 
-                    uiState.searchError != null && source?.id == uiState.selectedSearchSource?.id -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
+                    uiState.searchError != null && source == uiState.selectedSearchSource -> {
+                        Box(Modifier.fillMaxSize(), Alignment.Center) {
                             Text(
-                                text = stringResource(
-                                    id = R.string.search_failed,
-                                    uiState.searchError!!
-                                ),
-                                color = MiuixTheme.colorScheme.error,
-                                fontSize = 14.sp
+                                text = uiState.searchError!!,
+                                fontSize = 14.sp,
+                                color = MiuixTheme.colorScheme.error
                             )
                         }
                     }
 
-                    // Results
+                    results.isEmpty() -> {
+                        Box(Modifier.fillMaxSize(), Alignment.Center) {
+                            Text(stringResource(id = R.string.cd_no_results))
+                        }
+                    }
+
                     else -> {
-                        if (resultsForPage.isEmpty()) {
-                            Column(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_searchoff_24dp),
-                                    contentDescription = stringResource(id = R.string.cd_no_results),
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = stringResource(id = R.string.search_no_results),
-                                    color = MiuixTheme.colorScheme.onSecondaryContainer
-                                )
-                            }
-                        } else {
-                            LazyColumn(
-                                contentPadding = PaddingValues(bottom = 12.dp),
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 12.dp)
-                            ) {
-                                items(
-                                    items = resultsForPage,
-                                    key = { "${it.source.id}_${it.id}" }
-                                ) { result ->
-                                    SearchResultItem(
-                                        song = result,
-                                        onPreviewClick = { offset ->
-                                            viewModel.loadLyrics(result, offset)
-                                        },
-                                        onApplyClick = { offset ->
-                                            scope.launch {
-                                                val lyrics = viewModel.fetchLyrics(
-                                                    result,
-                                                    offset
-                                                ) // 关键：传入 offset
-                                                if (lyrics != null) {
-                                                    resultNavigator.navigateBack(
-                                                        LyricsSearchResult(
-                                                            title = result.title,
-                                                            artist = result.artist,
-                                                            album = result.album,
-                                                            lyrics = lyrics,
-                                                            date = result.date,
-                                                            trackerNumber = result.trackerNumber,
-                                                            picUrl = result.picUrl
-                                                        )
+                        LazyColumn(
+                            contentPadding = PaddingValues(bottom = 12.dp),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp)
+                        ) {
+                            items(results, key = { "${it.source}_${it.id}" }) { song ->
+
+                                SearchResultItem(
+                                    song = song,
+                                    onPreviewClick = {
+                                        viewModel.loadLyrics(song)
+                                    },
+                                    onApplyClick = {
+                                        scope.launch {
+                                            val lyrics =
+                                                viewModel.fetchLyrics(song)
+                                            if (lyrics != null) {
+                                                resultNavigator.navigateBack(
+                                                    LyricsSearchResult(
+                                                        title = song.title,
+                                                        artist = song.artist,
+                                                        album = song.album,
+                                                        lyrics = lyrics,
+                                                        date = song.date,
+                                                        trackerNumber = song.trackerNumber,
+                                                        picUrl = song.picUrl,
+                                                        lyricsOnly = false
                                                     )
-                                                } else {
-                                                    Toast.makeText(
-                                                        context,
-                                                        context.getString(R.string.fetch_lyrics_failed),
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
-                                            }
-                                        },
-                                        // 3. 仅应用歌词时传入 offset
-                                        onApplyLyricsOnlyClick = { offset ->
-                                            scope.launch {
-                                                val lyrics = viewModel.fetchLyrics(
-                                                    result,
-                                                    offset
-                                                ) // 关键：传入 offset
-                                                if (lyrics != null) {
-                                                    resultNavigator.navigateBack(
-                                                        LyricsSearchResult(
-                                                            title = null,
-                                                            artist = null,
-                                                            album = null,
-                                                            lyrics = lyrics,
-                                                            date = null,
-                                                            trackerNumber = null,
-                                                            picUrl = null,
-                                                            lyricsOnly = true
-                                                        )
-                                                    )
-                                                } else {
-                                                    Toast.makeText(
-                                                        context,
-                                                        context.getString(R.string.fetch_lyrics_failed),
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
+                                                )
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.fetch_lyrics_failed),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
                                             }
                                         }
-                                    )
-                                }
+                                    },
+                                    onApplyLyricsOnlyClick = {
+                                        scope.launch {
+                                            val lyrics =
+                                                viewModel.fetchLyrics(song)
+                                            if (lyrics != null) {
+                                                resultNavigator.navigateBack(
+                                                    LyricsSearchResult(
+                                                        title = null,
+                                                        artist = null,
+                                                        album = null,
+                                                        lyrics = lyrics,
+                                                        date = null,
+                                                        trackerNumber = null,
+                                                        picUrl = null,
+                                                        lyricsOnly = true
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                )
                             }
                         }
                     }
@@ -348,19 +339,26 @@ fun SearchResultsScreen(
 
     /**
      * 歌词 BottomSheet
-     * 使用独立的状态控制显示隐藏，保证动画流畅
      */
 
     val lyricsText = uiState.lyricsState.content
-    if (showLyricsSheet && uiState.lyricsState.song != null) {
-        val song = uiState.lyricsState.song!!
+    uiState.lyricsState.song?.let { song ->
         WindowBottomSheet(
             show = true,
-            onDismissRequest = {
-                showLyricsSheet = false
-                viewModel.clearLyrics()
-            },
-            title = song.title
+            onDismissRequest = { viewModel.clearLyrics() },
+            title = song.title,
+            endAction = {
+                IconButton(
+                    onClick = {
+                        showLyricRenderConfigBottomSheet.value = true
+                    }
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Settings,
+                        contentDescription = null
+                    )
+                }
+            }
         ) {
             Column(
                 modifier = Modifier
@@ -469,7 +467,8 @@ fun SearchResultsScreen(
                                     lyrics = uiState.lyricsState.content,
                                     date = song.date,
                                     trackerNumber = song.trackerNumber,
-                                    picUrl = song.picUrl
+                                    picUrl = song.picUrl,
+                                    lyricsOnly = false
                                 )
                             )
                         },
@@ -481,19 +480,92 @@ fun SearchResultsScreen(
         }
     }
 
+    WindowBottomSheet(
+        show = showLyricRenderConfigBottomSheet.value,
+        onDismissRequest = {
+            showLyricRenderConfigBottomSheet.value = false
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(bottom = 32.dp)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Card(
+                modifier = Modifier.padding(horizontal = 12.dp),
+                colors = CardDefaults.defaultColors(
+                    color = MiuixTheme.colorScheme.secondaryContainer,
+                )
+            ) {
+                lyricConfig?.let { config ->
+                    val lyricFormatItems = LyricFormat.entries.map { stringResource(it.labelRes) }
+                    val selectedLyricFormatIndex =
+                        LyricFormat.entries.indexOf(config.format).coerceAtLeast(0)
+
+                    val conversionModeItems =
+                        ConversionMode.entries.map { stringResource(it.labelRes) }
+                    val selectedConversionModeIndex =
+                        ConversionMode.entries.indexOf(config.conversionMode).coerceAtLeast(0)
+
+                    WindowDropdownPreference(
+                        title = stringResource(R.string.lyric_mode),
+                        items = lyricFormatItems,
+                        selectedIndex = selectedLyricFormatIndex,
+                        onSelectedIndexChange = { index ->
+                            viewModel.setLyricFormat(LyricFormat.entries[index])
+                        }
+                    )
+                    SwitchPreference(
+                        title = stringResource(R.string.roma),
+                        summary = stringResource(R.string.roma_hint),
+                        checked = config.showRomanization,
+                        onCheckedChange = { viewModel.setRomaEnabled(it) }
+                    )
+                    SwitchPreference(
+                        title = stringResource(R.string.translation),
+                        summary = stringResource(R.string.translation_hint),
+                        checked = config.showTranslation,
+                        onCheckedChange = { viewModel.setTranslationEnabled(it) }
+                    )
+                    AnimatedVisibility(visible = config.showTranslation) {
+                        SwitchPreference(
+                            title = stringResource(R.string.only_translation_if_available),
+                            summary = stringResource(R.string.only_translation_if_available_hint),
+                            enabled = config.showTranslation,
+                            checked = config.onlyTranslationIfAvailable,
+                            onCheckedChange = { viewModel.setOnlyTranslationIfAvailable(it) }
+                        )
+                    }
+                    SwitchPreference(
+                        title = stringResource(R.string.remove_empty_lines),
+                        summary = stringResource(R.string.remove_empty_lines_hint),
+                        checked = config.removeEmptyLines,
+                        onCheckedChange = { viewModel.setRemoveEmptyLines(it) }
+                    )
+                    WindowDropdownPreference(
+                        title = stringResource(R.string.conversion_mode),
+                        items = conversionModeItems,
+                        selectedIndex = selectedConversionModeIndex,
+                        onSelectedIndexChange = {
+                            viewModel.setConversionMode(ConversionMode.entries[it])
+                        }
+                    )
+                }
+            }
+        }
+    }
 }
 
 
 @Composable
 fun SearchResultItem(
     song: SongSearchResult,
-    onPreviewClick: (Long) -> Unit,
-    onApplyClick: (Long) -> Unit,
-    onApplyLyricsOnlyClick: (Long) -> Unit
+    onPreviewClick: () -> Unit,
+    onApplyClick: () -> Unit,
+    onApplyLyricsOnlyClick: () -> Unit
 ) {
     val context = LocalContext.current
-    var offset by remember { mutableLongStateOf(0L) }
-    var isOffsetVisible by remember { mutableStateOf(false) }
 
     var imageSize by remember(song.picUrl) { mutableStateOf<Pair<Int, Int>?>(null) }
 
@@ -520,7 +592,7 @@ fun SearchResultItem(
         modifier = Modifier
             .padding(bottom = 6.dp)
             .clip(RoundedCornerShape(CardDefaults.CornerRadius))
-            .clickable(onClick = { onPreviewClick(offset) }),
+            .clickable(onClick = { onPreviewClick() }),
     ) {
         Column(
             modifier = Modifier.padding(12.dp)
@@ -625,46 +697,19 @@ fun SearchResultItem(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        // 偏移调节开关
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                                .clickable { isOffsetVisible = !isOffsetVisible }
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.Settings,
-                                contentDescription = "Offset",
-                                modifier = Modifier.size(12.dp),
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions
-                            )
-                            Text(
-                                text = if (offset == 0L) stringResource(R.string.offset_adjust_hint)
-                                else "${if (offset > 0) "+" else ""}${offset}ms",
-                                fontSize = 11.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+
 
                         // 应用按钮组
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.End
                         ) {
                             Box(
                                 modifier = Modifier
                                     .clip(CircleShape)
                                     .background(MiuixTheme.colorScheme.surfaceVariant)
-                                    .clickable { onApplyLyricsOnlyClick(offset) }
+                                    .clickable { onApplyLyricsOnlyClick() }
                                     .padding(horizontal = 10.dp, vertical = 5.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -675,12 +720,12 @@ fun SearchResultItem(
                                     fontWeight = FontWeight.Medium
                                 )
                             }
-
+                            Spacer(modifier = Modifier.width(8.dp))
                             Box(
                                 modifier = Modifier
                                     .clip(CircleShape)
                                     .background(MiuixTheme.colorScheme.primary)
-                                    .clickable { onApplyClick(offset) }
+                                    .clickable { onApplyClick() }
                                     .padding(horizontal = 10.dp, vertical = 5.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -691,23 +736,12 @@ fun SearchResultItem(
                                     fontWeight = FontWeight.Medium
                                 )
                             }
-                        }
+
                     }
                 }
             }
 
 
-            AnimatedVisibility(
-                visible = isOffsetVisible,
-                enter = expandVertically(),
-                exit = shrinkVertically()
-            ) {
-                OffsetAdjustPanel(
-                    currentOffset = offset,
-                    onOffsetChange = { offset = it },
-                    onReset = { offset = 0L }
-                )
-            }
         }
     }
 }

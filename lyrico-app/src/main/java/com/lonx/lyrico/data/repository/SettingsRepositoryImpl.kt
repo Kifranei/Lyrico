@@ -3,7 +3,6 @@ package com.lonx.lyrico.data.repository
 import android.content.Context
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.core.graphics.toColor
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -242,28 +241,34 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         }.first()
     }
 
-    private data class LyricPart(
-        val lyricFormat: LyricFormat,
-        val romaEnabled: Boolean,
-        val translationEnabled: Boolean,
-        val onlyTranslationIfAvailable: Boolean,
-        val removeEmptyLines: Boolean
-    )
 
-    private val lyricPartFlow =
+    private val baseConfigFlow =
         combine(
             lyricFormat,
             romaEnabled,
-            translationEnabled,
+            translationEnabled
+        ) { format, roma, translation ->
+            Triple(format, roma, translation)
+        }
+
+    private val extraConfigFlow =
+        combine(
             onlyTranslationIfAvailable,
-            removeEmptyLines
-        ) { format, roma, translation, onlyTranslation, removeEmptyLines ->
-            LyricPart(
-                lyricFormat = format,
-                romaEnabled = roma,
-                translationEnabled = translation,
-                onlyTranslationIfAvailable = onlyTranslation,
-                removeEmptyLines = removeEmptyLines
+            removeEmptyLines,
+            conversionMode
+        ) { onlyTranslation, removeEmptyLines, conversionMode ->
+            Triple(onlyTranslation, removeEmptyLines, conversionMode)
+        }
+
+    override val lyricRenderConfigFlow =
+        combine(baseConfigFlow, extraConfigFlow) { base, extra ->
+            LyricRenderConfig(
+                format = base.first,
+                showRomanization = base.second,
+                showTranslation = base.third,
+                onlyTranslationIfAvailable = extra.first,
+                removeEmptyLines = extra.second,
+                conversionMode = extra.third
             )
         }
 
@@ -301,16 +306,16 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         }
     override val settingsFlow: Flow<SettingsSnapshot> =
         combine(
-            lyricPartFlow,
+            lyricRenderConfigFlow,
             searchPartFlow,
-            uiPartFlow,
-            conversionMode
-        ) { lyric, search, ui, conversionMode ->
+            uiPartFlow
+        ) { lyric, search, ui ->
             SettingsSnapshot(
-                lyricFormat = lyric.lyricFormat,
-                romaEnabled = lyric.romaEnabled,
-                translationEnabled = lyric.translationEnabled,
+                lyricFormat = lyric.format,
+                romaEnabled = lyric.showRomanization,
+                translationEnabled = lyric.showTranslation,
                 onlyTranslationIfAvailable = lyric.onlyTranslationIfAvailable,
+                conversionMode = lyric.conversionMode,
                 separator = search.separator,
                 searchSourceOrder = search.searchSourceOrder,
                 enabledSearchSources = search.enabledSearchSources,
@@ -320,8 +325,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                 keyColor = ui.keyColor,
                 ignoreShortAudio = ui.ignoreShortAudio,
                 removeEmptyLines = lyric.removeEmptyLines,
-                showScrollTopButton = ui.showScrollTopButton,
-                conversionMode = conversionMode
+                showScrollTopButton = ui.showScrollTopButton
             )
         }
 
