@@ -634,12 +634,8 @@ private fun CoverSection(
                     Box(
                         modifier = Modifier
                             .size(160.dp)
-                            .shadow(
-                                elevation = 16.dp,
-                                shape = RoundedCornerShape(12.dp),
-                                ambientColor = Color.Black.copy(alpha = 0.3f)
-                            )
                             .clip(RoundedCornerShape(12.dp))
+                            .background(MiuixTheme.colorScheme.onSurfaceContainerVariant)
                             .clickable { onCoverClick() }
                     ) {
                         AsyncImage(
@@ -660,15 +656,7 @@ private fun CoverSection(
                         // 编辑提示
                         Box(
                             modifier = Modifier
-                                .matchParentSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            Color.Black.copy(alpha = 0.4f)
-                                        )
-                                    )
-                                ),
+                                .matchParentSize(),
                             contentAlignment = Alignment.BottomCenter
                         ) {
                             Text(
