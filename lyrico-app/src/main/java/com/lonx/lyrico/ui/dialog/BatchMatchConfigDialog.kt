@@ -194,7 +194,7 @@ private fun BatchMatchFieldItem(
     onModeToggle: () -> Unit
 ) {
     BasicComponent(
-        insideMargin = PaddingValues(0.dp),
+        insideMargin = PaddingValues(horizontal = 12.dp),
         modifier = Modifier.fillMaxWidth(),
         startAction = {
             Checkbox(
