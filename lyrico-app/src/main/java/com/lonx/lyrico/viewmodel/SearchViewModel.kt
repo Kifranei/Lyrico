@@ -11,7 +11,14 @@ import com.lonx.lyrics.model.SearchSource
 import com.lonx.lyrics.model.SongSearchResult
 import com.lonx.lyrics.model.Source
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -84,8 +91,8 @@ class SearchViewModel(
 
             lyricsState.copy(content = rendered)
         }
-    private val settingsFlow =
-        settingsRepository.settingsFlow
+    private val searchConfigFlow =
+        settingsRepository.searchConfigFlow
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5000),
@@ -96,13 +103,13 @@ class SearchViewModel(
     val uiState: StateFlow<SearchUiState> =
         combine(
             searchState,
-            settingsFlow,
+            searchConfigFlow,
             renderedLyricsFlow,
             selectedSourceId
-        ) { search, settings, renderedLyrics, selectedId ->
+        ) { search, searchConfig, renderedLyrics, selectedId ->
 
-            val sourcesOrder = settings?.searchSourceOrder.orEmpty()
-            val enabledSources = settings?.enabledSearchSources.orEmpty()
+            val sourcesOrder = searchConfig?.searchSourceOrder.orEmpty()
+            val enabledSources = searchConfig?.enabledSearchSources.orEmpty()
 
             val filteredSources = sourcesOrder.filter { it in enabledSources }
 
@@ -120,7 +127,7 @@ class SearchViewModel(
                 selectedSearchSource = selectedSource,
 
                 lyricsState = renderedLyrics,
-                isInitializing = settings == null
+                isInitializing = searchConfig == null
             )
         }.stateIn(
             viewModelScope,
@@ -171,11 +178,11 @@ class SearchViewModel(
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
 
-            val settings = settingsFlow.filterNotNull().first()
+            val searchConfig = searchConfigFlow.filterNotNull().first()
 
             val source =
                 selectedSourceId.value
-                    ?: settings.searchSourceOrder.firstOrNull { it in settings.enabledSearchSources }
+                    ?: searchConfig.searchSourceOrder.firstOrNull { it in searchConfig.enabledSearchSources }
 
             if (source == null) return@launch
 

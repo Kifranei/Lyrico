@@ -16,7 +16,9 @@ import com.lonx.lyrico.data.model.CharacterMappingDefaults
 import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricFormat
 import com.lonx.lyrico.data.model.LyricRenderConfig
+import com.lonx.lyrico.data.model.SearchConfig
 import com.lonx.lyrico.data.model.SettingsBackup
+import com.lonx.lyrico.data.model.ThemeConfig
 import com.lonx.lyrico.data.model.ThemeMode
 import com.lonx.lyrico.ui.theme.KeyColor
 import com.lonx.lyrico.ui.theme.KeyColors
@@ -272,60 +274,22 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
             )
         }
 
-    private data class SearchPart(
-        val separator: String,
-        val searchSourceOrder: List<Source>,
-        val enabledSearchSources: Set<Source>,
-        val searchPageSize: Int
-    )
-
-    private val searchPartFlow =
+    override val searchConfigFlow: Flow<SearchConfig> =
         combine(separator, searchSourceOrder, enabledSearchSources, searchPageSize) { sep, order, enabled, size ->
-            SearchPart(sep, order, enabled, size)
-        }
-
-    private data class UiPart(
-        val themeMode: ThemeMode,
-        val ignoreShortAudio: Boolean,
-        val showScrollTopButton: Boolean,
-        val monetEnable: Boolean,
-        val keyColor: KeyColor
-    )
-
-    private val uiPartFlow =
-        combine(themeMode, ignoreShortAudio, showScrollTopButton,
-            monetEnable, keyColor
-        ) { theme, ignore, showScrollTop ,monet, keyColor ->
-            UiPart(
-                themeMode = theme,
-                ignoreShortAudio = ignore,
-                showScrollTopButton = showScrollTop,
-                monetEnable = monet,
-                keyColor = keyColor
+            SearchConfig(
+                separator = sep,
+                searchSourceOrder = order,
+                enabledSearchSources = enabled,
+                searchPageSize = size
             )
         }
-    override val settingsFlow: Flow<SettingsSnapshot> =
-        combine(
-            lyricRenderConfigFlow,
-            searchPartFlow,
-            uiPartFlow
-        ) { lyric, search, ui ->
-            SettingsSnapshot(
-                lyricFormat = lyric.format,
-                romaEnabled = lyric.showRomanization,
-                translationEnabled = lyric.showTranslation,
-                onlyTranslationIfAvailable = lyric.onlyTranslationIfAvailable,
-                conversionMode = lyric.conversionMode,
-                separator = search.separator,
-                searchSourceOrder = search.searchSourceOrder,
-                enabledSearchSources = search.enabledSearchSources,
-                searchPageSize = search.searchPageSize,
-                themeMode = ui.themeMode,
-                monetEnable = ui.monetEnable,
-                keyColor = ui.keyColor,
-                ignoreShortAudio = ui.ignoreShortAudio,
-                removeEmptyLines = lyric.removeEmptyLines,
-                showScrollTopButton = ui.showScrollTopButton
+
+    override val themeConfigFlow: Flow<ThemeConfig> =
+        combine(themeMode, monetEnable, keyColor) { theme, monet, keyColor ->
+            ThemeConfig(
+                themeMode = theme,
+                monetEnable = monet,
+                keyColor = keyColor
             )
         }
 

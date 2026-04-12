@@ -2,32 +2,17 @@ package com.lonx.lyrico.data.repository
 
 import com.lonx.lyrico.data.model.BatchMatchConfig
 import com.lonx.lyrico.data.model.CharacterMappingConfig
-import com.lonx.lyrico.data.model.CharacterMappingRule
 import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricFormat
 import com.lonx.lyrico.data.model.LyricRenderConfig
+import com.lonx.lyrico.data.model.SearchConfig
+import com.lonx.lyrico.data.model.ThemeConfig
 import com.lonx.lyrico.data.model.ThemeMode
 import com.lonx.lyrico.ui.theme.KeyColor
 import com.lonx.lyrico.viewmodel.SortInfo
 import com.lonx.lyrics.model.Source
 import kotlinx.coroutines.flow.Flow
-data class SettingsSnapshot(
-    val lyricFormat: LyricFormat,
-    val romaEnabled: Boolean,
-    val separator: String,
-    val searchSourceOrder: List<Source>,
-    val searchPageSize: Int,
-    val themeMode: ThemeMode,
-    val monetEnable: Boolean,
-    val keyColor: KeyColor,
-    val ignoreShortAudio: Boolean,
-    val translationEnabled: Boolean,
-    val onlyTranslationIfAvailable: Boolean,
-    val removeEmptyLines: Boolean,
-    val showScrollTopButton: Boolean,
-    val conversionMode: ConversionMode,
-    val enabledSearchSources: Set<Source> = Source.entries.toSet()
-)
+
 
 interface SettingsRepository {
     val batchMatchConfig: Flow<BatchMatchConfig>
@@ -55,7 +40,8 @@ interface SettingsRepository {
     val removeEmptyLines: Flow<Boolean>
 
     val lyricRenderConfigFlow: Flow<LyricRenderConfig>
-    val settingsFlow: Flow<SettingsSnapshot>
+    val searchConfigFlow: Flow<SearchConfig>
+    val themeConfigFlow: Flow<ThemeConfig>
     val showScrollTopButton : Flow<Boolean>
 
     val characterMappingConfig: Flow<CharacterMappingConfig>

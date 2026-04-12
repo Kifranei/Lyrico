@@ -63,28 +63,31 @@ class SettingsViewModel(
     private val folder = database.folderDao()
     private val _categorizedCacheSize = MutableStateFlow<Map<CacheCategory, Long>>(emptyMap())
 
-    // 使用 combine 合并设置流和缓存流
+    // 使用 combine 合并各分组设置流和缓存流
     val uiState: StateFlow<SettingsUiState> = combine(
-        settingsRepository.settingsFlow,
+        settingsRepository.lyricRenderConfigFlow,
+        settingsRepository.searchConfigFlow,
+        settingsRepository.themeConfigFlow,
+        settingsRepository.ignoreShortAudio,
         _categorizedCacheSize,
-    ) { settings, cacheMap ->
+    ) { lyric, search, theme, ignoreShort, cacheMap ->
         SettingsUiState(
-            lyricFormat = settings.lyricFormat,
-            romaEnabled = settings.romaEnabled,
-            translationEnabled = settings.translationEnabled,
-            separator = settings.separator.toArtistSeparator(),
-            searchSourceOrder = settings.searchSourceOrder,
-            enabledSearchSources = settings.enabledSearchSources,
-            searchPageSize = settings.searchPageSize,
-            themeMode = settings.themeMode,
-            ignoreShortAudio = settings.ignoreShortAudio,
-            monetEnable = settings.monetEnable,
-            keyColor = settings.keyColor,
+            lyricFormat = lyric.format,
+            romaEnabled = lyric.showRomanization,
+            translationEnabled = lyric.showTranslation,
+            separator = search.separator.toArtistSeparator(),
+            searchSourceOrder = search.searchSourceOrder,
+            enabledSearchSources = search.enabledSearchSources,
+            searchPageSize = search.searchPageSize,
+            themeMode = theme.themeMode,
+            ignoreShortAudio = ignoreShort,
+            monetEnable = theme.monetEnable,
+            keyColor = theme.keyColor,
             categorizedCacheSize = cacheMap,
-            onlyTranslationIfAvailable = settings.onlyTranslationIfAvailable,
+            onlyTranslationIfAvailable = lyric.onlyTranslationIfAvailable,
             totalCacheSize = cacheMap.values.sum(),
-            removeEmptyLines = settings.removeEmptyLines,
-            conversionMode = settings.conversionMode
+            removeEmptyLines = lyric.removeEmptyLines,
+            conversionMode = lyric.conversionMode
         )
     }.stateIn(
         scope = viewModelScope,
