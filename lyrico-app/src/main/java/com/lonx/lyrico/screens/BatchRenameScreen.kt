@@ -92,7 +92,6 @@ fun BatchRenameScreen(
                 },
                 actions = {
                     IconButton(
-                        modifier = Modifier.padding(end = 12.dp),
                         onClick = {
                             if (!uiState.isRenamingInProgress) {
                                 navigator.navigate(CharacterMappingDestination)
