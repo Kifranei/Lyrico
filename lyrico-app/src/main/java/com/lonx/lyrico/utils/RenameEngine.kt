@@ -67,13 +67,17 @@ object RenameEngine {
         return previews
     }
 
-    suspend fun renameFiles(previews: List<RenamePreview>): Result {
+    suspend fun renameFiles(
+        previews: List<RenamePreview>,
+        onProgressUpdate: ((Int, Int) -> Unit)? = null
+    ): Result {
         val result = Result(
             successful = mutableListOf(),
             failed = mutableListOf()
         )
 
-        for (preview in previews) {
+        val total = previews.size
+        for ((index, preview) in previews.withIndex()) {
             try {
                 val oldFile = File(preview.originalPath)
                 val newFile = File(preview.newPath)
@@ -82,12 +86,19 @@ object RenameEngine {
 
                 if (oldFile.renameTo(newFile)) {
                     result.successful.add(preview)
-                    delay(50L)
                 } else {
                     result.failed.add(preview to "Failed to rename file")
                 }
             } catch (e: Exception) {
                 result.failed.add(preview to e.message.orEmpty())
+            }
+
+
+            val current = index + 1
+            onProgressUpdate?.invoke(current, total)
+
+            if (index < previews.lastIndex) {
+                delay(50L)
             }
         }
 

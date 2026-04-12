@@ -165,7 +165,7 @@ fun BatchEditScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Text(
                                 text = stringResource(
                                     R.string.batch_edit_saving_progress,

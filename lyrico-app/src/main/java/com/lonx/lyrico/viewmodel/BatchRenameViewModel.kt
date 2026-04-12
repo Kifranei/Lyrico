@@ -29,13 +29,20 @@ import kotlinx.coroutines.flow.update
 import java.io.File
 
 data class BatchRenameUiState(
+    val songCount: Int = 0,
+    val isLoading: Boolean = false,
+    val isSaving: Boolean = false,
+    val saveProgress: Int = 0,
+    val saveTotal: Int = 0,
+    val saveSuccess: Boolean? = null,
+    val saveResultMessage: UiMessage? = null,
+    val errorMessage: UiMessage? = null,
     val songs: List<SongForBatchRename> = emptyList(),
     val presetFormats: List<String> = emptyList(),
     val previews: List<RenamePreview> = emptyList(),
     val isGeneratingPreview: Boolean = false,
     val isRenamingInProgress: Boolean = false,
     val renameResult: RenameEngine.Result? = null,
-    val errorMessage: UiMessage? = null,
     val characterMappingConfig: CharacterMappingConfig? = null
 )
 
@@ -199,17 +206,28 @@ class BatchRenameViewModel(
                 _uiState.update {
                     it.copy(
                         isRenamingInProgress = true,
+                        saveProgress = 0,
+                        saveTotal = previews.size,
                         errorMessage = null
                     )
                 }
 
 
-                val result = RenameEngine.renameFiles(previews)
+                val result = RenameEngine.renameFiles(previews) { progress, total ->
+                    _uiState.update {
+                        it.copy(
+                            saveProgress = progress,
+                            saveTotal = total
+                        )
+                    }
+                }
 
                 _uiState.update {
                     it.copy(
                         renameResult = result,
-                        isRenamingInProgress = false
+                        isRenamingInProgress = false,
+                        saveProgress = 0,
+                        saveTotal = 0
                     )
                 }
 
@@ -218,6 +236,8 @@ class BatchRenameViewModel(
                 _uiState.update {
                     it.copy(
                         isRenamingInProgress = false,
+                        saveProgress = 0,
+                        saveTotal = 0,
                         errorMessage = UiMessage.DynamicString(e.message)
                     )
                 }

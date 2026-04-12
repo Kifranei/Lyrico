@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
@@ -40,6 +42,7 @@ import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.ListPopupDefaults
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -177,6 +180,27 @@ fun BatchRenameScreen(
                     AnimatedVisibility(visible = showPlaceholderInfo) {
                         PlaceholderInfoContent()
                     }
+
+                    // 重命名进度
+                    if (uiState.isRenamingInProgress) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = stringResource(
+                                    R.string.batch_edit_saving_progress,
+                                    uiState.saveProgress,
+                                    uiState.saveTotal
+                                ),
+                                style = MiuixTheme.textStyles.body1
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = if (uiState.saveTotal > 0)
+                                    uiState.saveProgress.toFloat() / uiState.saveTotal
+                                else 0f
+                            )
+                        }
+                    }
+
                     TextButton(
                         modifier = Modifier
                             .padding(12.dp)
