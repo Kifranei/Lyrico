@@ -197,6 +197,15 @@ class EditMetadataViewModel(
             )
         }
     }
+    fun updateCover(picUrl: String) {
+        _uiState.update { state ->
+            state.copy(
+                coverUri = picUrl,
+                isEditing = true,
+                editingTagData = state.editingTagData?.copy(picUrl = picUrl)
+            )
+        }
+    }
 
     /**
      * 移除封面

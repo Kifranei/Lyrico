@@ -49,8 +49,10 @@ import coil3.compose.AsyncImage
 import com.lonx.lyrico.R
 import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.data.model.LyricsSearchResult
+import com.lonx.lyrico.viewmodel.CoverSearchResult
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.SearchCoverDestination
 import com.ramcosta.composedestinations.generated.destinations.SearchResultsDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.result.ResultRecipient
@@ -92,6 +94,7 @@ import top.yukonga.miuix.kmp.window.WindowBottomSheet
 fun EditMetadataScreen(
     navigator: DestinationsNavigator,
     songFileUri: String,
+    onCoverSearchResult: ResultRecipient<SearchCoverDestination, String>,
     onLyricsResult: ResultRecipient<SearchResultsDestination, LyricsSearchResult>
 ) {
     val viewModel: EditMetadataViewModel = koinViewModel()
@@ -136,6 +139,7 @@ fun EditMetadataScreen(
     // 事件监听
     onLyricsResult.onResult { result -> viewModel.updateMetadataFromSearchResult(result) }
 
+    onCoverSearchResult.onResult { result -> viewModel.updateCover(result) }
     LaunchedEffect(uiState.permissionIntentSender) {
         uiState.permissionIntentSender?.let { intentSender ->
             intentSenderLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
@@ -514,6 +518,19 @@ fun EditMetadataScreen(
                                     ActivityResultContracts.PickVisualMedia.ImageOnly
                                 )
                             )
+                        }
+                    )
+                    ArrowPreference(
+                        title = stringResource(R.string.label_search_cover),
+                        onClick = {
+                            val keyword = if (!editingTagData?.title.isNullOrEmpty()) {
+                                if (editingTagData.artist.isNullOrEmpty()) editingTagData.title!!
+                                else "${editingTagData.title} ${editingTagData.artist}"
+                            } else {
+                                uiState.songInfo?.tagData?.fileName?.substringBeforeLast(".") ?: ""
+                            }
+                            showCoverOptionsSheet = false
+                            navigator.navigate(SearchCoverDestination(keyword))
                         }
                     )
                     ArrowPreference(
