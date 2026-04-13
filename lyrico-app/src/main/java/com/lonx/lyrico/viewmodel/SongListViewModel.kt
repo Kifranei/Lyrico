@@ -144,7 +144,7 @@ class SongListViewModel(
     }.flatMapLatest { (sort, query, type) ->
         if (query.isBlank()) {
             // 没有搜索词，返回全部歌曲（应用排序）
-            songRepository.getAllSongsSorted(sort.sortBy, sort.order)
+            songRepository.observeSongs(sort.sortBy, sort.order)
         } else {
             // 有搜索词，将 query 和当前的 searchType 一起传给 Repository
             songRepository.searchSongs(query, type)
@@ -278,7 +278,7 @@ class SongListViewModel(
 
     fun initialScanIfEmpty() {
         viewModelScope.launch {
-            if (songRepository.getSongsCount() == 0) {
+            if (songRepository.getSongCount() == 0) {
                 Log.d(TAG, "数据库为空，触发首次扫描")
                 triggerSync(isAuto = false)
             }

@@ -219,7 +219,7 @@ class BatchMatchViewModel(
                     if (historyRecords.isNotEmpty()) {
                         // 更新数据库中已成功的歌曲元数据
                         if (matchResults.isNotEmpty()) {
-                            songRepository.applyBatchMetadata(matchResults.toList())
+                            songRepository.updateMetadatas(matchResults.toList())
                         }
 
                         val totalTime = System.currentTimeMillis() - startTime
@@ -406,7 +406,8 @@ class BatchMatchViewModel(
 
             if (isEffectivelyEmpty) return@coroutineScope MatchResult(null, BatchMatchResult.SKIPPED)
 
-            if (songRepository.writeAudioTagData(song.uri, tagDataToWrite)) {
+            // 使用增量更新方法，只写入非 null 字段，避免清空未指定的标签
+            if (songRepository.patchAudioTags(song.uri, tagDataToWrite)) {
                 MatchResult(tagDataToWrite, BatchMatchResult.SUCCESS)
             } else {
                 MatchResult(null, BatchMatchResult.FAILURE) // Write failed

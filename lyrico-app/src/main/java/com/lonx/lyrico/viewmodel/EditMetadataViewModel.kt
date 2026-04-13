@@ -289,7 +289,7 @@ class EditMetadataViewModel(
             _uiState.update { it.copy(isSaving = true, saveSuccess = null, permissionIntentSender = null) }
 
             try {
-                val success = songRepository.writeAudioTagData(uriString, audioTagData)
+                val success = songRepository.overwriteAudioTags(uriString, audioTagData)
 
                 if (success) {
                     val newModifiedTime = System.currentTimeMillis()
