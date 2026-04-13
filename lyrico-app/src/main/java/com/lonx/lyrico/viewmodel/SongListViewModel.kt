@@ -251,11 +251,6 @@ class SongListViewModel(
             }
         }
     }
-    fun openBatchMatchConfig() {
-        if (_selectedSongIds.value.isNotEmpty()) {
-            _uiState.update { it.copy(showBatchConfigDialog = true) }
-        }
-    }
 
     fun play(context: Context, song: SongEntity) {
         val uri = song.getUri

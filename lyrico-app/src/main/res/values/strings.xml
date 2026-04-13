@@ -51,7 +51,9 @@
     <string name="folder_ignored">, %1$d ignored</string>
     <string name="ignore_short_audio">Ignore audio shorter than 60 seconds</string>
 
-
+    <string name="batch_match_prefer_filename">Prefer filename for matching</string>
+    <string name="batch_match_prefer_filename_summary">Ignore embedded tags during matching; prioritize searching by file name to improve accuracy. When this feature is enabled, it is recommended to set the title and artist to overwrite mode.
+</string>
     <!-- Lyrics -->
     <string name="lyric_mode">Lyric Mode</string>
     <string name="roma">Romaji</string>

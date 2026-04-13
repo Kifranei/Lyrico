@@ -1,5 +1,6 @@
 package com.lonx.lyrico.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioTagData
@@ -23,6 +24,7 @@ import com.lonx.lyrics.model.SongSearchResult
 import com.lonx.lyrics.model.Source
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -37,6 +39,8 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -153,76 +157,96 @@ class BatchMatchViewModel(
 
             val semaphore = Semaphore(matchConfig.concurrency)
             val processedCount = AtomicInteger(0)
-            val matchResults = mutableListOf<Pair<SongEntity, AudioTagData>>()
-            val historyRecords = mutableListOf<BatchMatchRecordEntity>()
+
+            // 使用线程安全的列表，防止并发写入导致数据丢失或崩溃
+            val matchResults = Collections.synchronizedList(mutableListOf<Pair<SongEntity, AudioTagData>>())
+            val historyRecords = Collections.synchronizedList(mutableListOf<BatchMatchRecordEntity>())
 
             val successCounter = AtomicInteger(0)
             val failureCounter = AtomicInteger(0)
             val skippedCounter = AtomicInteger(0)
 
-            songsToMatch.map { song ->
-                launch {
-                    semaphore.withPermit {
-                        _uiState.update { it.copy(currentFile = song.fileName) }
+            try {
+                songsToMatch.map { song ->
+                    launch {
+                        semaphore.withPermit {
+                            _uiState.update { it.copy(currentFile = song.fileName) }
 
-                        // 核心逻辑：根据 Config 决定是否跳过、如何匹配
-                        val result = matchAndGetTag(
-                            song = song,
-                            separator = separatorValue,
-                            lyricConfig = lyricConfig,
-                            order = currentOrder,
-                            matchConfig = matchConfig
-                        )
-
-                        val currentProcessed = processedCount.incrementAndGet()
-
-                        historyRecords.add(
-                            BatchMatchRecordEntity(
-                                historyId = 0, // Pending
-                                filePath = song.filePath,
-                                status = result.status,
-                                uri = song.uri
+                            val result = matchAndGetTag(
+                                song = song,
+                                separator = separatorValue,
+                                lyricConfig = lyricConfig,
+                                order = currentOrder,
+                                matchConfig = matchConfig
                             )
-                        )
 
-                        when (result.status) {
-                            BatchMatchResult.SUCCESS if result.tagData != null -> {
-                                matchResults.add(song to result.tagData)
-                                val s = successCounter.incrementAndGet()
-                                _uiState.update { it.copy(successCount = s) }
+                            val currentProcessed = processedCount.incrementAndGet()
+
+                            // 添加到历史记录
+                            historyRecords.add(
+                                BatchMatchRecordEntity(
+                                    historyId = 0, // Pending
+                                    filePath = song.filePath,
+                                    status = result.status,
+                                    uri = song.uri
+                                )
+                            )
+
+                            when (result.status) {
+                                BatchMatchResult.SUCCESS -> {
+                                    if (result.tagData != null) {
+                                        matchResults.add(song to result.tagData)
+                                    }
+                                    val s = successCounter.incrementAndGet()
+                                    _uiState.update { it.copy(successCount = s) }
+                                }
+                                BatchMatchResult.FAILURE -> {
+                                    val f = failureCounter.incrementAndGet()
+                                    _uiState.update { it.copy(failureCount = f) }
+                                }
+                                else -> { // Skipped
+                                    val s = skippedCounter.incrementAndGet()
+                                    _uiState.update { it.copy(skippedCount = s) }
+                                }
                             }
-                            BatchMatchResult.FAILURE -> {
-                                val f = failureCounter.incrementAndGet()
-                                _uiState.update { it.copy(failureCount = f) }
-                            }
-                            else -> {
-                                // Skipped
-                                val s = skippedCounter.incrementAndGet()
-                                _uiState.update { it.copy(skippedCount = s) }
-                            }
+
+                            _uiState.update { it.copy(batchProgress = currentProcessed to total) }
+                        }
+                    }
+                }.joinAll()
+            } finally {
+                withContext(NonCancellable) {
+                    if (historyRecords.isNotEmpty()) {
+                        // 更新数据库中已成功的歌曲元数据
+                        if (matchResults.isNotEmpty()) {
+                            songRepository.applyBatchMetadata(matchResults.toList())
                         }
 
-                        _uiState.update { it.copy(batchProgress = currentProcessed to total) }
+                        val totalTime = System.currentTimeMillis() - startTime
+                        val history = BatchMatchHistory(
+                            timestamp = System.currentTimeMillis(),
+                            successCount = successCounter.get(),
+                            failureCount = failureCounter.get(),
+                            skippedCount = skippedCounter.get(),
+                            durationMillis = totalTime,
+                        )
+
+                        val historyId = batchMatchHistoryRepository.saveHistory(history, historyRecords.toList())
+
+                        // 更新 UI 状态展示结果
+                        _uiState.update {
+                            it.copy(
+                                batchHistoryId = historyId,
+                                isBatchMatching = false,
+                                batchTimeMillis = totalTime
+                            )
+                        }
+                    } else {
+                        // 如果刚开始就被取消，一条都没处理
+                        _uiState.update { it.copy(isBatchMatching = false) }
                     }
                 }
-            }.joinAll()
-
-            if (matchResults.isNotEmpty()) {
-                songRepository.applyBatchMetadata(matchResults)
             }
-
-            // Save History
-            val totalTime = System.currentTimeMillis() - startTime
-            val history = BatchMatchHistory(
-                timestamp = System.currentTimeMillis(),
-                successCount = successCounter.get(),
-                failureCount = failureCounter.get(),
-                skippedCount = skippedCounter.get(),
-                durationMillis = totalTime,
-            )
-            val historyId = batchMatchHistoryRepository.saveHistory(history, historyRecords)
-
-            _uiState.update { it.copy(batchHistoryId = historyId, isBatchMatching = false, batchTimeMillis = totalTime) }
         }
     }
 
@@ -278,10 +302,39 @@ class BatchMatchViewModel(
 
         if (!needsProcessing) return@coroutineScope MatchResult(null, BatchMatchResult.SKIPPED)
 
-        val queries = MusicMatchUtils.buildSearchQueries(song)
         val (parsedTitle, parsedArtist) = MusicMatchUtils.parseFileName(song.fileName)
-        val queryTitle = song.title?.takeIf { it.isNotBlank() && !it.contains("未知", true) } ?: parsedTitle
-        val queryArtist = song.artist?.takeIf { it.isNotBlank() && !it.contains("未知", true) } ?: parsedArtist
+
+        val queryTitle: String?
+        val queryArtist: String?
+        val queries: List<String>
+
+        if (matchConfig.preferFileName) {
+            Log.d("MatchAndGetTag", "PreferFileName")
+            // 优先从文件名获取，如果没有再降级使用标签
+            queryTitle = parsedTitle?.takeIf { it.isNotBlank() }
+                ?: song.title?.takeIf { it.isNotBlank() && !it.contains("未知", true) }
+            queryArtist = parsedArtist?.takeIf { it.isNotBlank() }
+                ?: song.artist?.takeIf { it.isNotBlank() && !it.contains("未知", true) }
+
+            // 构建优先用文件名组成的搜索词
+            val fileNameQuery = if (!queryTitle.isNullOrBlank() && !queryArtist.isNullOrBlank()) {
+                "$queryTitle $queryArtist"
+            } else {
+                queryTitle ?: queryArtist
+            }
+
+            queries = if (!fileNameQuery.isNullOrBlank()) {
+                listOf(fileNameQuery)
+            } else {
+                MusicMatchUtils.buildSearchQueries(song) // 降级处理
+            }
+            Log.d("MatchAndGetTag", "Queries: $queries")
+        } else {
+            // 原有的默认逻辑：优先用标签，标签没有再降级使用文件名
+            queryTitle = song.title?.takeIf { it.isNotBlank() && !it.contains("未知", true) } ?: parsedTitle
+            queryArtist = song.artist?.takeIf { it.isNotBlank() && !it.contains("未知", true) } ?: parsedArtist
+            queries = MusicMatchUtils.buildSearchQueries(song)
+        }
 
         val orderedSources = sources.sortedBy { s ->
             order.indexOf(s.sourceType).let { if (it == -1) Int.MAX_VALUE else it }

@@ -52,7 +52,8 @@
     <!-- 搜索 -->
     <string name="search_limit">搜索限制数</string>
     <string name="search_limit_tip">限制每个源的搜索结果数量，设置更大的值会消耗更多流量，同时产生更多图片缓存</string>
-
+    <string name="batch_match_prefer_filename">优先使用文件名匹配</string>
+    <string name="batch_match_prefer_filename_summary">匹配时忽略内置标签，优先依靠文件名进行搜索以提高准确度，启用此功能时建议将标题和艺术家设置为覆盖模式</string>
     <!-- 歌词 -->
     <string name="lyric_mode">歌词模式</string>
     <string name="roma">罗马音</string>

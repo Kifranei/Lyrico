@@ -96,7 +96,7 @@ import com.lonx.lyrico.data.model.entity.getUri
 import com.lonx.lyrico.ui.components.DropdownItem
 import com.lonx.lyrico.ui.components.bar.SearchBar
 import com.lonx.lyrico.ui.components.rememberTintedPainter
-import com.lonx.lyrico.ui.dialog.BatchMatchConfigDialog
+import com.lonx.lyrico.ui.dialog.BatchMatchConfigBottomSheet
 import com.lonx.lyrico.ui.theme.LyricoColors
 import com.lonx.lyrico.utils.coil.CoverRequest
 import com.lonx.lyrico.viewmodel.BatchMatchViewModel
@@ -285,7 +285,10 @@ fun SongListScreen(
                             selected = hasSelection,
                             enabled = hasSelection,
                             label = stringResource(R.string.action_batch_match),
-                            onClick = { batchMatchViewModel.openBatchMatchConfig() },
+                            onClick = {
+                                songListViewModel.setSelectionUris()
+                                batchMatchViewModel.openBatchMatchConfig()
+                                      },
                             icon = MiuixIcons.Edit
                         )
                         FloatingNavigationBarItem(
@@ -718,8 +721,8 @@ fun SongListScreen(
                     }
                 }
             }
-            // 批量匹配配置对话框
-            BatchMatchConfigDialog(
+            // 批量匹配配置BottomSheet
+            BatchMatchConfigBottomSheet(
                 show = batchMatchUiState.showBatchConfigDialog,
                 initialConfig = batchMatchConfig,
                 onDismissRequest = { config ->
@@ -731,7 +734,7 @@ fun SongListScreen(
                 }
             )
 
-            WindowDialog(
+            WindowBottomSheet(
                 show = batchMatchUiState.isBatchMatching || batchMatchUiState.batchProgress != null,
                 onDismissRequest = {
                     if (!batchMatchUiState.isBatchMatching) batchMatchViewModel.closeBatchMatchDialog()
@@ -740,6 +743,7 @@ fun SongListScreen(
             ) {
                 Column(
                     modifier = Modifier
+                        .padding(bottom = 32.dp)
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
                 ) {
