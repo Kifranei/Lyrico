@@ -2,6 +2,7 @@ package com.lonx.lyrico.screens
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -44,8 +45,11 @@ import coil3.compose.AsyncImage
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricsSearchResult
+import com.lonx.lyrico.ui.components.getBitmap
 import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.ui.theme.LyricoColors
+import com.lonx.lyrico.ui.components.ImageCropper
+import com.lonx.lyrico.ui.components.rememberImageCropperState
 import com.lonx.lyrico.viewmodel.EditMetadataViewModel
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -54,7 +58,9 @@ import com.ramcosta.composedestinations.generated.destinations.SearchResultsDest
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.result.ResultRecipient
 import com.ramcosta.composedestinations.result.onResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -68,19 +74,16 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
-import top.yukonga.miuix.kmp.basic.SpinnerEntry
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.icon.extended.Search
-import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
-import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -111,8 +114,10 @@ fun EditMetadataScreen(
     var showOffsetSheet by remember { mutableStateOf(false) }
     var showCoverOptionsSheet by remember { mutableStateOf(false) }
     var showLyricsActionBottomSheet by remember { mutableStateOf(false) }
+    var showCropSheet by remember { mutableStateOf(false) }
+    var bitmapToCrop by remember { mutableStateOf<Bitmap?>(null) }
+    var cropAction by remember { mutableStateOf<(() -> Bitmap)?>(null) }
     val currentShiftOffset by viewModel.currentShiftOffset.collectAsState()
-
     // 各种 Launcher
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -240,12 +245,11 @@ fun EditMetadataScreen(
                 if (!editingTagData?.lyrics.isNullOrBlank()) {
                     FloatingActionButton(
                         onClick = {
-                            viewModel.prepareLyricsOffset()
-                            showOffsetSheet = true
+                            showLyricsActionBottomSheet = true
                         }
                     ) {
                         Icon(
-                            imageVector = MiuixIcons.Tune,
+                            imageVector = MiuixIcons.Notes,
                             contentDescription = null,
                             tint = MiuixTheme.colorScheme.onPrimary
                         )
@@ -507,7 +511,7 @@ fun EditMetadataScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            text = stringResource(R.string.action_lyrics_menu),
+                                            text = stringResource(R.string.action_lyrics_options),
                                             fontSize = 11.sp,
                                             color = MiuixTheme.colorScheme.onPrimary,
                                             fontWeight = FontWeight.Medium
@@ -526,6 +530,7 @@ fun EditMetadataScreen(
     WindowBottomSheet(
         show = showLyricsActionBottomSheet,
         enableNestedScroll = false,
+        title = stringResource(R.string.action_lyrics_options),
         onDismissRequest = { showLyricsActionBottomSheet = false }
     ) {
         Column(
@@ -548,7 +553,7 @@ fun EditMetadataScreen(
                         lyricsFileLauncher.launch(arrayOf("*/*"))
                     }
                 )
-                if (editingTagData?.lyrics != null){
+                if (editingTagData?.lyrics != null) {
                     ArrowPreference(
                         title = stringResource(R.string.action_export_lyrics),
                         onClick = {
@@ -590,6 +595,7 @@ fun EditMetadataScreen(
     WindowBottomSheet(
         show = showCoverOptionsSheet,
         enableNestedScroll = false,
+        title = stringResource(R.string.label_cover_options),
         onDismissRequest = { showCoverOptionsSheet = false }
     ) {
         Column(
@@ -640,16 +646,92 @@ fun EditMetadataScreen(
                             viewModel.exportCover(context)
                         }
                     )
+                    ArrowPreference(
+                        title = stringResource(R.string.label_crop_cover),
+                        onClick = {
+                            showCoverOptionsSheet = false
+                            val sourceData = uiState.coverUri ?: uiState.originalCover
+
+                            if (sourceData != null) {
+                                scope.launch(Dispatchers.IO) {
+                                    val bitmap = getBitmap(context, sourceData)
+                                    withContext(Dispatchers.Main) {
+                                        if (bitmap != null) {
+                                            bitmapToCrop = bitmap
+                                            showCropSheet = true
+                                        } else {
+                                            snackbarHostState.showSnackbar(context.getString(R.string.msg_read_cover_failed)) // "无法读取封面图片"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    )
                 }
             }
 
         }
     }
+    // 裁剪界面
+    val cropperState = bitmapToCrop?.let { rememberImageCropperState(it) }
 
+    WindowBottomSheet(
+        show = showCropSheet,
+        enableNestedScroll = false,
+        title = stringResource(R.string.label_crop_cover),
+        endAction = {
+            if (cropperState != null) {
+                IconButton(
+                    onClick = {
+                        val croppedBitmap = cropperState.crop()
+                        viewModel.updateCover(croppedBitmap)
+                        showCropSheet = false
+                        // 注意：这里不清空 bitmapToCrop，等动画结束再清
+                    }
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Ok,
+                        contentDescription = null
+                    )
+                }
+            }
+        },
+        onDismissRequest = {
+            showCropSheet = false
+            // 同样不在这里清空
+        },
+        onDismissFinished = {
+            // 动画完全结束后再清理，避免闪烁
+            bitmapToCrop = null
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(bottom = 32.dp)
+                .fillMaxWidth()
+        ) {
+            if (cropperState != null) {
+                ImageCropper(
+                    state = cropperState,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+        }
+    }
     // 偏移调整 BottomSheet
     WindowBottomSheet(
         show = showOffsetSheet,
         enableNestedScroll = false,
+        title = stringResource(R.string.offset_adjust_hint),
         onDismissRequest = { showOffsetSheet = false }
     ) {
         Column(
