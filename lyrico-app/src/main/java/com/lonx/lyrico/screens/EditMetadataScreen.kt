@@ -15,41 +15,38 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.lonx.lyrico.ui.theme.LyricoColors
-import com.lonx.lyrico.viewmodel.EditMetadataViewModel
-import kotlinx.coroutines.launch
-import org.koin.androidx.compose.koinViewModel
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.lonx.lyrico.R
-import com.lonx.lyrico.ui.components.rememberTintedPainter
+import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricsSearchResult
-import com.lonx.lyrico.viewmodel.CoverSearchResult
+import com.lonx.lyrico.ui.components.rememberTintedPainter
+import com.lonx.lyrico.ui.theme.LyricoColors
+import com.lonx.lyrico.viewmodel.EditMetadataViewModel
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.SearchCoverDestination
@@ -57,6 +54,8 @@ import com.ramcosta.composedestinations.generated.destinations.SearchResultsDest
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.result.ResultRecipient
 import com.ramcosta.composedestinations.result.onResult
+import kotlinx.coroutines.launch
+import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
@@ -69,9 +68,9 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
+import top.yukonga.miuix.kmp.basic.SpinnerEntry
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Ok
@@ -79,6 +78,9 @@ import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.icon.extended.Undo
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
+import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -101,8 +103,6 @@ fun EditMetadataScreen(
     val uiState by viewModel.uiState.collectAsState()
     val originalTagData = uiState.originalTagData
     val editingTagData = uiState.editingTagData
-
-
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -110,6 +110,7 @@ fun EditMetadataScreen(
     // BottomSheet 状态
     var showOffsetSheet by remember { mutableStateOf(false) }
     var showCoverOptionsSheet by remember { mutableStateOf(false) }
+    var showLyricsActionBottomSheet by remember { mutableStateOf(false) }
     val currentShiftOffset by viewModel.currentShiftOffset.collectAsState()
 
     // 各种 Launcher
@@ -155,7 +156,7 @@ fun EditMetadataScreen(
             scope.launch { snackbarHostState.showSnackbar(context.getString(msg)) }
             viewModel.clearSaveStatus()
             if (success) {
-                if (!navigator.popBackStack()){
+                if (!navigator.popBackStack()) {
                     activity.finish()
                 }
             }
@@ -164,7 +165,8 @@ fun EditMetadataScreen(
 
     LaunchedEffect(uiState.exportLyricsResult) {
         uiState.exportLyricsResult?.let { success ->
-            val msg = if (success) R.string.msg_export_lyrics_success else R.string.msg_export_lyrics_failed
+            val msg =
+                if (success) R.string.msg_export_lyrics_success else R.string.msg_export_lyrics_failed
             scope.launch { snackbarHostState.showSnackbar(context.getString(msg)) }
             viewModel.clearExportLyricsStatus()
         }
@@ -172,7 +174,8 @@ fun EditMetadataScreen(
 
     LaunchedEffect(uiState.importLyricsResult) {
         uiState.importLyricsResult?.let { success ->
-            val msg = if (success) R.string.msg_import_lyrics_success else R.string.msg_import_lyrics_failed
+            val msg =
+                if (success) R.string.msg_import_lyrics_success else R.string.msg_import_lyrics_failed
             scope.launch { snackbarHostState.showSnackbar(context.getString(msg)) }
             viewModel.clearImportLyricsStatus()
         }
@@ -277,7 +280,8 @@ fun EditMetadataScreen(
             item(key = "cover") {
                 CoverSection(
                     coverUri = uiState.coverUri,
-                    title = editingTagData?.title ?: uiState.songInfo?.tagData?.fileName?.substringBeforeLast(".") ?: "",
+                    title = editingTagData?.title
+                        ?: uiState.songInfo?.tagData?.fileName?.substringBeforeLast(".") ?: "",
                     artist = editingTagData?.artist ?: "",
                     rating = editingTagData?.rating ?: 0,
                     isModified = uiState.coverUri != uiState.originalCover,
@@ -300,42 +304,78 @@ fun EditMetadataScreen(
                                 value = editingTagData?.title ?: "",
                                 onValueChange = { viewModel.updateTag { copy(title = it) } },
                                 isModified = editingTagData?.title != originalTagData?.title,
-                                onRevert = { viewModel.updateTag { copy(title = originalTagData?.title ?: "") } }
+                                onRevert = {
+                                    viewModel.updateTag {
+                                        copy(
+                                            title = originalTagData?.title ?: ""
+                                        )
+                                    }
+                                }
                             )
                             MetadataInputField(
                                 label = stringResource(R.string.label_artists),
                                 value = editingTagData?.artist ?: "",
                                 onValueChange = { viewModel.updateTag { copy(artist = it) } },
                                 isModified = editingTagData?.artist != originalTagData?.artist,
-                                onRevert = { viewModel.updateTag { copy(artist = originalTagData?.artist ?: "") } }
+                                onRevert = {
+                                    viewModel.updateTag {
+                                        copy(
+                                            artist = originalTagData?.artist ?: ""
+                                        )
+                                    }
+                                }
                             )
                             MetadataInputField(
                                 label = stringResource(R.string.label_album_artist),
                                 value = editingTagData?.albumArtist ?: "",
                                 onValueChange = { viewModel.updateTag { copy(albumArtist = it) } },
                                 isModified = editingTagData?.albumArtist != originalTagData?.albumArtist,
-                                onRevert = { viewModel.updateTag { copy(albumArtist = originalTagData?.albumArtist ?: "") } }
+                                onRevert = {
+                                    viewModel.updateTag {
+                                        copy(
+                                            albumArtist = originalTagData?.albumArtist ?: ""
+                                        )
+                                    }
+                                }
                             )
                             MetadataInputField(
                                 label = stringResource(R.string.label_album),
                                 value = editingTagData?.album ?: "",
                                 onValueChange = { viewModel.updateTag { copy(album = it) } },
                                 isModified = editingTagData?.album != originalTagData?.album,
-                                onRevert = { viewModel.updateTag { copy(album = originalTagData?.album ?: "") } }
+                                onRevert = {
+                                    viewModel.updateTag {
+                                        copy(
+                                            album = originalTagData?.album ?: ""
+                                        )
+                                    }
+                                }
                             )
                             MetadataInputField(
                                 label = stringResource(R.string.label_date),
                                 value = editingTagData?.date ?: "",
                                 onValueChange = { viewModel.updateTag { copy(date = it) } },
                                 isModified = editingTagData?.date != originalTagData?.date,
-                                onRevert = { viewModel.updateTag { copy(date = originalTagData?.date ?: "") } }
+                                onRevert = {
+                                    viewModel.updateTag {
+                                        copy(
+                                            date = originalTagData?.date ?: ""
+                                        )
+                                    }
+                                }
                             )
                             MetadataInputField(
                                 label = stringResource(R.string.label_genre),
                                 value = editingTagData?.genre ?: "",
                                 onValueChange = { viewModel.updateTag { copy(genre = it) } },
                                 isModified = editingTagData?.genre != originalTagData?.genre,
-                                onRevert = { viewModel.updateTag { copy(genre = originalTagData?.genre ?: "") } }
+                                onRevert = {
+                                    viewModel.updateTag {
+                                        copy(
+                                            genre = originalTagData?.genre ?: ""
+                                        )
+                                    }
+                                }
                             )
                         }
                     }
@@ -352,7 +392,13 @@ fun EditMetadataScreen(
                                 value = editingTagData?.trackNumber ?: "",
                                 onValueChange = { viewModel.updateTag { copy(trackNumber = it) } },
                                 isModified = editingTagData?.trackNumber != originalTagData?.trackNumber,
-                                onRevert = { viewModel.updateTag { copy(trackNumber = originalTagData?.trackNumber ?: "") } }
+                                onRevert = {
+                                    viewModel.updateTag {
+                                        copy(
+                                            trackNumber = originalTagData?.trackNumber ?: ""
+                                        )
+                                    }
+                                }
                             )
                             MetadataInputField(
                                 label = stringResource(R.string.label_disc_number),
@@ -376,14 +422,26 @@ fun EditMetadataScreen(
                                 value = editingTagData?.composer ?: "",
                                 onValueChange = { viewModel.updateTag { copy(composer = it) } },
                                 isModified = editingTagData?.composer != originalTagData?.composer,
-                                onRevert = { viewModel.updateTag { copy(composer = originalTagData?.composer ?: "") } }
+                                onRevert = {
+                                    viewModel.updateTag {
+                                        copy(
+                                            composer = originalTagData?.composer ?: ""
+                                        )
+                                    }
+                                }
                             )
                             MetadataInputField(
                                 label = stringResource(R.string.label_lyricist),
                                 value = editingTagData?.lyricist ?: "",
                                 onValueChange = { viewModel.updateTag { copy(lyricist = it) } },
                                 isModified = editingTagData?.lyricist != originalTagData?.lyricist,
-                                onRevert = { viewModel.updateTag { copy(lyricist = originalTagData?.lyricist ?: "") } }
+                                onRevert = {
+                                    viewModel.updateTag {
+                                        copy(
+                                            lyricist = originalTagData?.lyricist ?: ""
+                                        )
+                                    }
+                                }
                             )
                             MetadataInputField(
                                 label = stringResource(R.string.label_copyright),
@@ -397,7 +455,13 @@ fun EditMetadataScreen(
                                 value = editingTagData?.comment ?: "",
                                 onValueChange = { viewModel.updateTag { copy(comment = it) } },
                                 isModified = editingTagData?.comment != originalTagData?.comment,
-                                onRevert = { viewModel.updateTag { copy(comment = originalTagData?.comment ?: "") } }
+                                onRevert = {
+                                    viewModel.updateTag {
+                                        copy(
+                                            comment = originalTagData?.comment ?: ""
+                                        )
+                                    }
+                                }
                             )
                         }
                     }
@@ -413,72 +477,39 @@ fun EditMetadataScreen(
                             value = editingTagData?.lyrics ?: "",
                             onValueChange = { viewModel.updateTag { copy(lyrics = it) } },
                             isModified = editingTagData?.lyrics != originalTagData?.lyrics,
-                            onRevert = { viewModel.updateTag { copy(lyrics = originalTagData?.lyrics ?: "") } },
+                            onRevert = {
+                                viewModel.updateTag {
+                                    copy(
+                                        lyrics = originalTagData?.lyrics ?: ""
+                                    )
+                                }
+                            },
                             actionButtons = {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
+                                    horizontalArrangement = Arrangement.spacedBy(
+                                        6.dp,
+                                        Alignment.End
+                                    )
                                 ) {
-                                    // 偏移调整按钮
+                                    // 歌词操作
                                     Box(
                                         modifier = Modifier
                                             .clip(CircleShape)
                                             .background(MiuixTheme.colorScheme.primary)
                                             .clickable {
-                                                viewModel.prepareLyricsOffset()
-                                                showOffsetSheet = true
+                                                showLyricsActionBottomSheet = true
                                             }
                                             .padding(horizontal = 10.dp, vertical = 5.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            text = stringResource(R.string.offset_adjust_hint),
+                                            text = stringResource(R.string.action_lyrics_menu),
                                             fontSize = 11.sp,
                                             color = MiuixTheme.colorScheme.onPrimary,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-
-                                    // 导出按钮
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(CircleShape)
-                                            .background(MiuixTheme.colorScheme.tertiaryContainer)
-                                            .clickable {
-                                                val fileName = viewModel.getLyricsFileName()
-                                                if (fileName != null){
-                                                    exportLyricsLauncher.launch(fileName)
-                                                }
-                                            }
-                                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.action_export_lyrics),
-                                            fontSize = 11.sp,
-                                            color = MiuixTheme.colorScheme.onTertiaryContainer,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-
-                                    // 导入按钮
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(CircleShape)
-                                            .background(MiuixTheme.colorScheme.tertiaryContainer)
-                                            .clickable {
-                                                lyricsFileLauncher.launch(arrayOf("*/*"))
-                                            }
-                                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.action_import_lyrics),
-                                            fontSize = 11.sp,
-                                            color = MiuixTheme.colorScheme.onTertiaryContainer,
                                             fontWeight = FontWeight.Medium
                                         )
                                     }
@@ -491,72 +522,134 @@ fun EditMetadataScreen(
             }
         }
     }
+    // 歌词操作
+    WindowBottomSheet(
+        show = showLyricsActionBottomSheet,
+        enableNestedScroll = false,
+        onDismissRequest = { showLyricsActionBottomSheet = false }
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(bottom = 32.dp)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                colors = CardDefaults.defaultColors(
+                    color = MiuixTheme.colorScheme.secondaryContainer,
+                )
+            ) {
+                ArrowPreference(
+                    title = stringResource(R.string.action_import_lyrics),
+                    onClick = {
+                        showLyricsActionBottomSheet = false
+                        lyricsFileLauncher.launch(arrayOf("*/*"))
+                    }
+                )
+                if (editingTagData?.lyrics != null){
+                    ArrowPreference(
+                        title = stringResource(R.string.action_export_lyrics),
+                        onClick = {
+                            showLyricsActionBottomSheet = false
+                            val fileName = viewModel.getLyricsFileName()
+                            if (fileName != null) {
+                                exportLyricsLauncher.launch(fileName)
+                            }
+                        }
+                    )
+                    ArrowPreference(
+                        title = stringResource(R.string.chinese_conversion_mode_simplified_to_traditional),
+                        onClick = {
+                            showLyricsActionBottomSheet = false
+                            viewModel.convertLyrics(ConversionMode.SIMPLIFIED_TO_TRADITIONAL)
+                        }
+                    )
+                    ArrowPreference(
+                        title = stringResource(R.string.chinese_conversion_mode_traditional_to_simplified),
+                        onClick = {
+                            showLyricsActionBottomSheet = false
+                            viewModel.convertLyrics(ConversionMode.TRADITIONAL_TO_SIMPLIFIED)
+                        }
+                    )
 
+                    ArrowPreference(
+                        title = stringResource(R.string.offset_adjust_hint),
+                        onClick = {
+                            showLyricsActionBottomSheet = false
+                            viewModel.prepareLyricsOffset()
+                            showOffsetSheet = true
+                        }
+                    )
+                }
+            }
+        }
+    }
     // 封面操作
     WindowBottomSheet(
         show = showCoverOptionsSheet,
+        enableNestedScroll = false,
         onDismissRequest = { showCoverOptionsSheet = false }
     ) {
-        LazyColumn(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
                 .padding(bottom = 32.dp)
-                .scrollEndHaptic()
-                .overScrollVertical(),
-            overscrollEffect = null
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
         ) {
-            item(key = "cover_options") {
-                Card(
-                    colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.secondaryContainer)
-                ) {
-                    ArrowPreference(
-                        title = stringResource(R.string.label_change_cover),
-                        onClick = {
-                            showCoverOptionsSheet = false
-                            photoPickerLauncher.launch(
-                                PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly
-                                )
+            Card(
+                colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.secondaryContainer)
+            ) {
+                ArrowPreference(
+                    title = stringResource(R.string.label_change_cover),
+                    onClick = {
+                        showCoverOptionsSheet = false
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly
                             )
-                        }
-                    )
-                    ArrowPreference(
-                        title = stringResource(R.string.label_search_cover),
-                        onClick = {
-                            val keyword = if (!editingTagData?.title.isNullOrEmpty()) {
-                                if (editingTagData.artist.isNullOrEmpty()) editingTagData.title!!
-                                else "${editingTagData.title} ${editingTagData.artist}"
-                            } else {
-                                uiState.songInfo?.tagData?.fileName?.substringBeforeLast(".") ?: ""
-                            }
-                            showCoverOptionsSheet = false
-                            navigator.navigate(SearchCoverDestination(keyword))
-                        }
-                    )
-                    ArrowPreference(
-                        title = stringResource(R.string.label_remove_cover),
-                        onClick = {
-                            showCoverOptionsSheet = false
-                            viewModel.removeCover()
-                        }
-                    )
-                    if (uiState.coverUri != null || uiState.originalCover != null) {
-                        ArrowPreference(
-                            title = stringResource(R.string.label_save_cover),
-                            onClick = {
-                                showCoverOptionsSheet = false
-                                viewModel.exportCover(context)
-                            }
                         )
                     }
+                )
+                ArrowPreference(
+                    title = stringResource(R.string.label_search_cover),
+                    onClick = {
+                        val keyword = if (!editingTagData?.title.isNullOrEmpty()) {
+                            if (editingTagData.artist.isNullOrEmpty()) editingTagData.title!!
+                            else "${editingTagData.title} ${editingTagData.artist}"
+                        } else {
+                            uiState.songInfo?.tagData?.fileName?.substringBeforeLast(".") ?: ""
+                        }
+                        showCoverOptionsSheet = false
+                        navigator.navigate(SearchCoverDestination(keyword))
+                    }
+                )
+                ArrowPreference(
+                    title = stringResource(R.string.label_remove_cover),
+                    onClick = {
+                        showCoverOptionsSheet = false
+                        viewModel.removeCover()
+                    }
+                )
+                if (uiState.coverUri != null || uiState.originalCover != null) {
+                    ArrowPreference(
+                        title = stringResource(R.string.label_save_cover),
+                        onClick = {
+                            showCoverOptionsSheet = false
+                            viewModel.exportCover(context)
+                        }
+                    )
                 }
             }
+
         }
     }
 
     // 偏移调整 BottomSheet
     WindowBottomSheet(
         show = showOffsetSheet,
+        enableNestedScroll = false,
         onDismissRequest = { showOffsetSheet = false }
     ) {
         Column(
@@ -573,7 +666,7 @@ fun EditMetadataScreen(
                         .padding(8.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    top.yukonga.miuix.kmp.basic.Text(
+                    Text(
                         text = editingTagData?.lyrics ?: "",
                         style = MiuixTheme.textStyles.footnote1
                     )
@@ -774,6 +867,7 @@ private fun CoverSection(
         }
     }
 }
+
 @Composable
 private fun MetadataInputField(
     label: String,
@@ -825,7 +919,7 @@ private fun MetadataInputField(
                 textStyle = MiuixTheme.textStyles.body2,
                 modifier = Modifier.fillMaxWidth(),
                 value = value,
-                label = label + if (isModified) "("+stringResource(R.string.status_modified)+")" else "",
+                label = label + if (isModified) "(" + stringResource(R.string.status_modified) + ")" else "",
                 onValueChange = onValueChange,
                 borderColor = if (isModified) LyricoColors.modifiedBorder else MiuixTheme.colorScheme.primary,
                 singleLine = false,
@@ -839,12 +933,14 @@ private fun MetadataInputField(
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             value = value,
             onValueChange = onValueChange,
-            label = label + if (isModified) "("+stringResource(R.string.status_modified)+")" else "",
-            trailingIcon = if (isModified) { {
-                IconButton(onClick = onRevert) {
-                    Icon(imageVector = MiuixIcons.Undo, contentDescription = "Undo")
+            label = label + if (isModified) "(" + stringResource(R.string.status_modified) + ")" else "",
+            trailingIcon = if (isModified) {
+                {
+                    IconButton(onClick = onRevert) {
+                        Icon(imageVector = MiuixIcons.Undo, contentDescription = "Undo")
+                    }
                 }
-            } } else null,
+            } else null,
             borderColor = if (isModified) LyricoColors.modifiedBorder else MiuixTheme.colorScheme.primary
         )
     }

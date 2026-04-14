@@ -416,4 +416,5 @@
     <string name="search_type_filename">文件名</string>
     <string name="action_scroll_to_top">返回顶部</string>
     <string name="label_search_cover">从网络搜索封面</string>
+    <string name="action_lyrics_menu">歌词操作</string>
 </resources>

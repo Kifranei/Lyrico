@@ -1,6 +1,7 @@
 package com.lonx.lyrico.viewmodel
 
 import android.app.RecoverableSecurityException
+import com.lonx.lyrico.data.model.ConversionMode
 import android.content.ContentValues
 import android.content.Context
 import android.content.IntentSender
@@ -435,6 +436,17 @@ class EditMetadataViewModel(
 
     fun clearExportLyricsStatus() {
         _uiState.update { it.copy(exportLyricsResult = null) }
+    }
+
+    /**
+     * 对当前歌词进行简繁转换
+     */
+    fun convertLyrics(conversionMode: ConversionMode) {
+        val currentLyrics = _uiState.value.editingTagData?.lyrics ?: return
+        if (currentLyrics.isBlank()) return
+
+        val convertedLyrics = LyricsUtils.convertLyricsText(currentLyrics, conversionMode)
+        updateTag { copy(lyrics = convertedLyrics) }
     }
 
     fun clearImportLyricsStatus() {
