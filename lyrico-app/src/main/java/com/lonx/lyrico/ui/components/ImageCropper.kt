@@ -317,62 +317,46 @@ fun calculateNewRect(
 ): Rect {
     if (handle == DragHandle.NONE) return oldRect
 
+    val safeMinW = min(minSize, bounds.width)
+    val safeMinH = min(minSize, bounds.height)
+
     var left = oldRect.left
     var top = oldRect.top
     var right = oldRect.right
     var bottom = oldRect.bottom
 
     if (handle == DragHandle.CENTER) {
-        val maxDx = min(dragAmount.x, bounds.right - right).coerceAtLeast(bounds.left - left)
-        val maxDy = min(dragAmount.y, bounds.bottom - bottom).coerceAtLeast(bounds.top - top)
-        return oldRect.translate(maxDx, maxDy)
+
+        // 计算平移量的最大允许范围
+        val maxDx = (bounds.right - right).coerceAtLeast(0f)
+        val minDx = (bounds.left - left).coerceAtMost(0f)
+        val maxDy = (bounds.bottom - bottom).coerceAtLeast(0f)
+        val minDy = (bounds.top - top).coerceAtMost(0f)
+
+        val dx = dragAmount.x.coerceIn(minDx, maxDx)
+        val dy = dragAmount.y.coerceIn(minDy, maxDy)
+
+        return oldRect.translate(dx, dy)
     }
 
     when (handle) {
-        DragHandle.TOP_LEFT -> {
-            left += dragAmount.x; top += dragAmount.y
-        }
-
-        DragHandle.TOP_RIGHT -> {
-            right += dragAmount.x; top += dragAmount.y
-        }
-
-        DragHandle.BOTTOM_LEFT -> {
-            left += dragAmount.x; bottom += dragAmount.y
-        }
-
-        DragHandle.BOTTOM_RIGHT -> {
-            right += dragAmount.x; bottom += dragAmount.y
-        }
-
-        DragHandle.LEFT -> {
-            left += dragAmount.x
-        }
-
-        DragHandle.RIGHT -> {
-            right += dragAmount.x
-        }
-
-        DragHandle.TOP -> {
-            top += dragAmount.y
-        }
-
-        DragHandle.BOTTOM -> {
-            bottom += dragAmount.y
-        }
-
-        else -> return oldRect
+        DragHandle.TOP_LEFT -> { left += dragAmount.x; top += dragAmount.y }
+        DragHandle.TOP_RIGHT -> { right += dragAmount.x; top += dragAmount.y }
+        DragHandle.BOTTOM_LEFT -> { left += dragAmount.x; bottom += dragAmount.y }
+        DragHandle.BOTTOM_RIGHT -> { right += dragAmount.x; bottom += dragAmount.y }
+        DragHandle.LEFT -> left += dragAmount.x
+        DragHandle.RIGHT -> right += dragAmount.x
+        DragHandle.TOP -> top += dragAmount.y
+        DragHandle.BOTTOM -> bottom += dragAmount.y
     }
 
-    // 基本约束
-    left = left.coerceIn(bounds.left, right - minSize)
-    right = right.coerceIn(left + minSize, bounds.right)
-    top = top.coerceIn(bounds.top, bottom - minSize)
-    bottom = bottom.coerceIn(top + minSize, bounds.bottom)
+    left = left.coerceIn(bounds.left, maxOf(bounds.left, right - safeMinW))
+    right = right.coerceIn(minOf(bounds.right, left + safeMinW), bounds.right)
+    top = top.coerceIn(bounds.top, maxOf(bounds.top, bottom - safeMinH))
+    bottom = bottom.coerceIn(minOf(bounds.bottom, top + safeMinH), bounds.bottom)
 
-    // 比例锁定
+
     if (aspectRatio != null) {
-        val ratio = aspectRatio
         var w = right - left
         var h = bottom - top
 
@@ -383,74 +367,68 @@ fun calculateNewRect(
         }
 
         if (useWidthAsBasis) {
-            h = w / ratio
-            if (h > bounds.height) {
-                h = bounds.height; w = h * ratio
-            }
-            if (h < minSize) {
-                h = minSize; w = h * ratio
-            }
+            h = w / aspectRatio
+            if (h > bounds.height) { h = bounds.height; w = h * aspectRatio }
+            if (h < safeMinH) { h = safeMinH; w = h * aspectRatio }
         } else {
-            w = h * ratio
-            if (w > bounds.width) {
-                w = bounds.width; h = w / ratio
-            }
-            if (w < minSize) {
-                w = minSize; h = w / ratio
-            }
+            w = h * aspectRatio
+            if (w > bounds.width) { w = bounds.width; h = w / aspectRatio }
+            if (w < safeMinW) { w = safeMinW; h = w / aspectRatio }
         }
 
+        // 根据手柄重新定位
         when (handle) {
-            DragHandle.TOP_LEFT -> {
-                left = right - w; top = bottom - h
-            }
-
-            DragHandle.TOP_RIGHT -> {
-                right = left + w; top = bottom - h
-            }
-
-            DragHandle.BOTTOM_LEFT -> {
-                left = right - w; bottom = top + h
-            }
-
-            DragHandle.BOTTOM_RIGHT -> {
-                right = left + w; bottom = top + h
-            }
-
+            DragHandle.TOP_LEFT -> { left = right - w; top = bottom - h }
+            DragHandle.TOP_RIGHT -> { right = left + w; top = bottom - h }
+            DragHandle.BOTTOM_LEFT -> { left = right - w; bottom = top + h }
+            DragHandle.BOTTOM_RIGHT -> { right = left + w; bottom = top + h }
             DragHandle.LEFT -> {
                 left = right - w
-                val cy = (top + bottom) / 2f; top = cy - h / 2f; bottom = cy + h / 2f
+                val cy = (top + bottom) / 2f
+                top = cy - h / 2f; bottom = cy + h / 2f
             }
-
             DragHandle.RIGHT -> {
                 right = left + w
-                val cy = (top + bottom) / 2f; top = cy - h / 2f; bottom = cy + h / 2f
+                val cy = (top + bottom) / 2f
+                top = cy - h / 2f; bottom = cy + h / 2f
             }
-
             DragHandle.TOP -> {
                 top = bottom - h
-                val cx = (left + right) / 2f; left = cx - w / 2f; right = cx + w / 2f
+                val cx = (left + right) / 2f
+                left = cx - w / 2f; right = cx + w / 2f
             }
-
             DragHandle.BOTTOM -> {
                 bottom = top + h
-                val cx = (left + right) / 2f; left = cx - w / 2f; right = cx + w / 2f
+                val cx = (left + right) / 2f
+                left = cx - w / 2f; right = cx + w / 2f
             }
-
-            else -> {}
         }
 
         if (left < bounds.left) {
-            left = bounds.left; right = left + w
+            val offset = bounds.left - left
+            left += offset; right += offset
         }
         if (right > bounds.right) {
-            right = bounds.right; left = right - w
+            val offset = right - bounds.right
+            left -= offset; right -= offset
         }
         if (top < bounds.top) {
-            top = bounds.top; bottom = top + h
+            val offset = bounds.top - top
+            top += offset; bottom += offset
         }
         if (bottom > bounds.bottom) {
-            bottom = bounds.bottom; top = bottom - h
+            val offset = bottom - bounds.bottom
+            top -= offset; bottom -= offset
+        }
+
+        // 6. 最后的极端情况兜底：如果比例裁剪框依然大于图片，强制缩小
+        if (right - left > bounds.width) {
+            left = bounds.left
+            right = bounds.right
+        }
+        if (bottom - top > bounds.height) {
+            top = bounds.top
+            bottom = bounds.bottom
         }
     }
 
