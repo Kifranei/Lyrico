@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.22.1)
 project("ebur128")
 
 add_library(${CMAKE_PROJECT_NAME} SHARED
-    ebur128_jni.cpp
+    ebur128.cpp
     ebur128/ebur128.c)
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE

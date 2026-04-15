@@ -1,6 +1,6 @@
 /* See COPYING file for copyright and license details. */
 
-#include "ebur128_jni.h"
+#include "ebur128.h"
 
 #include <float.h>
 #include <limits.h>

@@ -34,7 +34,7 @@ class LibEbuR128(val channels: Int, sampleRate: Int) : AutoCloseable {
         get() = if (nativePtr == 0L) -70.0 else getLoudnessNative(nativePtr)
 
     val truePeak: Double
-        get() = if (nativePtr == 0L) 0.0 else getTruePeakNative(nativePtr)
+        get() = if (nativePtr == 0L) 0.0 else getTruePeakNative(nativePtr, channels)
 
     override fun close() {
         if (nativePtr != 0L) {
@@ -47,5 +47,5 @@ class LibEbuR128(val channels: Int, sampleRate: Int) : AutoCloseable {
     private external fun destroyNative(statePtr: Long)
     private external fun processDirectNative(statePtr: Long, buffer: ByteBuffer, format: Int, frames: Int)
     private external fun getLoudnessNative(statePtr: Long): Double
-    private external fun getTruePeakNative(statePtr: Long): Double
+    private external fun getTruePeakNative(statePtr: Long, channels: Int): Double
 }
