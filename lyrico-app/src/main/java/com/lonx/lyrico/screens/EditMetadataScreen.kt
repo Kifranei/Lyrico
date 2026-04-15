@@ -67,7 +67,6 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.FloatingToolbar
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -515,15 +514,39 @@ fun EditMetadataScreen(
                     SmallTitle(text = stringResource(R.string.group_replay_gain))
                     Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
                         Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                            ArrowPreference(
-                                title = stringResource(R.string.action_scan_replay_gain),
-                                summary = if (uiState.isReplayGainScanning) {
-                                    stringResource(R.string.replay_gain_scan_in_progress)
-                                } else {
-                                    stringResource(R.string.replay_gain_scan_single_summary)
-                                },
-                                onClick = { viewModel.scanReplayGain() }
-                            )
+                            Column(
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(
+                                        6.dp,
+                                        Alignment.End
+                                    )
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(MiuixTheme.colorScheme.primary)
+                                            .clickable {
+                                                viewModel.calculateReplayGain()
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = if (uiState.isReplayGainCalculating) {stringResource(R.string.replay_gain_calculate_in_progress)} else {stringResource(R.string.action_calculate_replay_gain)},
+                                            fontSize = 11.sp,
+                                            color = MiuixTheme.colorScheme.onPrimary,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
                             MetadataInputField(
                                 label = stringResource(R.string.label_replaygain_track_gain),
                                 value = editingTagData?.replayGainTrackGain ?: "",

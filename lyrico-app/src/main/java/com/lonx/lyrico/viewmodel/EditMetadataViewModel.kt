@@ -49,9 +49,9 @@ data class EditMetadataUiState(
     val originalCover: Any? = null,
     val picture: AudioPicture? = null,
     val permissionIntentSender: IntentSender? = null,
-    val isReplayGainScanning: Boolean = false,
+    val isReplayGainCalculating: Boolean = false,
     val replayGainScanMessage: String? = null,
-    
+
     /**
      * 歌词导出导入状态
      */
@@ -396,14 +396,14 @@ class EditMetadataViewModel(
         }
     }
 
-    fun scanReplayGain() {
+    fun calculateReplayGain() {
         val uriString = currentSongUri ?: _uiState.value.songInfo?.uriString ?: return
-        if (_uiState.value.isReplayGainScanning) return
+        if (_uiState.value.isReplayGainCalculating) return
 
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
-                    isReplayGainScanning = true,
+                    isReplayGainCalculating = true,
                     replayGainScanMessage = null
                 )
             }
@@ -419,10 +419,10 @@ class EditMetadataViewModel(
                                 editingTagData = current.copy(
                                     replayGainTrackGain = replayGainScanner.formatGain(result.analysis),
                                     replayGainTrackPeak = replayGainScanner.formatPeak(result.analysis.peak),
-                                    replayGainReferenceLoudness = current.replayGainReferenceLoudness ?: "-18.0 LUFS"
+                                    replayGainReferenceLoudness = current.replayGainReferenceLoudness ?: "-14 LUFS"
                                 ),
                                 isEditing = true,
-                                isReplayGainScanning = false,
+                                isReplayGainCalculating = false,
                                 replayGainScanMessage = replayGainScanner.buildFailureMessage(result)
                             )
                         }
@@ -431,7 +431,7 @@ class EditMetadataViewModel(
                     else -> {
                         _uiState.update {
                             it.copy(
-                                isReplayGainScanning = false,
+                                isReplayGainCalculating = false,
                                 replayGainScanMessage = replayGainScanner.buildFailureMessage(result)
                             )
                         }
@@ -441,7 +441,7 @@ class EditMetadataViewModel(
                 Log.e(TAG, "扫描 ReplayGain 失败: $uriString", e)
                 _uiState.update {
                     it.copy(
-                        isReplayGainScanning = false,
+                        isReplayGainCalculating = false,
                         replayGainScanMessage = "ReplayGain 扫描失败: ${e.message ?: "Unknown error"}"
                     )
                 }
