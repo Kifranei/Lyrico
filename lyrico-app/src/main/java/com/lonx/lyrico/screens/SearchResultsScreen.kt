@@ -296,7 +296,8 @@ fun SearchResultsScreen(
                                                         date = song.date,
                                                         trackerNumber = song.trackerNumber,
                                                         picUrl = song.picUrl,
-                                                        lyricsOnly = false
+                                                        lyricsOnly = false,
+                                                        extras = song.extras
                                                     )
                                                 )
                                             } else {
@@ -477,7 +478,8 @@ fun SearchResultsScreen(
                                     date = currentSong.date,
                                     trackerNumber = currentSong.trackerNumber,
                                     picUrl = currentSong.picUrl,
-                                    lyricsOnly = false
+                                    lyricsOnly = false,
+                                    extras = currentSong.extras
                                 )
                             )
                         },

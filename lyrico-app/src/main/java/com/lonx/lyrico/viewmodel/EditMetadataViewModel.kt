@@ -177,7 +177,24 @@ class EditMetadataViewModel(
                     )
                 )
             }
+            // 从 extras 解析 ReplayGain
+            val extras = result.extras
 
+            fun pick(vararg keys: String): String? {
+                return keys.firstNotNullOfOrNull { key ->
+                    extras[key]?.takeIf { it.isNotBlank() }
+                }
+            }
+
+            val trackGain = pick("replaygain_track_gain", "rg_track_gain")
+            val trackPeak = pick("replaygain_track_peak", "rg_track_peak")
+            val albumGain = pick("replaygain_album_gain", "rg_album_gain")
+            val albumPeak = pick("replaygain_album_peak", "rg_album_peak")
+            var refLoudness = pick("replaygain_reference_loudness", "r128_reference_loudness")
+
+            if (refLoudness == null && trackGain != null) {
+                refLoudness = "-14 LUFS" // 或 -18 LUFS
+            }
             state.copy(
                 isEditing = true,
                 editingTagData = current.copy(
@@ -188,7 +205,12 @@ class EditMetadataViewModel(
                     date = result.date?.takeIf { it.isNotBlank() } ?: current.date,
                     trackNumber = result.trackerNumber?.takeIf { it.isNotBlank() }
                         ?: current.trackNumber,
-                    picUrl = result.picUrl?.takeIf { it.isNotBlank() } ?: current.picUrl
+                    picUrl = result.picUrl?.takeIf { it.isNotBlank() } ?: current.picUrl,
+                    replayGainTrackGain = trackGain ?: current.replayGainTrackGain,
+                    replayGainTrackPeak = trackPeak ?: current.replayGainTrackPeak,
+                    replayGainAlbumGain = albumGain ?: current.replayGainAlbumGain,
+                    replayGainAlbumPeak = albumPeak ?: current.replayGainAlbumPeak,
+                    replayGainReferenceLoudness = refLoudness ?: current.replayGainReferenceLoudness,
                 ),
                 coverUri = result.picUrl?.takeIf { it.isNotBlank() }?.toUri()
             )
@@ -397,7 +419,7 @@ class EditMetadataViewModel(
                                 editingTagData = current.copy(
                                     replayGainTrackGain = replayGainScanner.formatGain(result.analysis),
                                     replayGainTrackPeak = replayGainScanner.formatPeak(result.analysis.peak),
-                                    replayGainReferenceLoudness = current.replayGainReferenceLoudness ?: "89.0 dB"
+                                    replayGainReferenceLoudness = current.replayGainReferenceLoudness ?: "-18.0 LUFS"
                                 ),
                                 isEditing = true,
                                 isReplayGainScanning = false,

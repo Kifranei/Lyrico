@@ -56,7 +56,14 @@ data class QmSongItem(
     val interval: Int,
     @SerialName("index_album") val trackerNumber: String = "",
     @SerialName("genre") val genre: String = "",
-    @SerialName("time_public") val timePublic: String? = null
+    @SerialName("time_public") val timePublic: String? = null,
+    @SerialName("volume") val volume: Volume? = null
+)
+@Serializable
+data class Volume(
+    val gain: String = "",
+    val lra: String = "",
+    val peak: String = ""
 )
 
 @Serializable
