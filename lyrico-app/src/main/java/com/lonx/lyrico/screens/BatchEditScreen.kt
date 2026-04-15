@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.lonx.audiotag.model.CustomTagField
 import com.lonx.lyrico.R
 import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.ui.theme.LyricoColors
@@ -54,6 +56,8 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.FloatingActionButton
+import top.yukonga.miuix.kmp.basic.FloatingToolbar
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
@@ -64,11 +68,13 @@ import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Ok
@@ -76,6 +82,7 @@ import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import kotlin.collections.plus
 
 
 @Composable
@@ -89,6 +96,7 @@ fun BatchEditScreen(
 
     var showCoverOptionsSheet by remember { mutableStateOf(false) }
     var showInfoDialog by remember { mutableStateOf(false) }
+    var showAddCustomTagDialog by remember { mutableStateOf(false) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -134,6 +142,26 @@ fun BatchEditScreen(
                 },
                 scrollBehavior = topAppBarScrollBehavior
             )
+        },
+        floatingToolbarPosition = ToolbarPosition.CenterEnd,
+        floatingToolbar = {
+            FloatingToolbar(){
+                Column(
+                    modifier = Modifier.padding(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    IconButton(
+                        onClick = {
+                            showAddCustomTagDialog = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Add,
+                            contentDescription = null
+                        )
+                    }
+                }
+            }
         }
     ) { paddingValues ->
 
@@ -303,18 +331,56 @@ fun BatchEditScreen(
             }
 
 
-
+            // 自定义标签组
+            if (uiState.customFields.isNotEmpty()) {
+                item(key = "custom_fields") {
+                    SmallTitle(text = stringResource(R.string.group_custom_tags))
+                    Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                            uiState.customFields.forEachIndexed { index, field ->
+                                BatchEditCustomFieldItem(
+                                    field = field,
+                                    onKeyChange = { newKey ->
+                                        viewModel.updateCustomField(index, newKey, field.value)
+                                    },
+                                    onValueChange = { newValue ->
+                                        viewModel.updateCustomField(index, field.key, newValue)
+                                    },
+                                    onRemove = { viewModel.removeCustomField(index) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             // 歌词组
             item(key = "lyrics") {
                 Column {
                     SmallTitle(text = stringResource(R.string.label_lyrics))
                     Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                        BatchEditFieldItem(
-                            field = BatchEditField.LYRICS,
-                            value = uiState.lyrics,
-                            onValueChange = { viewModel.updateLyrics(it) },
-                            isMultiline = true
-                        )
+                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                            TextField(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                value = uiState.lyricsOffset,
+                                onValueChange = { viewModel.updateLyricsOffset(it) },
+                                label = stringResource(R.string.label_lyrics_offset),
+                            )
+                            Text(
+                                text = stringResource(R.string.batch_edit_lyrics_offset_hint),
+                                style = MiuixTheme.textStyles.footnote1,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp)
+                            )
+                            BatchEditFieldItem(
+                                field = BatchEditField.LYRICS,
+                                value = uiState.lyrics,
+                                onValueChange = { viewModel.updateLyrics(it) },
+                                isMultiline = true
+                            )
+                        }
                     }
                 }
             }
@@ -422,6 +488,66 @@ fun BatchEditScreen(
                 },
                 colors = ButtonDefaults.textButtonColorsPrimary()
             )
+        }
+    }
+
+    // 添加自定义标签 BottomSheet
+    WindowDialog(
+        show = showAddCustomTagDialog,
+        title = stringResource(R.string.action_add_custom_tag),
+        onDismissRequest = { showAddCustomTagDialog = false }
+    ) {
+        // 临时存储新自定义标签内容
+        var newCustomTagKey by remember { mutableStateOf("") }
+        var newCustomTagValue by remember { mutableStateOf("") }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+        ) {
+
+            TextField(
+                value = newCustomTagKey,
+                onValueChange = { newCustomTagKey = it },
+                label = stringResource(R.string.label_custom_tag_name),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            TextField(
+                value = newCustomTagValue,
+                onValueChange = { newCustomTagValue = it },
+                label = stringResource(R.string.label_custom_tag_value),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                TextButton(
+                    text = stringResource(R.string.cancel),
+                    onClick = {
+                        showAddCustomTagDialog = false
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(20.dp))
+                TextButton(
+                    text = stringResource(R.string.confirm),
+                    onClick = {
+                        if (newCustomTagKey.isNotBlank()) {
+                            viewModel.addCustomField(
+                                CustomTagField(
+                                    newCustomTagKey,
+                                    newCustomTagValue
+                                )
+                            )
+                            showAddCustomTagDialog = false
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                )
+            }
         }
     }
 }
@@ -595,7 +721,7 @@ private fun BatchEditFieldItem(
     isMultiline: Boolean = false
 ) {
     val isKeep = value == "<keep>"
-    
+
     if (isMultiline) {
         Column(
             modifier = Modifier
@@ -633,7 +759,7 @@ private fun BatchEditFieldItem(
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.batch_edit_field_remove_hint),
+                            text = stringResource(R.string.action_undo_changes),
                             fontSize = 11.sp,
                             color = MiuixTheme.colorScheme.error,
                             fontWeight = FontWeight.Medium
@@ -660,19 +786,69 @@ private fun BatchEditFieldItem(
             onValueChange = onValueChange,
             label = stringResource(field.labelResId) + if (isKeep) " (无修改)" else "",
             trailingIcon = {
-                IconButton(onClick = { 
+                IconButton(onClick = {
                     onValueChange(if (isKeep) "" else "<keep>")
                 }) {
                     Icon(
                         imageVector = if (isKeep) MiuixIcons.Close else MiuixIcons.Undo,
                         contentDescription = null,
-                        tint = if (isKeep) 
-                            MiuixTheme.colorScheme.primary 
-                        else 
+                        tint = if (isKeep)
+                            MiuixTheme.colorScheme.primary
+                        else
                             MiuixTheme.colorScheme.error
                     )
                 }
             }
+        )
+    }
+}
+
+/**
+ * 自定义标签编辑字段
+ */
+@Composable
+private fun BatchEditCustomFieldItem(
+    field: CustomTagField,
+    onKeyChange: (String) -> Unit,
+    onValueChange: (String) -> Unit,
+    onRemove: () -> Unit
+) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.label_custom_tag),
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            IconButton(onClick = onRemove) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_delete_24dp),
+                    contentDescription = stringResource(R.string.action_remove_custom_tag)
+                )
+            }
+        }
+
+        TextField(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            value = field.key,
+            onValueChange = onKeyChange,
+            label = stringResource(R.string.label_custom_tag_name)
+        )
+        TextField(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            value = field.value,
+            onValueChange = onValueChange,
+            label = stringResource(R.string.label_custom_tag_value)
         )
     }
 }

@@ -5,9 +5,11 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioTagData
+import com.lonx.audiotag.model.CustomTagField
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.SharedSelectionManager
 import com.lonx.lyrico.data.repository.SongRepository
+import com.lonx.lyrico.utils.LyricsUtils
 import com.lonx.lyrico.utils.UiMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,7 +69,13 @@ data class BatchEditUiState(
 
     /** 封面相关 */
     val coverUri: Any? = null,
-    val removeCover: Boolean = false
+    val removeCover: Boolean = false,
+
+    /** 歌词偏移（毫秒） */
+    val lyricsOffset: String = "",
+
+    /** 自定义标签 */
+    val customFields: List<CustomTagField> = emptyList()
 )
 
 class BatchEditViewModel(
@@ -111,6 +119,36 @@ class BatchEditViewModel(
     }
     fun resetRating() { 
         _uiState.update { it.copy(rating = 0, ratingModified = false) } 
+    }
+
+    // ── 歌词偏移 ──────────────────────────────────────────
+
+    fun updateLyricsOffset(value: String) { _uiState.update { it.copy(lyricsOffset = value) } }
+
+    // ── 自定义标签 ──────────────────────────────────────────
+
+    fun addCustomField(field: CustomTagField) {
+        _uiState.update { it.copy(customFields = it.customFields + field) }
+    }
+
+    fun updateCustomField(index: Int, key: String, value: String) {
+        _uiState.update {
+            it.copy(
+                customFields = it.customFields.toMutableList().apply {
+                    this[index] = this[index].copy(key = key, value = value)
+                }
+            )
+        }
+    }
+
+    fun removeCustomField(index: Int) {
+        _uiState.update {
+            it.copy(
+                customFields = it.customFields.toMutableList().apply {
+                    removeAt(index)
+                }
+            )
+        }
     }
 
 
@@ -239,7 +277,48 @@ class BatchEditViewModel(
             tag = tag.copy(picUrl = state.coverUri.toString())
         }
 
+        // 处理歌词偏移（直接修改歌词文本中的时间戳）
+        if (state.lyricsOffset.isNotBlank() && tag.lyrics != null) {
+            val offsetValue = parseLyricsOffset(state.lyricsOffset)
+            if (offsetValue != 0) {
+                val shiftedLyrics = LyricsUtils.shiftLyricsOffset(tag.lyrics!!, offsetValue.toLong())
+                tag = tag.copy(lyrics = shiftedLyrics)
+            }
+        }
+
+        // 处理自定义标签
+        if (state.customFields.isNotEmpty()) {
+            tag = tag.copy(customFields = tag.customFields.toMutableList().apply {
+                state.customFields.forEach { newField ->
+                    val existingIndex = indexOfFirst { it.key == newField.key }
+                    if (existingIndex >= 0) {
+                        this[existingIndex] = newField
+                    } else {
+                        add(newField)
+                    }
+                }
+            })
+        }
+
         return tag
+    }
+
+    /**
+     * 解析歌词偏移值
+     * 支持正负号，未填写正负号默认为正
+     */
+    private fun parseLyricsOffset(input: String): Int {
+        return try {
+            val trimmed = input.trim()
+            if (trimmed.startsWith("+") || trimmed.startsWith("-")) {
+                trimmed.toInt()
+            } else {
+                // 未填写正负号，默认为正
+                trimmed.toInt()
+            }
+        } catch (e: NumberFormatException) {
+            0
+        }
     }
 
     // ── 状态清理 ──────────────────────────────────────────

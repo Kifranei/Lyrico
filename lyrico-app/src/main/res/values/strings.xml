@@ -386,7 +386,9 @@
     <string name="chinese_conversion_mode_traditional_to_simplified">CHT -> CHS</string>
     <string name="chinese_conversion_mode_simplified_to_traditional">CHS -> CHT</string>
     <string name="conversion_mode">Lyric Conversion Mode</string>
-    <string name="offset_adjust_hint">Adjsut Offset</string>
+    <string name="offset_adjust_hint">Adjust Offset</string>
+    <string name="label_lyrics_offset">Lyrics Offset (ms)</string>
+    <string name="batch_edit_lyrics_offset_hint">Supports positive and negative values. If no sign is provided, positive is assumed.</string>
 
     <string name="pull_to_refresh">Pull down to refresh</string>
     <string name="release_to_refresh">Release to refresh</string>
