@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.lonx.audiotag"
-    ndkVersion = "26.1.10909125"
+    ndkVersion = "29.0.14206865"
     compileSdk {
         version = release(36)
     }
