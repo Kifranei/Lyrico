@@ -68,6 +68,7 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
+import top.yukonga.miuix.kmp.basic.FloatingToolbar
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -79,9 +80,11 @@ import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Image
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Play
@@ -242,44 +245,55 @@ fun EditMetadataScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            Column(
-                modifier = Modifier.padding(bottom = 16.dp),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                FloatingActionButton(
-                    onClick = {
-                        showAddCustomTagDialog = true
-                    }
+        floatingToolbarPosition = ToolbarPosition.CenterEnd,
+        floatingToolbar = {
+            FloatingToolbar() {
+                Column(
+                    modifier = Modifier.padding(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        imageVector = MiuixIcons.Add,
-                        contentDescription = null,
-                        tint = MiuixTheme.colorScheme.onPrimary
-                    )
-                }
-                if (!editingTagData?.lyrics.isNullOrBlank()) {
-                    FloatingActionButton(
+                    IconButton(
                         onClick = {
-                            showLyricsActionBottomSheet = true
+                            showAddCustomTagDialog = true
                         }
                     ) {
                         Icon(
-                            imageVector = MiuixIcons.Notes,
-                            contentDescription = null,
-                            tint = MiuixTheme.colorScheme.onPrimary
+                            imageVector = MiuixIcons.Add,
+                            contentDescription = null
                         )
                     }
-                }
-                FloatingActionButton(
-                    onClick = { viewModel.play(context) }
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Play,
-                        contentDescription = null,
-                        tint = MiuixTheme.colorScheme.onPrimary
-                    )
+                    if (!editingTagData?.lyrics.isNullOrBlank()) {
+                        IconButton(
+                            onClick = {
+                                showLyricsActionBottomSheet = true
+                            }
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Notes,
+                                contentDescription = null
+                            )
+                        }
+                    }
+                    if (uiState.coverUri != null){
+                        IconButton(
+                            onClick = {
+                                showCoverOptionsSheet = true
+                            }
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Image,
+                                contentDescription = null
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = { viewModel.play(context) }
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Play,
+                            contentDescription = null
+                        )
+                    }
                 }
             }
 
@@ -998,7 +1012,7 @@ private fun CoverSection(
                             contentAlignment = Alignment.BottomCenter
                         ) {
                             Text(
-                                text = "点击编辑",
+                                text = stringResource(R.string.edit_cover),
                                 style = MiuixTheme.textStyles.footnote1,
                                 color = Color.White.copy(alpha = 0.9f),
                                 fontWeight = FontWeight.Medium,

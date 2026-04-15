@@ -272,7 +272,7 @@
     <string name="group_track_details">Track Details</string>
     <string name="group_custom_tags">Custom Tags</string>
     <string name="group_credits_other">Credits &amp; Others</string>
-    <string name="action_add_custom_tag">Add Tag</string>
+    <string name="action_add_custom_tag">Add Custom Tag</string>
     <string name="action_remove_custom_tag">Remove Tag</string>
     <string name="custom_tags_empty">No custom tags yet. Tap \"Add Tag\" to create one.</string>
     <string name="label_file_size">File Size</string>
@@ -419,4 +419,5 @@
     <string name="msg_read_cover_failed">Read cover failed</string>
     <string name="label_image_ratio">Image ratio</string>
     <string name="option_free_ratio">Free ratio</string>
+    <string name="edit_cover">Edit Cover</string>
 </resources>
