@@ -620,10 +620,17 @@ fun SongListScreen(
                 )
             }
             val song = sheetUiState.menuSong
+            var showMenuSheet by remember { mutableStateOf(false) }
+            LaunchedEffect(song) {
+                if (song != null) {
+                    showMenuSheet = true
+                }
+            }
 
             WindowBottomSheet(
-                show = song != null,
-                onDismissRequest = { songListViewModel.dismissAll() }
+                show = showMenuSheet,
+                onDismissRequest = { showMenuSheet = false },
+                onDismissFinished = { songListViewModel.dismissAll() }
             ) {
                 song?.let {
                     SongMenuBottomSheetContent(
@@ -653,9 +660,16 @@ fun SongListScreen(
                 }
             }
             val detailSong = sheetUiState.detailSong
+            var showDetailSheet by remember { mutableStateOf(false) }
+            LaunchedEffect(detailSong) {
+                if (detailSong != null) {
+                    showDetailSheet = true
+                }
+            }
             WindowBottomSheet(
-                show = detailSong != null,
-                onDismissRequest = { songListViewModel.dismissDetail() },
+                show = showDetailSheet,
+                onDismissRequest = { showDetailSheet = false },
+                onDismissFinished = { songListViewModel.dismissDetail() },
             ) {
                 detailSong?.let {
                     SongDetailBottomSheetContent(context = context, song = it)

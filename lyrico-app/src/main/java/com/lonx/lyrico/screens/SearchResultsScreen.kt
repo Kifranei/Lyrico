@@ -342,24 +342,33 @@ fun SearchResultsScreen(
      */
 
     val lyricsText = uiState.lyricsState.content
-    uiState.lyricsState.song?.let { song ->
-        WindowBottomSheet(
-            show = true,
-            onDismissRequest = { viewModel.clearLyrics() },
-            title = song.title,
-            endAction = {
-                IconButton(
-                    onClick = {
-                        showLyricRenderConfigBottomSheet.value = true
-                    }
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Settings,
-                        contentDescription = null
-                    )
+    val song = uiState.lyricsState.song
+    var showLyricsSheet by remember { mutableStateOf(false) }
+    LaunchedEffect(song) {
+        if (song != null) {
+            showLyricsSheet = true
+        }
+    }
+
+    WindowBottomSheet(
+        show = showLyricsSheet,
+        onDismissRequest = { showLyricsSheet = false },
+        onDismissFinished = { viewModel.clearLyrics() },
+        title = song?.title ?: "",
+        endAction = {
+            IconButton(
+                onClick = {
+                    showLyricRenderConfigBottomSheet.value = true
                 }
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Settings,
+                    contentDescription = null
+                )
             }
-        ) {
+        }
+    ) {
+        song?.let { currentSong ->
             Column(
                 modifier = Modifier
                     .padding(bottom = 32.dp)
@@ -461,13 +470,13 @@ fun SearchResultsScreen(
                         onClick = {
                             resultNavigator.navigateBack(
                                 LyricsSearchResult(
-                                    title = song.title,
-                                    artist = song.artist,
-                                    album = song.album,
+                                    title = currentSong.title,
+                                    artist = currentSong.artist,
+                                    album = currentSong.album,
                                     lyrics = uiState.lyricsState.content,
-                                    date = song.date,
-                                    trackerNumber = song.trackerNumber,
-                                    picUrl = song.picUrl,
+                                    date = currentSong.date,
+                                    trackerNumber = currentSong.trackerNumber,
+                                    picUrl = currentSong.picUrl,
                                     lyricsOnly = false
                                 )
                             )
