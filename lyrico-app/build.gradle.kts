@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
     id("kotlin-parcelize")
+    alias(libs.plugins.aboutLibraries)
 }
 
 android {
@@ -99,6 +100,7 @@ dependencies {
     implementation(libs.xxpermissions)
     implementation(libs.tinypinyin)
     implementation(libs.opencc4j)
+    implementation(libs.aboutlibraries.compose.core)
     // KSP
     ksp(libs.compose.destinations.ksp)
     ksp(libs.androidx.room.compiler)

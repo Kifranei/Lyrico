@@ -434,4 +434,5 @@
     <string name="label_image_ratio">Image ratio</string>
     <string name="option_free_ratio">Free ratio</string>
     <string name="edit_cover">Edit Cover</string>
+    <string name="title_opensource_licence">Open source licence</string>
 </resources>

@@ -32,6 +32,7 @@ import com.lonx.lyrico.viewmodel.AboutViewModel
 import com.lonx.lyrico.viewmodel.UiError
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.OpensourceLicenceDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -144,6 +145,12 @@ fun AboutScreen(
                             viewModel.openBrowser(context, TELEGRAM_GROUP_LINK)
                         }
                     )
+                    ArrowPreference(
+                        title = stringResource(R.string.title_opensource_licence),
+                        onClick = {
+                            navigator.navigate(OpensourceLicenceDestination())
+                        }
+                    )
                     SwitchPreference(
                         title = stringResource(R.string.about_auto_check_update),
                         summary = stringResource(R.string.about_auto_check_update_sub),
@@ -190,6 +197,7 @@ fun AboutScreen(
                         ) {
                             Text(
                                 text = errorText,
+                                modifier = Modifier.padding(16.dp),
                                 color = MiuixTheme.colorScheme.onErrorContainer
                             )
                         }
