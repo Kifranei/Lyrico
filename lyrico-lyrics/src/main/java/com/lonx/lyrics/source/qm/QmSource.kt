@@ -80,7 +80,7 @@ class QmSource(
                     peak?.let {
                         extrasMap["replaygain_track_peak"] = "%.6f".format(it)
                     }
-                    extrasMap["replaygain_reference_loudness"] = "-14 LUFS"
+                    extrasMap["replaygain_reference_loudness"] = "-18 LUFS"
                 }
                 SongSearchResult(
                     id = item.id,

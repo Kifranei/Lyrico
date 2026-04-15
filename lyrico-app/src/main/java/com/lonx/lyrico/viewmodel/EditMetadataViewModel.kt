@@ -1,7 +1,6 @@
 package com.lonx.lyrico.viewmodel
 
 import android.app.RecoverableSecurityException
-import com.lonx.lyrico.data.model.ConversionMode
 import android.content.ContentValues
 import android.content.Context
 import android.content.IntentSender
@@ -16,20 +15,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioPicture
 import com.lonx.audiotag.model.AudioTagData
+import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricsSearchResult
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.repository.PlaybackRepository
 import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.utils.LyricsUtils
-import com.lonx.lyrico.utils.ReplayGainScanResult
+import com.lonx.lyrico.utils.ReplayGainCalculateState
 import com.lonx.lyrico.utils.ReplayGainScanner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 data class EditMetadataUiState(
     val songInfo: SongInfo? = null,
@@ -37,6 +37,7 @@ data class EditMetadataUiState(
     val originalTagData: AudioTagData? = null,
     val editingTagData: AudioTagData? = null,
 
+    val replayGainCalculateProgress: Float? = null,
     val isEditing: Boolean = false,
     val fileName: String? = null,
     /**
@@ -193,7 +194,7 @@ class EditMetadataViewModel(
             var refLoudness = pick("replaygain_reference_loudness", "r128_reference_loudness")
 
             if (refLoudness == null && trackGain != null) {
-                refLoudness = "-14 LUFS" // 或 -18 LUFS
+                refLoudness = "-18 LUFS"
             }
             state.copy(
                 isEditing = true,
@@ -404,45 +405,69 @@ class EditMetadataViewModel(
             _uiState.update {
                 it.copy(
                     isReplayGainCalculating = true,
+                    replayGainCalculateProgress = 0f,
                     replayGainScanMessage = null
                 )
             }
 
             try {
-                when (val result = withContext(Dispatchers.IO) {
-                    replayGainScanner.analyze(uriString)
-                }) {
-                    is ReplayGainScanResult.Success -> {
-                        _uiState.update { state ->
-                            val current = state.editingTagData ?: AudioTagData(fileName = state.fileName.orEmpty())
-                            state.copy(
-                                editingTagData = current.copy(
-                                    replayGainTrackGain = replayGainScanner.formatGain(result.analysis),
-                                    replayGainTrackPeak = replayGainScanner.formatPeak(result.analysis.peak),
-                                    replayGainReferenceLoudness = current.replayGainReferenceLoudness ?: "-14 LUFS"
-                                ),
-                                isEditing = true,
-                                isReplayGainCalculating = false,
-                                replayGainScanMessage = replayGainScanner.buildFailureMessage(result)
-                            )
-                        }
-                    }
+                replayGainScanner.analyze(uriString)
+                    .flowOn(Dispatchers.IO) // 将解码和 DSP 计算放入 IO 线程池，不卡顿 UI
+                    .collect { state ->     // 持续监听发射出来的状态
+                        when (state) {
+                            is ReplayGainCalculateState.Progress -> {
+                                // 实时刷新进度条
+                                _uiState.update {
+                                    it.copy(replayGainCalculateProgress = state.percent)
+                                }
+                            }
 
-                    else -> {
-                        _uiState.update {
-                            it.copy(
-                                isReplayGainCalculating = false,
-                                replayGainScanMessage = replayGainScanner.buildFailureMessage(result)
-                            )
+                            is ReplayGainCalculateState.Success -> {
+                                // 扫描成功，写入标签
+                                _uiState.update { ui ->
+                                    val current = ui.editingTagData ?: AudioTagData(fileName = ui.fileName.orEmpty())
+                                    ui.copy(
+                                        editingTagData = current.copy(
+                                            replayGainTrackGain = replayGainScanner.formatGain(state.analysis),
+                                            replayGainTrackPeak = replayGainScanner.formatPeak(state.analysis.peak),
+                                            replayGainReferenceLoudness = current.replayGainReferenceLoudness ?: "-18 LUFS"
+                                        ),
+                                        isEditing = true,
+                                        isReplayGainCalculating = false,
+                                        replayGainCalculateProgress = 1.0f, // 强制推到 100%
+                                        replayGainScanMessage = replayGainScanner.buildFailureMessage(state)
+                                    )
+                                }
+                            }
+
+                            is ReplayGainCalculateState.Failed,
+                            is ReplayGainCalculateState.UnsupportedCodec -> {
+                                // 扫描失败或不支持该格式
+                                _uiState.update { ui ->
+                                    ui.copy(
+                                        isReplayGainCalculating = false,
+                                        replayGainCalculateProgress = 0f, // 出错将进度归零
+                                        replayGainScanMessage = replayGainScanner.buildFailureMessage(state)
+                                    )
+                                }
+                            }
                         }
                     }
-                }
             } catch (e: Exception) {
+                // 捕获未知的意外异常（比如 IO 文件突然被删除等）
                 Log.e(TAG, "扫描 ReplayGain 失败: $uriString", e)
                 _uiState.update {
                     it.copy(
                         isReplayGainCalculating = false,
+                        replayGainCalculateProgress = 0f,
                         replayGainScanMessage = "ReplayGain 扫描失败: ${e.message ?: "Unknown error"}"
+                    )
+                }
+            } finally {
+                _uiState.update {
+                    it.copy(
+                        isReplayGainCalculating = false,
+                        replayGainCalculateProgress = null
                     )
                 }
             }

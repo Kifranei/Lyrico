@@ -70,6 +70,7 @@ import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.FloatingToolbar
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
@@ -111,6 +112,7 @@ fun EditMetadataScreen(
 ) {
     val viewModel: EditMetadataViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsState()
+    val replayGainCalculateProgress = uiState.replayGainCalculateProgress
     val originalTagData = uiState.originalTagData
     val editingTagData = uiState.editingTagData
     val snackbarHostState = remember { SnackbarHostState() }
@@ -280,7 +282,7 @@ fun EditMetadataScreen(
                             )
                         }
                     }
-                    if (uiState.coverUri != null){
+                    if (uiState.coverUri != null) {
                         IconButton(
                             onClick = {
                                 showCoverOptionsSheet = true
@@ -514,37 +516,63 @@ fun EditMetadataScreen(
                     SmallTitle(text = stringResource(R.string.group_replay_gain))
                     Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
                         Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                            Column(
+                            Row(
                                 modifier = Modifier
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(
-                                        6.dp,
-                                        Alignment.End
-                                    )
+                                Box(
+                                    modifier = Modifier.weight(1f).padding(start = 4.dp),
+                                    contentAlignment = Alignment.CenterStart
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(CircleShape)
-                                            .background(MiuixTheme.colorScheme.primary)
-                                            .clickable {
-                                                viewModel.calculateReplayGain()
-                                            }
-                                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                                        contentAlignment = Alignment.Center
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = uiState.isReplayGainCalculating,
+                                        enter = fadeIn(),
+                                        exit = fadeOut()
                                     ) {
-                                        Text(
-                                            text = if (uiState.isReplayGainCalculating) {stringResource(R.string.replay_gain_calculate_in_progress)} else {stringResource(R.string.action_calculate_replay_gain)},
-                                            fontSize = 11.sp,
-                                            color = MiuixTheme.colorScheme.onPrimary,
-                                            fontWeight = FontWeight.Medium
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            // 环形进度条
+                                            androidx.compose.material3.CircularProgressIndicator(
+                                                progress = { replayGainCalculateProgress ?: 0f },
+                                                modifier = Modifier.size(20.dp),
+                                                color = MiuixTheme.colorScheme.primary,
+                                                strokeWidth = 2.5.dp,
+                                                trackColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            )
+
+                                            Spacer(modifier = Modifier.width(8.dp))
+
+                                            // 进度百分比文本
+                                            Text(
+                                                text = "${((replayGainCalculateProgress ?: 0f) * 100).toInt()}%",
+                                                fontSize = 12.sp,
+                                                color = MiuixTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
                                     }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(MiuixTheme.colorScheme.primary)
+                                        .clickable {
+                                            viewModel.calculateReplayGain()
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (uiState.isReplayGainCalculating) {
+                                            stringResource(R.string.replay_gain_calculate_in_progress)
+                                        } else {
+                                            stringResource(R.string.action_calculate_replay_gain)
+                                        },
+                                        fontSize = 11.sp,
+                                        color = MiuixTheme.colorScheme.onPrimary,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 }
                             }
                             MetadataInputField(
@@ -554,7 +582,10 @@ fun EditMetadataScreen(
                                 isModified = editingTagData?.replayGainTrackGain != originalTagData?.replayGainTrackGain,
                                 onRevert = {
                                     viewModel.updateTag {
-                                        copy(replayGainTrackGain = originalTagData?.replayGainTrackGain ?: "")
+                                        copy(
+                                            replayGainTrackGain = originalTagData?.replayGainTrackGain
+                                                ?: ""
+                                        )
                                     }
                                 }
                             )
@@ -565,7 +596,10 @@ fun EditMetadataScreen(
                                 isModified = editingTagData?.replayGainTrackPeak != originalTagData?.replayGainTrackPeak,
                                 onRevert = {
                                     viewModel.updateTag {
-                                        copy(replayGainTrackPeak = originalTagData?.replayGainTrackPeak ?: "")
+                                        copy(
+                                            replayGainTrackPeak = originalTagData?.replayGainTrackPeak
+                                                ?: ""
+                                        )
                                     }
                                 }
                             )
@@ -576,7 +610,10 @@ fun EditMetadataScreen(
                                 isModified = editingTagData?.replayGainAlbumGain != originalTagData?.replayGainAlbumGain,
                                 onRevert = {
                                     viewModel.updateTag {
-                                        copy(replayGainAlbumGain = originalTagData?.replayGainAlbumGain ?: "")
+                                        copy(
+                                            replayGainAlbumGain = originalTagData?.replayGainAlbumGain
+                                                ?: ""
+                                        )
                                     }
                                 }
                             )
@@ -587,18 +624,30 @@ fun EditMetadataScreen(
                                 isModified = editingTagData?.replayGainAlbumPeak != originalTagData?.replayGainAlbumPeak,
                                 onRevert = {
                                     viewModel.updateTag {
-                                        copy(replayGainAlbumPeak = originalTagData?.replayGainAlbumPeak ?: "")
+                                        copy(
+                                            replayGainAlbumPeak = originalTagData?.replayGainAlbumPeak
+                                                ?: ""
+                                        )
                                     }
                                 }
                             )
                             MetadataInputField(
                                 label = stringResource(R.string.label_replaygain_reference_loudness),
                                 value = editingTagData?.replayGainReferenceLoudness ?: "",
-                                onValueChange = { viewModel.updateTag { copy(replayGainReferenceLoudness = it) } },
+                                onValueChange = {
+                                    viewModel.updateTag {
+                                        copy(
+                                            replayGainReferenceLoudness = it
+                                        )
+                                    }
+                                },
                                 isModified = editingTagData?.replayGainReferenceLoudness != originalTagData?.replayGainReferenceLoudness,
                                 onRevert = {
                                     viewModel.updateTag {
-                                        copy(replayGainReferenceLoudness = originalTagData?.replayGainReferenceLoudness ?: "")
+                                        copy(
+                                            replayGainReferenceLoudness = originalTagData?.replayGainReferenceLoudness
+                                                ?: ""
+                                        )
                                     }
                                 }
                             )
@@ -695,7 +744,7 @@ fun EditMetadataScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 8.dp),
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(
                                         6.dp,
