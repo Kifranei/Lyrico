@@ -42,14 +42,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.lonx.audiotag.model.CustomTagField
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricsSearchResult
+import com.lonx.lyrico.ui.components.ImageCropper
 import com.lonx.lyrico.ui.components.getBitmap
+import com.lonx.lyrico.ui.components.rememberImageCropperState
 import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.ui.theme.LyricoColors
-import com.lonx.lyrico.ui.components.ImageCropper
-import com.lonx.lyrico.ui.components.rememberImageCropperState
 import com.lonx.lyrico.viewmodel.EditMetadataViewModel
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -62,6 +63,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
@@ -75,8 +77,10 @@ import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Ok
@@ -88,6 +92,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 
 @SuppressLint("LocalContextGetResourceValueCall")
@@ -115,8 +120,9 @@ fun EditMetadataScreen(
     var showCoverOptionsSheet by remember { mutableStateOf(false) }
     var showLyricsActionBottomSheet by remember { mutableStateOf(false) }
     var showCropSheet by remember { mutableStateOf(false) }
+    var showAddCustomTagDialog by remember { mutableStateOf(false) }
     var bitmapToCrop by remember { mutableStateOf<Bitmap?>(null) }
-    var cropAction by remember { mutableStateOf<(() -> Bitmap)?>(null) }
+
     val currentShiftOffset by viewModel.currentShiftOffset.collectAsState()
     // 各种 Launcher
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -242,6 +248,17 @@ fun EditMetadataScreen(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                FloatingActionButton(
+                    onClick = {
+                        showAddCustomTagDialog = true
+                    }
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Add,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onPrimary
+                    )
+                }
                 if (!editingTagData?.lyrics.isNullOrBlank()) {
                     FloatingActionButton(
                         onClick = {
@@ -467,6 +484,74 @@ fun EditMetadataScreen(
                                     }
                                 }
                             )
+                        }
+                    }
+                }
+            }
+
+            if (!editingTagData?.customFields.isNullOrEmpty()) {
+                item(key = "custom_fields") {
+                    Column {
+                        SmallTitle(text = stringResource(R.string.group_custom_tags))
+                        Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                            Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                                editingTagData.customFields.forEachIndexed { index, field ->
+                                    CustomMetadataFieldEditor(
+                                        field = field,
+                                        isModified = field != originalTagData?.customFields?.getOrNull(
+                                            index
+                                        ),
+                                        onKeyChange = { newKey ->
+                                            viewModel.updateTag {
+                                                copy(
+                                                    customFields = customFields.toMutableList()
+                                                        .apply {
+                                                            this[index] =
+                                                                this[index].copy(key = newKey)
+                                                        }
+                                                )
+                                            }
+                                        },
+                                        onValueChange = { newValue ->
+                                            viewModel.updateTag {
+                                                copy(
+                                                    customFields = customFields.toMutableList()
+                                                        .apply {
+                                                            this[index] =
+                                                                this[index].copy(value = newValue)
+                                                        }
+                                                )
+                                            }
+                                        },
+                                        onRemove = {
+                                            viewModel.updateTag {
+                                                copy(
+                                                    customFields = customFields.toMutableList()
+                                                        .apply {
+                                                            removeAt(index)
+                                                        }
+                                                )
+                                            }
+                                        },
+                                        onRevert = {
+                                            viewModel.updateTag {
+                                                val originalField =
+                                                    originalTagData?.customFields?.getOrNull(index)
+                                                copy(
+                                                    customFields = customFields.toMutableList()
+                                                        .apply {
+                                                            if (originalField != null) {
+                                                                this[index] = originalField
+                                                            } else {
+                                                                removeAt(index)
+                                                            }
+                                                        }
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -762,6 +847,67 @@ fun EditMetadataScreen(
             )
         }
     }
+    // 添加自定义标签 BottomSheet
+    WindowDialog(
+        show = showAddCustomTagDialog,
+        title = stringResource(R.string.action_add_custom_tag),
+        onDismissRequest = { showAddCustomTagDialog = false }
+    ) {
+        // 临时存储新自定义标签内容
+        var newCustomTagKey by remember { mutableStateOf("") }
+        var newCustomTagValue by remember { mutableStateOf("") }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+        ) {
+
+            TextField(
+                value = newCustomTagKey,
+                onValueChange = { newCustomTagKey = it },
+                label = stringResource(R.string.label_custom_tag_name),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            TextField(
+                value = newCustomTagValue,
+                onValueChange = { newCustomTagValue = it },
+                label = stringResource(R.string.label_custom_tag_value),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                TextButton(
+                    text = stringResource(R.string.cancel),
+                    onClick = {
+                        showAddCustomTagDialog = false
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(20.dp))
+                TextButton(
+                    text = stringResource(R.string.confirm),
+                    onClick = {
+                        if (newCustomTagKey.isNotBlank()) {
+                            viewModel.updateTag {
+                                copy(
+                                    customFields = customFields + CustomTagField(
+                                        newCustomTagKey,
+                                        newCustomTagValue
+                                    )
+                                )
+                            }
+                            showAddCustomTagDialog = false
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                )
+            }
+        }
+    }
 }
 
 
@@ -1024,6 +1170,85 @@ private fun MetadataInputField(
                 }
             } else null,
             borderColor = if (isModified) LyricoColors.modifiedBorder else MiuixTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+private fun CustomMetadataFieldEditor(
+    field: CustomTagField,
+    isModified: Boolean,
+    onKeyChange: (String) -> Unit,
+    onValueChange: (String) -> Unit,
+    onRemove: () -> Unit,
+    onRevert: () -> Unit
+) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isModified) {
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(LyricoColors.modifiedBadgeBackground.copy(alpha = 0.8f))
+                        .clickable { onRevert() }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_undo_changes),
+                        fontSize = 11.sp,
+                        color = LyricoColors.modifiedText,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(
+                    6.dp,
+                    Alignment.End
+                )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MiuixTheme.colorScheme.primary)
+                        .clickable {
+                            onRemove()
+                        }
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_delete),
+                        fontSize = 11.sp,
+                        color = MiuixTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        MetadataInputField(
+            label = stringResource(R.string.label_custom_tag_name),
+            value = field.key,
+            onValueChange = onKeyChange,
+            isModified = false,
+            onRevert = onRevert
+        )
+        MetadataInputField(
+            label = stringResource(R.string.label_custom_tag_value),
+            value = field.value,
+            onValueChange = onValueChange,
+            isModified = false,
+            onRevert = onRevert
         )
     }
 }
