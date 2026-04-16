@@ -69,7 +69,17 @@
     <string name="replay_gain_scan_summary">扫描当前音乐库并把 ReplayGain 曲目/专辑增益标签写回音频文件。</string>
     <string name="replay_gain_no_songs">当前没有可用于 ReplayGain 扫描的歌曲。</string>
     <string name="action_calculate_replay_gain">计算 ReplayGain</string>
-    <string name="replay_gain_calculate_in_progress">正在计算 ReplayGain…</string>
+    <string name="replay_gain_calculate_in_progress">正在计算 ReplayGain，点击以中止</string>
+    <string name="replay_gain_calculate_success">ReplayGain 计算成功</string>
+    <string name="replay_gain_calculate_cancelled">ReplayGain 计算已取消</string>
+    <string name="replay_gain_calculate_failed">ReplayGain 计算失败: %1$s</string>
+    <string name="replay_gain_error_no_audio_track">未发现有效音轨</string>
+    <string name="replay_gain_error_unknown_mime_type">无法识别音频编码</string>
+    <string name="replay_gain_error_zero_sample_count">解码数据为空</string>
+    <string name="replay_gain_error_unsupported_codec">设备不支持 %1$s 解码</string>
+    <string name="replay_gain_error_alac_issue">系统 ALAC 解码器不稳定，请尝试重启</string>
+    <string name="replay_gain_error_codec_exception">解码器异常: %1$s</string>
+    <string name="replay_gain_error_general">扫描失败: %1$s</string>
 
     <!-- 其他 -->
     <string name="batch_match_history">批量匹配记录</string>

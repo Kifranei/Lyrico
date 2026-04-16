@@ -6,41 +6,47 @@ import android.media.MediaCodec
 import android.media.MediaCodecList
 import android.media.MediaExtractor
 import android.media.MediaFormat
-import kotlin.math.log10
-import kotlin.math.pow
 import androidx.core.net.toUri
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlin.coroutines.cancellation.CancellationException
 
 data class ReplayGainAnalysis(
     val loudnessLufs: Double,
     val sampleCount: Long,
     val peak: Double
 )
+
+// 定义具体的错误原因，方便调用方根据枚举或类名进行多语言/自定义处理
+sealed interface ReplayGainError {
+    data object NoAudioTrack : ReplayGainError
+    data object UnknownMimeType : ReplayGainError
+    data object ZeroSampleCount : ReplayGainError
+    data class UnsupportedCodec(val mimeType: String?) : ReplayGainError
+    data class CodecException(val message: String?, val isAlacIssue: Boolean = false) : ReplayGainError
+    data class GeneralException(val message: String?) : ReplayGainError
+}
+
 sealed interface ReplayGainCalculateState {
     data class Progress(val percent: Float) : ReplayGainCalculateState
-
+    data object Cancelled : ReplayGainCalculateState
     data class Success(
         val analysis: ReplayGainAnalysis,
         val mimeType: String
     ) : ReplayGainCalculateState
 
-    data class UnsupportedCodec(
-        val mimeType: String?
-    ) : ReplayGainCalculateState
-
+    // 将失败统一为一个状态，携带错误原因对象
     data class Failed(
         val mimeType: String?,
-        val message: String?
+        val error: ReplayGainError
     ) : ReplayGainCalculateState
 }
 
-class ReplayGainScanner(
-    private val context: Context
-) {
+class ReplayGainScanner(private val context: Context) {
     companion object {
         private const val TARGET_LOUDNESS_LUFS = -18.0
-        // 进度更新阈值：每增加 1% (0.01) 才通知一次 UI，防止过度绘制卡顿
         private const val PROGRESS_UPDATE_THRESHOLD = 0.01
     }
 
@@ -59,30 +65,23 @@ class ReplayGainScanner(
             }
 
             if (trackIndex == null) {
-                emit(ReplayGainCalculateState.Failed(null, "No audio track found"))
+                emit(ReplayGainCalculateState.Failed(null, ReplayGainError.NoAudioTrack))
                 return@flow
             }
 
             extractor.selectTrack(trackIndex)
             val format = extractor.getTrackFormat(trackIndex)
+            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L
 
-            // 获取音频总时长 (微秒)
-            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) {
-                format.getLong(MediaFormat.KEY_DURATION)
-            } else {
-                0L
-            }
-
-            val mime = format.getString(MediaFormat.KEY_MIME)
-            if (mime == null) {
-                emit(ReplayGainCalculateState.Failed(null, "Unknown audio MIME type"))
+            mimeType = format.getString(MediaFormat.KEY_MIME)
+            if (mimeType == null) {
+                emit(ReplayGainCalculateState.Failed(null, ReplayGainError.UnknownMimeType))
                 return@flow
             }
-            mimeType = mime
 
             val decoderName = MediaCodecList(MediaCodecList.ALL_CODECS).findDecoderForFormat(format)
             if (decoderName == null) {
-                emit(ReplayGainCalculateState.UnsupportedCodec(mime))
+                emit(ReplayGainCalculateState.Failed(mimeType, ReplayGainError.UnsupportedCodec(mimeType)))
                 return@flow
             }
 
@@ -90,118 +89,79 @@ class ReplayGainScanner(
                 configure(format, null, null, 0)
                 start()
             }
-            val codecRef = codec
 
             val bufferInfo = MediaCodec.BufferInfo()
             var inputEnded = false
             var outputEnded = false
             var pcmEncoding = AudioFormat.ENCODING_PCM_16BIT
-
             var lastReportedProgress = 0.0
 
-            // 刚开始解码，发射 0%
             emit(ReplayGainCalculateState.Progress(0f))
 
             while (!outputEnded) {
-                // 1. 喂入压缩数据 (Input)
+                // 检查协程是否被取消，如果取消会抛出 CancellationException
+                currentCoroutineContext().ensureActive()
+
                 if (!inputEnded) {
-                    val inputIndex = codecRef.dequeueInputBuffer(10_000)
+                    val inputIndex = codec.dequeueInputBuffer(10_000)
                     if (inputIndex >= 0) {
-                        val inputBuffer = codecRef.getInputBuffer(inputIndex) ?: continue
-                        val sampleSize = extractor.readSampleData(inputBuffer, 0)
-                        if (sampleSize < 0) {
-                            codecRef.queueInputBuffer(
-                                inputIndex,
-                                0,
-                                0,
-                                0L,
-                                MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                            )
-                            inputEnded = true
-                        } else {
-                            codecRef.queueInputBuffer(
-                                inputIndex,
-                                0,
-                                sampleSize,
-                                extractor.sampleTime,
-                                0
-                            )
-                            extractor.advance()
+                        val inputBuffer = codec.getInputBuffer(inputIndex)
+                        if (inputBuffer != null) {
+                            val sampleSize = extractor.readSampleData(inputBuffer, 0)
+                            if (sampleSize < 0) {
+                                codec.queueInputBuffer(inputIndex, 0, 0, 0L, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                                inputEnded = true
+                            } else {
+                                codec.queueInputBuffer(inputIndex, 0, sampleSize, extractor.sampleTime, 0)
+                                extractor.advance()
+                            }
                         }
                     }
                 }
 
-                // 取出解码后的 PCM 数据 (Output)
-                when (val outputIndex = codecRef.dequeueOutputBuffer(bufferInfo, 10_000)) {
+                when (val outputIndex = codec.dequeueOutputBuffer(bufferInfo, 10_000)) {
                     MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        val outputFormat = codecRef.outputFormat
-                        if (outputFormat.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
-                            pcmEncoding = outputFormat.getInteger(MediaFormat.KEY_PCM_ENCODING)
-                        }
-                        val sampleRate = outputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                        val channels = outputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-
-                        // 重置并初始化底层 C++ 库引擎
+                        val outFmt = codec.outputFormat
+                        pcmEncoding = if (outFmt.containsKey(MediaFormat.KEY_PCM_ENCODING)) outFmt.getInteger(MediaFormat.KEY_PCM_ENCODING) else AudioFormat.ENCODING_PCM_16BIT
+                        val sr = outFmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                        val ch = outFmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
                         ebuR128?.close()
-                        ebuR128 = LibEbuR128(channels, sampleRate)
+                        ebuR128 = LibEbuR128(ch, sr)
                     }
-
                     MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
+                    else -> if (outputIndex >= 0) {
+                        if (ebuR128 == null) {
+                            val outFmt = codec.outputFormat
+                            ebuR128 = LibEbuR128(outFmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT), outFmt.getInteger(MediaFormat.KEY_SAMPLE_RATE))
+                        }
 
-                    else -> {
-                        if (outputIndex >= 0) {
-                            // 边缘保护：部分机型/系统版本可能不抛出 INFO_OUTPUT_FORMAT_CHANGED
-                            if (ebuR128 == null) {
-                                val outFmt = codecRef.outputFormat
-                                val sr = outFmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                                val ch = outFmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-                                ebuR128 = LibEbuR128(ch, sr)
-                            }
-
-                            val outputBuffer = codecRef.getOutputBuffer(outputIndex)
-                            if (outputBuffer != null && bufferInfo.size > 0) {
-                                // 限制 ByteBuffer 的可视区域为当前帧的有效数据
+                        codec.getOutputBuffer(outputIndex)?.let { outputBuffer ->
+                            if (bufferInfo.size > 0) {
                                 outputBuffer.position(bufferInfo.offset)
                                 outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-
-                                // 生成 DirectBuffer 切片，用于 JNI 层的 Zero-Copy（零拷贝）
-                                val sliceBuffer = outputBuffer.slice()
-
                                 val isFloat = (pcmEncoding == AudioFormat.ENCODING_PCM_FLOAT)
-                                val bytesPerSample = if (isFloat) 4 else 2
-                                val channels = ebuR128.channels
-                                // 1 帧 (frame) = 所有声道在同一时刻的一个采样点组合
-                                val frameCount = bufferInfo.size / (channels * bytesPerSample)
+                                val frameCount = bufferInfo.size / (ebuR128.channels * (if (isFloat) 4 else 2))
+                                ebuR128.processDirect(outputBuffer.slice(), isFloat, frameCount)
 
-                                // 调用底层 C++ 进行极速计算
-                                ebuR128.processDirect(sliceBuffer, isFloat, frameCount)
-
-                                // 计算并发出进度 (节流机制)
                                 if (durationUs > 0) {
-                                    val currentUs = bufferInfo.presentationTimeUs
-                                    val currentProgress = (currentUs.toDouble() / durationUs).coerceIn(0.0, 1.0)
-                                    // 仅当进度增长大于阈值 (如1%) 时才发射，避免过度占用主线程
+                                    val currentProgress = (bufferInfo.presentationTimeUs.toDouble() / durationUs).coerceIn(0.0, 1.0)
                                     if (currentProgress - lastReportedProgress >= PROGRESS_UPDATE_THRESHOLD) {
                                         emit(ReplayGainCalculateState.Progress(currentProgress.toFloat()))
                                         lastReportedProgress = currentProgress
                                     }
                                 }
                             }
-
-                            codecRef.releaseOutputBuffer(outputIndex, false)
-                            if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                                outputEnded = true
-                            }
                         }
+                        codec.releaseOutputBuffer(outputIndex, false)
+                        if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) outputEnded = true
                     }
                 }
             }
 
-            // 发射 100%
             emit(ReplayGainCalculateState.Progress(1.0f))
 
             if (ebuR128 == null || ebuR128.sampleCount == 0L) {
-                emit(ReplayGainCalculateState.Failed(mimeType, "Decoded sample count is zero"))
+                emit(ReplayGainCalculateState.Failed(mimeType, ReplayGainError.ZeroSampleCount))
             } else {
                 emit(
                     ReplayGainCalculateState.Success(
@@ -214,10 +174,16 @@ class ReplayGainScanner(
                     )
                 )
             }
+
+        } catch (e: CancellationException) {
+            // 捕获取消异常，发射 Cancelled 状态并重新抛出
+            emit(ReplayGainCalculateState.Cancelled)
+            throw e
         } catch (e: IllegalStateException) {
-            emit(ReplayGainCalculateState.Failed(mimeType, mapCodecStateError(mimeType, e.message)))
+            val isAlacIssue = mimeType.equals("audio/alac", true) && e.message?.contains("Executing states", true) == true
+            emit(ReplayGainCalculateState.Failed(mimeType, ReplayGainError.CodecException(e.message, isAlacIssue)))
         } catch (e: Exception) {
-            emit(ReplayGainCalculateState.Failed(mimeType, e.message))
+            emit(ReplayGainCalculateState.Failed(mimeType, ReplayGainError.GeneralException(e.message)))
         } finally {
             runCatching { ebuR128?.close() }
             runCatching { codec?.stop() }
@@ -236,21 +202,6 @@ class ReplayGainScanner(
     }
 
     /**
-     * 计算并格式化 Album Gain
-     * @param trackLoudnesses 整张专辑所有歌曲的 track loudness (LUFS) 集合
-     */
-    fun formatAlbumGain(trackLoudnesses: List<Double>): String {
-        if (trackLoudnesses.isEmpty()) return "0.00 dB"
-
-        // EBU R128 标准专辑近似算法：将所有单曲的 LUFS 还原为能量均值，然后再转换为 LUFS
-        val meanEnergy = trackLoudnesses.map { 10.0.pow((it + 0.691) / 10.0) }.average()
-        val albumLoudness = -0.691 + 10 * log10(meanEnergy.coerceAtLeast(1e-10))
-        val gainDb = TARGET_LOUDNESS_LUFS - albumLoudness
-
-        return "%.2f dB".format(java.util.Locale.US, gainDb)
-    }
-
-    /**
      * 格式化 True Peak (真实峰值)
      */
     fun formatPeak(peak: Double): String {
@@ -258,48 +209,4 @@ class ReplayGainScanner(
         return "%.6f".format(java.util.Locale.US, peak.coerceAtLeast(0.0))
     }
 
-    fun buildFailureMessage(result: ReplayGainCalculateState): String {
-        return when (result) {
-            is ReplayGainCalculateState.Success -> "ReplayGain 标签已生成，可继续手动调整"
-            is ReplayGainCalculateState.UnsupportedCodec -> {
-                val formatName = describeMimeType(result.mimeType)
-                "当前设备不支持解码 $formatName，暂时无法扫描 ReplayGain"
-            }
-            is ReplayGainCalculateState.Failed -> {
-                val formatName = describeMimeType(result.mimeType)
-                if (result.message.isNullOrBlank()) {
-                    "扫描 ReplayGain 失败: $formatName"
-                } else {
-                    "扫描 ReplayGain 失败: $formatName，${result.message}"
-                }
-            }
-            else -> ""
-        }
-    }
-
-    private fun describeMimeType(mimeType: String?): String {
-        return when (mimeType?.lowercase()) {
-            "audio/alac" -> "ALAC (m4a)"
-            "audio/raw" -> "PCM/WAV"
-            "audio/flac" -> "FLAC"
-            "audio/mpeg" -> "MP3"
-            "audio/mp4a-latm" -> "AAC/MP4"
-            null -> "未知格式"
-            else -> mimeType
-        }
-    }
-
-    private fun mapCodecStateError(mimeType: String?, message: String?): String {
-        if (message.isNullOrBlank()) {
-            return "解码器进入异常状态"
-        }
-
-        return when {
-            mimeType.equals("audio/alac", ignoreCase = true) &&
-                    message.contains("Executing states", ignoreCase = true) -> {
-                "当前设备上的 ALAC 解码器不可用或不稳定"
-            }
-            else -> message
-        }
-    }
 }

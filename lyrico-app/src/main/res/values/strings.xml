@@ -69,7 +69,17 @@
     <string name="replay_gain_scan_summary">Analyze the current music library and write ReplayGain track/album gain tags back to audio files.</string>
     <string name="replay_gain_no_songs">No songs available for ReplayGain scanning.</string>
     <string name="action_calculate_replay_gain">Calculate replayGain</string>
-    <string name="replay_gain_calculate_in_progress">Calculating now…</string>
+    <string name="replay_gain_calculate_in_progress">Calculating now, click to stop</string>
+    <string name="replay_gain_calculate_success">ReplayGain calculation successful</string>
+    <string name="replay_gain_calculate_cancelled">ReplayGain calculation cancelled</string>
+    <string name="replay_gain_calculate_failed">ReplayGain calculation failed: %1$s</string>
+    <string name="replay_gain_error_no_audio_track">No valid audio track found</string>
+    <string name="replay_gain_error_unknown_mime_type">Unable to recognize audio codec</string>
+    <string name="replay_gain_error_zero_sample_count">Decoded data is empty</string>
+    <string name="replay_gain_error_unsupported_codec">Device does not support %1$s decoding</string>
+    <string name="replay_gain_error_alac_issue">System ALAC decoder is unstable, please try restarting</string>
+    <string name="replay_gain_error_codec_exception">Decoder exception: %1$s</string>
+    <string name="replay_gain_error_general">Scan failed: %1$s</string>
 
     <!-- Other -->
     <string name="batch_match_history">Batch Match History</string>

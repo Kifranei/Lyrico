@@ -15,6 +15,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioPicture
 import com.lonx.audiotag.model.AudioTagData
+import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricsSearchResult
 import com.lonx.lyrico.data.model.entity.SongEntity
@@ -22,8 +23,12 @@ import com.lonx.lyrico.data.repository.PlaybackRepository
 import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.utils.LyricsUtils
 import com.lonx.lyrico.utils.ReplayGainCalculateState
+import com.lonx.lyrico.utils.ReplayGainError
 import com.lonx.lyrico.utils.ReplayGainScanner
+import com.lonx.lyrico.utils.UiMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,7 +56,7 @@ data class EditMetadataUiState(
     val picture: AudioPicture? = null,
     val permissionIntentSender: IntentSender? = null,
     val isReplayGainCalculating: Boolean = false,
-    val replayGainScanMessage: String? = null,
+    val replayGainScanMessage: UiMessage? = null,
 
     /**
      * 歌词导出导入状态
@@ -73,7 +78,7 @@ class EditMetadataViewModel(
     // 存储当前正在操作的 URI 字符串
     private var currentSongUri: String? = null
     private var preOffsetLyrics: String? = null
-
+    private var scanJob: Job? = null
     // 记录当前的累计偏移量，供 UI 显示
     private val _currentShiftOffset = MutableStateFlow(0L)
     val currentShiftOffset: StateFlow<Long> = _currentShiftOffset.asStateFlow()
@@ -401,7 +406,7 @@ class EditMetadataViewModel(
         val uriString = currentSongUri ?: _uiState.value.songInfo?.uriString ?: return
         if (_uiState.value.isReplayGainCalculating) return
 
-        viewModelScope.launch {
+        scanJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
                     isReplayGainCalculating = true,
@@ -434,46 +439,85 @@ class EditMetadataViewModel(
                                         ),
                                         isEditing = true,
                                         isReplayGainCalculating = false,
-                                        replayGainCalculateProgress = 1.0f, // 强制推到 100%
-                                        replayGainScanMessage = replayGainScanner.buildFailureMessage(state)
+                                        replayGainCalculateProgress = 1.0f,
+                                        replayGainScanMessage = UiMessage.StringResource(R.string.replay_gain_calculate_success)
                                     )
                                 }
                             }
 
-                            is ReplayGainCalculateState.Failed,
-                            is ReplayGainCalculateState.UnsupportedCodec -> {
-                                // 扫描失败或不支持该格式
-                                _uiState.update { ui ->
-                                    ui.copy(
-                                        isReplayGainCalculating = false,
-                                        replayGainCalculateProgress = 0f, // 出错将进度归零
-                                        replayGainScanMessage = replayGainScanner.buildFailureMessage(state)
-                                    )
-                                }
+                            is ReplayGainCalculateState.Cancelled -> {
+                                // 这里处理 Flow 内部抛出异常前发出的 Cancelled 状态
+                                _uiState.update { it.copy(
+                                    isReplayGainCalculating = false,
+                                    replayGainCalculateProgress = 0f,
+                                    replayGainScanMessage = UiMessage.StringResource(R.string.replay_gain_calculate_cancelled)
+                                )}
+                            }
+
+                            is ReplayGainCalculateState.Failed -> {
+                                // 根据 state.error 映射具体的错误信息
+                                val errorMsg = mapErrorToUiMessage(state.mimeType, state.error)
+                                _uiState.update { it.copy(
+                                    isReplayGainCalculating = false,
+                                    replayGainCalculateProgress = 0f,
+                                    replayGainScanMessage = errorMsg
+                                )}
                             }
                         }
                     }
+            } catch (e: CancellationException) {
+                // 协程被取消时，collect 可能会停止。如果是外部 job.cancel() 触发，
+                // 且 state 没有发回 Cancelled，这里可以补底线逻辑
+                if (_uiState.value.isReplayGainCalculating) {
+                    _uiState.update { it.copy(isReplayGainCalculating = false, replayGainScanMessage = UiMessage.StringResource(R.string.replay_gain_calculate_cancelled)) }
+                }
             } catch (e: Exception) {
-                // 捕获未知的意外异常（比如 IO 文件突然被删除等）
                 Log.e(TAG, "扫描 ReplayGain 失败: $uriString", e)
-                _uiState.update {
-                    it.copy(
-                        isReplayGainCalculating = false,
-                        replayGainCalculateProgress = 0f,
-                        replayGainScanMessage = "ReplayGain 扫描失败: ${e.message ?: "Unknown error"}"
-                    )
-                }
+                _uiState.update { it.copy(
+                    isReplayGainCalculating = false,
+                    replayGainCalculateProgress = 0f,
+                    replayGainScanMessage = UiMessage.StringResource(R.string.replay_gain_calculate_failed,e.localizedMessage?: "未知错误")
+                )}
             } finally {
-                _uiState.update {
-                    it.copy(
-                        isReplayGainCalculating = false,
-                        replayGainCalculateProgress = null
-                    )
-                }
+                _uiState.update { it.copy(
+                    isReplayGainCalculating = false,
+                    replayGainCalculateProgress = if (it.replayGainCalculateProgress == 1f) 1f else null
+                )}
             }
         }
     }
 
+    /**
+     * 具体的 UI 文本映射逻辑
+     */
+    private fun mapErrorToUiMessage(mimeType: String?, error: ReplayGainError): UiMessage {
+        val format = when (mimeType?.lowercase()) {
+            "audio/alac" -> "ALAC"
+            "audio/flac" -> "FLAC"
+            "audio/mpeg" -> "MP3"
+            "audio/mp4a-latm" -> "AAC"
+            null -> "unknown"
+            else -> mimeType
+        }
+
+        return when (error) {
+            is ReplayGainError.NoAudioTrack -> UiMessage.StringResource(R.string.replay_gain_error_no_audio_track)
+            is ReplayGainError.UnknownMimeType -> UiMessage.StringResource(R.string.replay_gain_error_unknown_mime_type)
+            is ReplayGainError.ZeroSampleCount -> UiMessage.StringResource(R.string.replay_gain_error_zero_sample_count)
+            is ReplayGainError.UnsupportedCodec -> UiMessage.StringResource(R.string.replay_gain_error_unsupported_codec, format)
+            is ReplayGainError.CodecException -> {
+                if (error.isAlacIssue) UiMessage.StringResource(R.string.replay_gain_error_alac_issue)
+                else UiMessage.StringResource(R.string.replay_gain_error_codec_exception, error.message ?: "")
+            }
+            is ReplayGainError.GeneralException -> UiMessage.StringResource(R.string.replay_gain_error_general, error.message ?: "")
+        }
+    }
+    
+    fun cancelScan() {
+        scanJob?.cancel()  // 这会触发 ensureActive() 抛出 CancellationException
+        scanJob = null
+    }
+    
     fun clearReplayGainScanMessage() {
         _uiState.update { it.copy(replayGainScanMessage = null) }
     }
