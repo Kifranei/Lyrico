@@ -35,10 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -93,7 +94,6 @@ fun BatchEditScreen(
 ) {
     val viewModel: BatchEditViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
 
     var showCoverOptionsSheet by remember { mutableStateOf(false) }
     var showInfoDialog by remember { mutableStateOf(false) }
@@ -116,12 +116,18 @@ fun BatchEditScreen(
                         is String -> {
                             viewModel.updateCover(cover.toUri())
                         }
+
                         is ByteArray -> {
                             // 将 ByteArray 转换为 Bitmap，然后保存为临时文件
-                            val bitmap = android.graphics.BitmapFactory.decodeByteArray(cover, 0, cover.size)
+                            val bitmap =
+                                android.graphics.BitmapFactory.decodeByteArray(cover, 0, cover.size)
                             val tempFile = java.io.File.createTempFile("cover", ".jpg")
                             tempFile.outputStream().use {
-                                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, it)
+                                bitmap.compress(
+                                    android.graphics.Bitmap.CompressFormat.JPEG,
+                                    100,
+                                    it
+                                )
                             }
                             viewModel.updateCover(android.net.Uri.fromFile(tempFile))
                         }
@@ -176,7 +182,7 @@ fun BatchEditScreen(
         },
         floatingToolbarPosition = ToolbarPosition.CenterEnd,
         floatingToolbar = {
-            FloatingToolbar(){
+            FloatingToolbar() {
                 Column(
                     modifier = Modifier.padding(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -214,34 +220,6 @@ fun BatchEditScreen(
                 SmallTitle(
                     text = stringResource(R.string.batch_edit_song_count, uiState.songCount)
                 )
-            }
-
-            // 保存进度
-            if (uiState.isSaving) {
-                item(key = "saving_progress") {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = stringResource(
-                                    R.string.batch_edit_saving_progress,
-                                    uiState.saveProgress,
-                                    uiState.saveTotal
-                                ),
-                                style = MiuixTheme.textStyles.body1
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            LinearProgressIndicator(
-                                progress = if (uiState.saveTotal > 0)
-                                    uiState.saveProgress.toFloat() / uiState.saveTotal
-                                else 0f
-                            )
-                        }
-                    }
-                }
             }
 
             // 封面编辑区
@@ -500,32 +478,100 @@ fun BatchEditScreen(
         }
     }
 
-    // 保存结果对话框
-    uiState.saveResultMessage?.let { message ->
-        WindowDialog(
-            show = true,
-            title = stringResource(
-                if (uiState.saveSuccess == true)
-                    R.string.batch_edit_success_title
-                else
-                    R.string.batch_edit_finished_title
-            ),
-            summary = message.asString(context) ?: "",
-            onDismissRequest = {
-                viewModel.clearSaveResult()
+    // 保存进度对话框
+    WindowBottomSheet(
+        show = uiState.saveProgressDialog,
+        onDismissRequest = {
+            if (!uiState.isSaving) viewModel.closeSaveBottomSheet()
+        },
+        onDismissFinished = {
+            if (uiState.saveSuccess == true) {
+                navigator.popBackStack()
             }
+        },
+        allowDismiss = !uiState.isSaving,
+        title = stringResource(R.string.batch_edit_title),
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(bottom = 32.dp)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
         ) {
+            Column(
+                modifier = Modifier.padding(bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = if (uiState.isSaving) {
+                        uiState.currentFile
+                    } else {
+                        stringResource(
+                            R.string.batch_matching_total_time,
+                            uiState.saveTimeMillis / 1000.0
+                        )
+                    },
+                    style = MiuixTheme.textStyles.subtitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${uiState.saveProgress} / ${uiState.saveTotal}",
+                        style = MiuixTheme.textStyles.main,
+                        textAlign = TextAlign.End
+                    )
+                }
+
+                LinearProgressIndicator(
+                    progress = if (uiState.saveTotal > 0)
+                        uiState.saveProgress.toFloat() / uiState.saveTotal
+                    else 0f
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(
+                        R.string.batch_matching_success,
+                        uiState.successCount
+                    ),
+                    style = MiuixTheme.textStyles.main
+                )
+                Text(
+                    text = stringResource(
+                        R.string.batch_matching_failure,
+                        uiState.failureCount
+                    ),
+                    style = MiuixTheme.textStyles.main
+                )
+            }
+
             TextButton(
-                modifier = Modifier.fillMaxWidth(),
-                text = stringResource(R.string.confirm),
+                text = if (uiState.isSaving) stringResource(R.string.action_abort) else stringResource(
+                    R.string.confirm
+                ),
                 onClick = {
-                    viewModel.clearSaveResult()
-                    if (uiState.saveSuccess == true) {
-                        navigator.popBackStack()
+                    if (uiState.isSaving) {
+                        viewModel.abortSave()
+                    } else {
+                        viewModel.closeSaveBottomSheet()
                     }
                 },
-                colors = ButtonDefaults.textButtonColorsPrimary()
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.textButtonColorsPrimary(),
             )
+
         }
     }
 

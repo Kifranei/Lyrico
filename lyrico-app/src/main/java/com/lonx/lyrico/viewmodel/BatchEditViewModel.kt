@@ -12,12 +12,14 @@ import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.utils.LyricsUtils
 import com.lonx.lyrico.utils.UiMessage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 可批量编辑的标签字段枚举
@@ -75,7 +77,14 @@ data class BatchEditUiState(
     val lyricsOffset: String = "",
 
     /** 自定义标签 */
-    val customFields: List<CustomTagField> = emptyList()
+    val customFields: List<CustomTagField> = emptyList(),
+    
+    /** 保存进度显示相关字段 */
+    val saveProgressDialog: Boolean = false,  // 是否显示保存进度对话框
+    val currentFile: String = "",  // 当前处理的文件名
+    val successCount: Int = 0,  // 成功计数
+    val failureCount: Int = 0,  // 失败计数
+    val saveTimeMillis: Long = 0  // 保存总用时（毫秒）
 )
 
 class BatchEditViewModel(
@@ -84,6 +93,8 @@ class BatchEditViewModel(
 ) : ViewModel() {
 
     private val TAG = "BatchEditVM"
+    
+    private var saveJob: Job? = null
 
     private val _uiState = MutableStateFlow(BatchEditUiState())
     val uiState: StateFlow<BatchEditUiState> = _uiState.asStateFlow()
@@ -172,44 +183,64 @@ class BatchEditViewModel(
         val state = _uiState.value
         if (state.isSaving || selectedUris.isEmpty()) return
 
-        viewModelScope.launch {
+        saveJob = viewModelScope.launch {
+            val startTime = System.currentTimeMillis()
+            val successCounter = AtomicInteger(0)
+            val failureCounter = AtomicInteger(0)
+            
             _uiState.update {
                 it.copy(
                     isSaving = true,
+                    saveProgressDialog = true,
                     saveProgress = 0,
                     saveTotal = selectedUris.size,
+                    currentFile = "",
+                    successCount = 0,
+                    failureCount = 0,
+                    saveTimeMillis = 0,
                     saveSuccess = null,
                     saveResultMessage = null,
                     errorMessage = null
                 )
             }
 
-            var successCount = 0
-            var failCount = 0
-
             for ((index, path) in selectedUris.withIndex()) {
+                val fileName = path.substringAfterLast('/')
+                _uiState.update { it.copy(currentFile = fileName) }
+                
                 try {
                     val success = withContext(Dispatchers.IO) {
                         updateAudioTags(path, state)
                     }
-                    if (success) successCount++ else failCount++
+                    if (success) {
+                        val s = successCounter.incrementAndGet()
+                        _uiState.update { it.copy(successCount = s) }
+                    } else {
+                        val f = failureCounter.incrementAndGet()
+                        _uiState.update { it.copy(failureCount = f) }
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "批量编辑失败: $path", e)
-                    failCount++
+                    val f = failureCounter.incrementAndGet()
+                    _uiState.update { it.copy(failureCount = f) }
                 }
 
                 _uiState.update { it.copy(saveProgress = index + 1) }
             }
+            
+            val totalTime = System.currentTimeMillis() - startTime
 
             _uiState.update {
                 it.copy(
                     isSaving = false,
-                    saveSuccess = failCount == 0,
+                    currentFile = "",
+                    saveTimeMillis = totalTime,
+                    saveSuccess = failureCounter.get() == 0,
                     saveResultMessage = UiMessage.StringResource(
                         R.string.batch_edit_result_summary,
-                        successCount,
+                        successCounter.get(),
                         selectedUris.size,
-                        failCount
+                        failureCounter.get()
                     )
                 )
             }
@@ -327,6 +358,40 @@ class BatchEditViewModel(
         _uiState.update { it.copy(saveSuccess = null, saveResultMessage = null) }
     }
 
+    /**
+     * 关闭保存进度对话框
+     */
+    fun closeSaveBottomSheet() {
+        _uiState.update {
+            it.copy(
+                saveProgressDialog = false,
+                currentFile = "",
+                isSaving = false,
+                saveTimeMillis = 0,
+                successCount = 0,
+                failureCount = 0
+            )
+        }
+    }
+
+    /**
+     * 中止保存
+     */
+    fun abortSave() {
+        saveJob?.cancel()
+        saveJob = null
+        _uiState.update {
+            it.copy(
+                isSaving = false,
+                saveProgressDialog = false,
+                currentFile = "",
+                saveTimeMillis = 0,
+                successCount = 0,
+                failureCount = 0
+            )
+        }
+    }
+
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
@@ -413,6 +478,7 @@ class BatchEditViewModel(
     }
 
     override fun onCleared() {
+        saveJob?.cancel()
         super.onCleared()
         selectionManager.clearAll()
     }
