@@ -11,9 +11,11 @@ import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.utils.RenameEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicInteger
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.SharedSelectionManager
 import com.lonx.lyrico.data.repository.SettingsDefaults
@@ -39,7 +41,13 @@ data class BatchRenameUiState(
     val isGeneratingPreview: Boolean = false,
     val isRenamingInProgress: Boolean = false,
     val renameResult: RenameEngine.Result? = null,
-    val characterMappingConfig: CharacterMappingConfig? = null
+    val characterMappingConfig: CharacterMappingConfig? = null,
+    // 重命名进度显示相关字段
+    val renameProgress: Pair<Int, Int>? = null, // (当前进度, 总数)
+    val currentFile: String = "",
+    val renameTimeMillis: Long = 0,  // 批量重命名总用时（毫秒）
+    val successCount: Int = 0,  // 成功计数
+    val failureCount: Int = 0  // 失败计数
 )
 
 data class SongForBatchRename(
@@ -54,6 +62,8 @@ class BatchRenameViewModel(
     private val selectionManager: SharedSelectionManager,
     private val appContext: Context
 ) : ViewModel() {
+
+    private var renameJob: Job? = null
 
     private val _uiState = MutableStateFlow(BatchRenameUiState())
     val uiState: StateFlow<BatchRenameUiState> = _uiState
@@ -201,29 +211,44 @@ class BatchRenameViewModel(
 
         if (previews.isEmpty()) return
 
-
-        viewModelScope.launch(Dispatchers.IO) {
+        renameJob = viewModelScope.launch(Dispatchers.IO) {
+            val startTime = System.currentTimeMillis()
+            val successCounter = AtomicInteger(0)
+            val failureCounter = AtomicInteger(0)
 
             try {
 
                 _uiState.update {
                     it.copy(
                         isRenamingInProgress = true,
-                        saveProgress = 0,
-                        saveTotal = previews.size,
+                        renameProgress = 0 to previews.size,
+                        currentFile = "",
+                        renameTimeMillis = 0,
+                        successCount = 0,
+                        failureCount = 0,
                         errorMessage = null
                     )
                 }
 
 
-                val result = RenameEngine.renameFiles(previews) { progress, total ->
+                val result = RenameEngine.renameFiles(previews) { progress, total, fileName, isSuccess ->
+                    if (isSuccess) {
+                        val s = successCounter.incrementAndGet()
+                        _uiState.update { it.copy(successCount = s) }
+                    } else {
+                        val f = failureCounter.incrementAndGet()
+                        _uiState.update { it.copy(failureCount = f) }
+                    }
+                    
                     _uiState.update {
                         it.copy(
-                            saveProgress = progress,
-                            saveTotal = total
+                            renameProgress = progress to total,
+                            currentFile = fileName
                         )
                     }
                 }
+
+                val totalTime = System.currentTimeMillis() - startTime
 
                 // 更新成功重命名的预览，将原路径更新为新路径，让用户看到重命名后的结果
                 val updatedPreviews = previews.map { preview ->
@@ -252,21 +277,27 @@ class BatchRenameViewModel(
                         previews = updatedPreviews,
                         renameResult = result,
                         isRenamingInProgress = false,
-                        saveProgress = 0,
-                        saveTotal = 0
+                        // 不清除 renameProgress，让用户看到最终结果
+                        currentFile = "",
+                        renameTimeMillis = totalTime
                     )
                 }
 
             } catch (e: Exception) {
-
-                _uiState.update {
-                    it.copy(
-                        isRenamingInProgress = false,
-                        saveProgress = 0,
-                        saveTotal = 0,
-                        errorMessage = UiMessage.DynamicString(e.message)
-                    )
+                // 如果是被取消的，不显示错误
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    _uiState.update {
+                        it.copy(
+                            isRenamingInProgress = false,
+                            renameProgress = null,
+                            currentFile = "",
+                            renameTimeMillis = 0,
+                            errorMessage = UiMessage.DynamicString(e.message)
+                        )
+                    }
                 }
+            } finally {
+                renameJob = null
             }
         }
     }
@@ -298,8 +329,38 @@ class BatchRenameViewModel(
         )
     }
 
-    fun clearResult() {
-        _uiState.update { it.copy(renameResult = null) }
+    /**
+     * 关闭重命名进度对话框
+     */
+    fun closeRenameDialog() {
+        _uiState.update {
+            it.copy(
+                renameProgress = null,
+                currentFile = "",
+                isRenamingInProgress = false,
+                renameTimeMillis = 0,
+                successCount = 0,
+                failureCount = 0
+            )
+        }
+    }
+
+    /**
+     * 中止重命名
+     */
+    fun abortRename() {
+        renameJob?.cancel()
+        renameJob = null
+        _uiState.update {
+            it.copy(
+                isRenamingInProgress = false,
+                renameProgress = null,
+                currentFile = "",
+                renameTimeMillis = 0,
+                successCount = 0,
+                failureCount = 0
+            )
+        }
     }
 
     fun clearError() {
@@ -330,6 +391,7 @@ class BatchRenameViewModel(
         }
     }
     override fun onCleared() {
+        renameJob?.cancel()
         super.onCleared()
         selectionManager.clearAll()
     }

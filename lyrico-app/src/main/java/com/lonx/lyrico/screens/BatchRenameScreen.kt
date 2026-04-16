@@ -12,17 +12,22 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,6 +67,7 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.window.WindowDialog
 
 @SuppressLint("LocalContextGetResourceValueCall")
@@ -181,26 +187,6 @@ fun BatchRenameScreen(
                         PlaceholderInfoContent()
                     }
 
-                    // 重命名进度
-                    if (uiState.isRenamingInProgress) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = stringResource(
-                                    R.string.batch_edit_saving_progress,
-                                    uiState.saveProgress,
-                                    uiState.saveTotal
-                                ),
-                                style = MiuixTheme.textStyles.body1
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            LinearProgressIndicator(
-                                progress = if (uiState.saveTotal > 0)
-                                    uiState.saveProgress.toFloat() / uiState.saveTotal
-                                else 0f
-                            )
-                        }
-                    }
-
                     TextButton(
                         modifier = Modifier
                             .padding(12.dp)
@@ -259,7 +245,11 @@ fun BatchRenameScreen(
 
             uiState.errorMessage?.let {
                 item {
-                    Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth()) {
+                    Card(
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .fillMaxWidth()
+                    ) {
                         it.asString(context)?.let { text ->
                             Text(
                                 text = text, fontSize = MiuixTheme.textStyles.footnote1.fontSize,
@@ -272,56 +262,96 @@ fun BatchRenameScreen(
             }
         }
 
-        uiState.renameResult?.let { result ->
-            val summary = buildString {
-                    append(
-                        stringResource(
-                            R.string.rename_result_summary,
-                            result.successCount,
-                            result.totalCount
-                        )
-                    )
-                    append("\n")
+        // 重命名进度对话框
+        WindowBottomSheet(
+            show = uiState.renameProgress != null,
+            onDismissRequest = {
+                if (!uiState.isRenamingInProgress) viewModel.closeRenameDialog()
+            },
+            allowDismiss = !uiState.isRenamingInProgress,
+            title = stringResource(R.string.batch_rename_title),
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(bottom = 32.dp)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Column(
+                    modifier = Modifier.padding(bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    uiState.renameProgress?.let { (current, total) ->
+                        val progress =
+                            if (total > 0) current.toFloat() / total.toFloat() else 0f
 
-                    if (result.failureCount > 0) {
-                        append(
-                            stringResource(
-                                R.string.rename_result_failure,
-                                result.failureCount
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (uiState.isRenamingInProgress) {
+                                    uiState.currentFile
+                                } else {
+                                    stringResource(
+                                        R.string.batch_matching_total_time,
+                                        uiState.renameTimeMillis / 1000.0
+                                    )
+                                },
+                                style = MiuixTheme.textStyles.subtitle,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
-                        )
-                        append("\n")
 
-                        result.failed.take(3).forEach { (_, error) ->
-                            append("• $error\n")
+                            Text(
+                                text = "$current / $total",
+                                style = MiuixTheme.textStyles.main,
+                                textAlign = TextAlign.End
+                            )
                         }
 
-                        if (result.failed.size > 3) {
-                            append("...")
-                        }
+                        LinearProgressIndicator(progress = progress)
                     }
                 }
-            WindowDialog(
-                show = true,
-                title =  stringResource(
-                    if (result.isSuccessful)
-                        R.string.rename_success_title
-                    else
-                        R.string.rename_finished_title
-                ),
-                summary = summary,
-                onDismissRequest = {
-                    viewModel.clearResult()
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = stringResource(
+                            R.string.batch_matching_success,
+                            uiState.successCount
+                        ),
+                        style = MiuixTheme.textStyles.main
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.batch_matching_failure,
+                            uiState.failureCount
+                        ),
+                        style = MiuixTheme.textStyles.main
+                    )
                 }
-            ) {
+
                 TextButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    text = stringResource(R.string.confirm),
+                    text = if (uiState.isRenamingInProgress) stringResource(R.string.action_abort) else stringResource(
+                        R.string.confirm
+                    ),
                     onClick = {
-                        viewModel.clearResult()
+                        if (uiState.isRenamingInProgress) {
+                            viewModel.abortRename()
+                        } else {
+                            viewModel.closeRenameDialog()
+                        }
                     },
+                    modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.textButtonColorsPrimary(),
                 )
+
             }
         }
     }
