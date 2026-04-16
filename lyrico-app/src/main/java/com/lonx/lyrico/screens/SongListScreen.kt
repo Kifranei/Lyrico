@@ -307,7 +307,7 @@ fun SongListScreen(
                             enabled = hasSelection,
                             label = stringResource(R.string.action_batch_rename),
                             onClick = {
-                                if (songListViewModel.setSelectionPaths()) {
+                                if (songListViewModel.setSelectionUris()) {
                                     navigator.navigate(BatchRenameDestination)
                                 }
                             },

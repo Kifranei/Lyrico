@@ -216,7 +216,7 @@ val appModule = module {
             database = get()
         )
     }
-    viewModel { BatchRenameViewModel(get(), get(),androidContext()) }
+    viewModel { BatchRenameViewModel(get(), get(), get(),androidContext()) }
     viewModel { BatchEditViewModel(get(), get()) }
 }
 

@@ -4,29 +4,25 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioTagData
-import com.lonx.audiotag.rw.AudioTagReader
 import com.lonx.lyrico.data.model.CharacterMappingConfig
 import com.lonx.lyrico.data.model.RenamePreview
+import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.repository.SettingsRepository
+import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.utils.RenameEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import android.net.Uri
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.SharedSelectionManager
 import com.lonx.lyrico.data.repository.SettingsDefaults
 import com.lonx.lyrico.utils.UiMessage
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import java.io.File
 
 data class BatchRenameUiState(
     val songCount: Int = 0,
@@ -54,6 +50,7 @@ data class SongForBatchRename(
 
 class BatchRenameViewModel(
     private val settingsRepository: SettingsRepository,
+    private val songRepository: SongRepository,
     private val selectionManager: SharedSelectionManager,
     private val appContext: Context
 ) : ViewModel() {
@@ -73,13 +70,22 @@ class BatchRenameViewModel(
             presetFormats = RenameEngine.getPresetFormats()
         )
 
-        val selectedPaths = selectionManager.selectedUris.value
-        if (selectedPaths.isNotEmpty()) {
-            // 转换数据并推入流中
-            val songList = selectedPaths.map { path ->
-                SongForBatchRename(path, path.substringAfterLast('/'), null)
+        val selectedUris = selectionManager.selectedUris.value
+        if (selectedUris.isNotEmpty()) {
+            // 从数据库获取歌曲信息，避免重复读取文件
+            viewModelScope.launch(Dispatchers.IO) {
+                val songList = selectedUris.mapNotNull { path ->
+                    val songEntity = songRepository.getSongByUri(path)
+                    songEntity?.let {
+                        SongForBatchRename(
+                            filePath = it.filePath,
+                            fileName = it.fileName,
+                            tagData = convertToAudioTagData(it)
+                        )
+                    }
+                }
+                setSongs(songList)
             }
-            setSongs(songList)
         }
 
         /** 同步 characterMappingConfig 到 uiState */
@@ -113,13 +119,10 @@ class BatchRenameViewModel(
                     try {
 
                         val songsForRename = songs.mapNotNull { song ->
-
-                            val tagData = song.tagData ?: loadTagData(song.filePath)
-
-                            tagData?.let {
+                            song.tagData?.let { tagData ->
                                 RenameEngine.SongForRename(
                                     originalPath = song.filePath,
-                                    tagData = it
+                                    tagData = tagData
                                 )
                             }
                         }
@@ -222,8 +225,31 @@ class BatchRenameViewModel(
                     }
                 }
 
+                // 更新成功重命名的预览，将原路径更新为新路径，让用户看到重命名后的结果
+                val updatedPreviews = previews.map { preview ->
+                    if (result.successful.contains(preview)) {
+                        preview.copy(originalPath = preview.newPath)
+                    } else {
+                        preview
+                    }
+                }
+
+                // 更新 songsFlow 中的文件路径，确保后续操作使用正确的路径
+                val currentSongs = songsFlow.value.toMutableList()
+                result.successful.forEach { successfulPreview ->
+                    val index = currentSongs.indexOfFirst { it.filePath == successfulPreview.originalPath }
+                    if (index != -1) {
+                        currentSongs[index] = currentSongs[index].copy(
+                            filePath = successfulPreview.newPath,
+                            fileName = successfulPreview.newPath.substringAfterLast('/')
+                        )
+                    }
+                }
+                songsFlow.value = currentSongs
+
                 _uiState.update {
                     it.copy(
+                        previews = updatedPreviews,
                         renameResult = result,
                         isRenamingInProgress = false,
                         saveProgress = 0,
@@ -246,24 +272,30 @@ class BatchRenameViewModel(
     }
 
     /**
-     * 读取标签
+     * 将 SongEntity 转换为 AudioTagData
      */
-    private suspend fun loadTagData(filePath: String): AudioTagData? {
-
-        return try {
-
-            val uri = Uri.fromFile(File(filePath))
-
-            appContext.contentResolver
-                .openFileDescriptor(uri, "r")
-                ?.use { descriptor ->
-
-                    AudioTagReader.read(descriptor, true)
-                }
-
-        } catch (e: Exception) {
-            null
-        }
+    private fun convertToAudioTagData(song: SongEntity): AudioTagData {
+        return AudioTagData(
+            title = song.title,
+            artist = song.artist,
+            album = song.album,
+            albumArtist = song.albumArtist,
+            genre = song.genre,
+            date = song.date,
+            trackNumber = song.trackerNumber,
+            discNumber = song.discNumber,
+            composer = song.composer,
+            lyricist = song.lyricist,
+            comment = song.comment,
+            lyrics = song.lyrics,
+            copyright = song.copyright,
+            rating = song.rating,
+            fileName = song.fileName,
+            durationMilliseconds = song.durationMilliseconds,
+            bitrate = song.bitrate,
+            sampleRate = song.sampleRate,
+            channels = song.channels
+        )
     }
 
     fun clearResult() {
