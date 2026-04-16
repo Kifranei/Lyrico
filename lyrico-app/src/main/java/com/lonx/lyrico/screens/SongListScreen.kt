@@ -622,9 +622,7 @@ fun SongListScreen(
             val song = sheetUiState.menuSong
             var showMenuSheet by remember { mutableStateOf(false) }
             LaunchedEffect(song) {
-                if (song != null) {
-                    showMenuSheet = true
-                }
+                showMenuSheet = song != null
             }
 
             WindowBottomSheet(
