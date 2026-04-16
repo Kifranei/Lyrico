@@ -273,6 +273,8 @@
     <string name="label_lyricist">作词</string>
     <string name="label_comment">注释</string>
     <string name="label_lyrics">歌词</string>
+    <string name="label_replay_gain">回放增益</string>
+    <string name="label_replay_gain_summary">仅QQ源支持匹配该字段</string>
     <string name="group_replay_gain">ReplayGain</string>
     <string name="label_replaygain_track_gain">曲目增益</string>
     <string name="label_replaygain_track_peak">曲目峰值</string>

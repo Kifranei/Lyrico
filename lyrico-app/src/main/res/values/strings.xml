@@ -268,6 +268,8 @@
     <string name="label_lyricist">Lyricist</string>
     <string name="label_comment">Comment</string>
     <string name="label_lyrics">Lyrics</string>
+    <string name="label_replay_gain">ReplayGain</string>
+    <string name="label_replay_gain_summary">Only QQ Music source supports matching this field</string>
     <string name="group_replay_gain">ReplayGain</string>
     <string name="label_replaygain_track_gain">Track Gain</string>
     <string name="label_replaygain_track_peak">Track Peak</string>

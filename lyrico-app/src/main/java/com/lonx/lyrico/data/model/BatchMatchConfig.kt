@@ -23,7 +23,8 @@ enum class BatchMatchMode(
 }
 
 enum class BatchMatchField(
-    @field:StringRes val labelRes: Int
+    @field:StringRes val labelRes: Int,
+    @field:StringRes val summaryRes: Int = 0
 ) {
     TITLE(R.string.label_title),
     ARTIST(R.string.label_artists),
@@ -32,7 +33,8 @@ enum class BatchMatchField(
     DATE(R.string.label_date),
     TRACK_NUMBER(R.string.label_track_number),
     LYRICS(R.string.label_lyrics),
-    COVER(R.string.label_cover)
+    COVER(R.string.label_cover),
+    REPLAY_GAIN(R.string.label_replay_gain, R.string.label_replay_gain_summary)
 }
 object BatchMatchConfigDefaults {
     val DEFAULT_CONFIG = BatchMatchConfig(
@@ -44,7 +46,8 @@ object BatchMatchConfigDefaults {
             BatchMatchField.DATE to BatchMatchMode.SUPPLEMENT,
             BatchMatchField.TRACK_NUMBER to BatchMatchMode.SUPPLEMENT,
             BatchMatchField.LYRICS to BatchMatchMode.SUPPLEMENT,
-            BatchMatchField.COVER to BatchMatchMode.SUPPLEMENT
+            BatchMatchField.COVER to BatchMatchMode.SUPPLEMENT,
+            BatchMatchField.REPLAY_GAIN to BatchMatchMode.SUPPLEMENT
         ),
         concurrency = 3,
         preferFileName = false
