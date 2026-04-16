@@ -226,6 +226,31 @@ fun EditMetadataScreen(
         }
     }
 
+    // 加载同专辑封面（直接使用第一张）
+    fun loadSameAlbumCovers() {
+        scope.launch {
+            try {
+                val covers = viewModel.getSameAlbumCovers()
+                if (covers.isNotEmpty()) {
+                    val (_, cover) = covers.first()
+                    when (cover) {
+                        is String -> viewModel.updateCover(cover)
+                        is ByteArray -> {
+                            // 将 ByteArray 转换为 Bitmap
+                            val bitmap = android.graphics.BitmapFactory.decodeByteArray(cover, 0, cover.size)
+                            viewModel.updateCover(bitmap)
+                        }
+                    }
+                    scope.launch { snackbarHostState.showSnackbar("已应用同专辑封面") }
+                } else {
+                    scope.launch { snackbarHostState.showSnackbar("未找到同专辑的歌曲封面") }
+                }
+            } catch (e: Exception) {
+                scope.launch { snackbarHostState.showSnackbar("加载同专辑封面失败") }
+            }
+        }
+    }
+
     BackHandler {
         if (!navigator.popBackStack()) {
             activity.finish()
@@ -912,6 +937,13 @@ fun EditMetadataScreen(
                         }
                         showCoverOptionsSheet = false
                         navigator.navigate(SearchCoverDestination(keyword))
+                    }
+                )
+                ArrowPreference(
+                    title = "选择同专辑歌曲封面",
+                    onClick = {
+                        showCoverOptionsSheet = false
+                        loadSameAlbumCovers()
                     }
                 )
                 ArrowPreference(

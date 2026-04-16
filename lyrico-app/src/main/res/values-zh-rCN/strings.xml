@@ -431,6 +431,7 @@
     <string name="batch_edit_cover_remove">移除封面</string>
     <string name="batch_edit_cover_revert">还原封面</string>
     <string name="batch_edit_cover_hint">点击选择封面图片</string>
+    <string name="batch_edit_cover_mismatch">选中的歌曲有不同的专辑/艺术家，无法应用同专辑封面</string>
     <string name="batch_edit_field_remove_hint">移除此标签</string>
     <string name="batch_edit_info_summary">了解批量编辑的使用方法</string>
     <string name="batch_edit_info_content">批量编辑说明：

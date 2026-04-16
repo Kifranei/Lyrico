@@ -421,6 +421,7 @@
     <string name="batch_edit_cover_remove">Remove Cover</string>
     <string name="batch_edit_cover_revert">Revert Cover</string>
     <string name="batch_edit_cover_hint">Tap to select cover image</string>
+    <string name="batch_edit_cover_mismatch">Selected songs have different album/artist, cannot apply same album cover</string>
     <string name="batch_edit_field_remove_hint">Remove this field</string>
     <string name="batch_edit_info_summary">Learn how to use batch edit</string>
     <string name="batch_edit_info_content">Batch Edit Guide:

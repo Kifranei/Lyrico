@@ -640,4 +640,33 @@ class EditMetadataViewModel(
         val uriStr = currentSong?.uri ?: currentSongUri ?: return
         playbackRepository.play(context, uriStr.toUri())
     }
+
+    /**
+     * 获取同专辑歌曲封面
+     * 优先使用同专辑且同歌手的查询结果作为封面
+     */
+    suspend fun getSameAlbumCovers(): List<Pair<String, Any?>> {
+        val currentAlbum = _uiState.value.editingTagData?.album ?: return emptyList()
+        val currentArtist = _uiState.value.editingTagData?.artist ?: ""
+
+        val sameAlbumSongs = songRepository.getSongsByAlbum(currentAlbum, currentArtist)
+        val covers = mutableListOf<Pair<String, Any?>>()
+
+        for (song in sameAlbumSongs) {
+            if (song.uri == currentSongUri) continue // 跳过当前歌曲
+            
+            try {
+                val tagData = songRepository.readAudioTagData(song.uri)
+                val cover = tagData.pictures.firstOrNull()?.data ?: tagData.picUrl
+                if (cover != null) {
+                    val title = "${song.title} - ${song.artist}"
+                    covers.add(title to cover)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "读取同专辑歌曲封面失败: ${song.uri}", e)
+            }
+        }
+
+        return covers
+    }
 }

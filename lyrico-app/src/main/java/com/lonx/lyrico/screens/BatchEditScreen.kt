@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,12 +52,12 @@ import com.lonx.lyrico.viewmodel.BatchEditViewModel
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
-import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.FloatingToolbar
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -69,20 +70,20 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.ToolbarPosition
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.window.WindowDialog
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Undo
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import kotlin.collections.plus
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import top.yukonga.miuix.kmp.window.WindowDialog
+import androidx.core.net.toUri
 
 
 @Composable
@@ -101,6 +102,36 @@ fun BatchEditScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri -> uri?.let { viewModel.updateCover(it) } }
+
+    val scope = rememberCoroutineScope()
+
+    // 加载同专辑封面（直接使用第一张）
+    fun loadSameAlbumCovers() {
+        scope.launch {
+            try {
+                val covers = viewModel.getSameAlbumCovers()
+                if (covers.isNotEmpty()) {
+                    val (_, cover) = covers.first()
+                    when (cover) {
+                        is String -> {
+                            viewModel.updateCover(cover.toUri())
+                        }
+                        is ByteArray -> {
+                            // 将 ByteArray 转换为 Bitmap，然后保存为临时文件
+                            val bitmap = android.graphics.BitmapFactory.decodeByteArray(cover, 0, cover.size)
+                            val tempFile = java.io.File.createTempFile("cover", ".jpg")
+                            tempFile.outputStream().use {
+                                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, it)
+                            }
+                            viewModel.updateCover(android.net.Uri.fromFile(tempFile))
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // 错误处理
+            }
+        }
+    }
 
     val topAppBarScrollBehavior = MiuixScrollBehavior()
 
@@ -413,6 +444,13 @@ fun BatchEditScreen(
                                     ActivityResultContracts.PickVisualMedia.ImageOnly
                                 )
                             )
+                        }
+                    )
+                    ArrowPreference(
+                        title = "选择同专辑歌曲封面",
+                        onClick = {
+                            showCoverOptionsSheet = false
+                            loadSameAlbumCovers()
                         }
                     )
                     ArrowPreference(
