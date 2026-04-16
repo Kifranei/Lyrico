@@ -480,7 +480,7 @@ fun BatchEditScreen(
 
     // 保存进度对话框
     WindowBottomSheet(
-        show = uiState.saveProgressDialog,
+        show = uiState.saveProgressBottomSheet,
         onDismissRequest = {
             if (!uiState.isSaving) viewModel.closeSaveBottomSheet()
         },
@@ -502,25 +502,27 @@ fun BatchEditScreen(
                 modifier = Modifier.padding(bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = if (uiState.isSaving) {
-                        uiState.currentFile
-                    } else {
-                        stringResource(
-                            R.string.batch_matching_total_time,
-                            uiState.saveTimeMillis / 1000.0
-                        )
-                    },
-                    style = MiuixTheme.textStyles.subtitle,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-
+                // 第一行：显示 标题/文件名 或 总用时
                 Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text(
+                        text = if (uiState.isSaving) {
+                            uiState.currentFile.ifEmpty { stringResource(R.string.batch_edit_processing) }
+                        } else {
+                            // 保存完成后显示总用时
+                            stringResource(R.string.batch_matching_total_time, uiState.saveTimeMillis / 1000.0)
+                        },
+                        style = MiuixTheme.textStyles.subtitle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     Text(
                         text = "${uiState.saveProgress} / ${uiState.saveTotal}",
                         style = MiuixTheme.textStyles.main,

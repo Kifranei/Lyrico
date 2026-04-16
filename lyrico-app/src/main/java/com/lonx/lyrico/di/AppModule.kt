@@ -21,9 +21,9 @@ import com.lonx.lyrico.utils.ReplayGainScanner
 import com.lonx.lyrico.utils.UpdateManager
 import com.lonx.lyrico.utils.UpdateManagerImpl
 import com.lonx.lyrico.viewmodel.AboutViewModel
+import com.lonx.lyrico.viewmodel.BatchEditViewModel
 import com.lonx.lyrico.viewmodel.BatchMatchHistoryViewModel
 import com.lonx.lyrico.viewmodel.BatchMatchViewModel
-import com.lonx.lyrico.viewmodel.BatchEditViewModel
 import com.lonx.lyrico.viewmodel.BatchRenameViewModel
 import com.lonx.lyrico.viewmodel.CoverSearchViewModel
 import com.lonx.lyrico.viewmodel.EditMetadataViewModel
@@ -178,13 +178,10 @@ val appModule = module {
 
     single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     // 工具类
-    single<SettingsRepository> { SettingsRepositoryImpl(androidContext()) }
-    single<UpdateRepository> { UpdateRepositoryImpl(get(), get()) }
+
     single<UpdateManager> { UpdateManagerImpl(get(), get()) }
     single { MediaScanner(androidContext()) }
     single { ReplayGainScanner(androidContext()) }
-    
-
     // 数据库和存储库
     single {
         Room.databaseBuilder(
@@ -194,7 +191,8 @@ val appModule = module {
         ).build()
     }
     single { get<LyricoDatabase>().batchMatchHistoryDao() }
-
+    single<SettingsRepository> { SettingsRepositoryImpl(androidContext()) }
+    single<UpdateRepository> { UpdateRepositoryImpl(get(), get()) }
     single<PlaybackRepository> { PlaybackRepositoryImpl() }
     single<SongRepository> { SongRepositoryImpl(get(), androidContext(), get(), get(), get()) }
     single<BatchMatchHistoryRepository> { BatchMatchHistoryRepositoryImpl(get()) }
@@ -216,7 +214,7 @@ val appModule = module {
             database = get()
         )
     }
-    viewModel { BatchRenameViewModel(get(), get(), get(),androidContext()) }
-    viewModel { BatchEditViewModel(get(), get()) }
+    viewModel { BatchRenameViewModel(get(), get(), get()) }
+    viewModel { BatchEditViewModel(get(), get(), get())}
 }
 

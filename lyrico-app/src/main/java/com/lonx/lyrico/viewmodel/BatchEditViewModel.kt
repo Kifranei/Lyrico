@@ -1,7 +1,9 @@
 package com.lonx.lyrico.viewmodel
 
+import android.app.Application
 import android.net.Uri
 import android.util.Log
+import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioTagData
@@ -11,6 +13,7 @@ import com.lonx.lyrico.data.SharedSelectionManager
 import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.utils.LyricsUtils
 import com.lonx.lyrico.utils.UiMessage
+import com.lonx.lyrico.utils.UriUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,9 +81,9 @@ data class BatchEditUiState(
 
     /** 自定义标签 */
     val customFields: List<CustomTagField> = emptyList(),
-    
+
     /** 保存进度显示相关字段 */
-    val saveProgressDialog: Boolean = false,  // 是否显示保存进度对话框
+    val saveProgressBottomSheet: Boolean = false,  // 是否显示保存进度对话框
     val currentFile: String = "",  // 当前处理的文件名
     val successCount: Int = 0,  // 成功计数
     val failureCount: Int = 0,  // 失败计数
@@ -89,11 +92,12 @@ data class BatchEditUiState(
 
 class BatchEditViewModel(
     private val songRepository: SongRepository,
-    private val selectionManager: SharedSelectionManager
+    private val selectionManager: SharedSelectionManager,
+    private val application: Application
 ) : ViewModel() {
 
     private val TAG = "BatchEditVM"
-    
+    private val contentResolver = application.contentResolver
     private var saveJob: Job? = null
 
     private val _uiState = MutableStateFlow(BatchEditUiState())
@@ -103,9 +107,9 @@ class BatchEditViewModel(
     private var selectedUris: List<String> = emptyList()
 
     init {
-        val paths = selectionManager.selectedUris.value.toList()
-        selectedUris = paths
-        _uiState.update { it.copy(songCount = paths.size) }
+        val uris = selectionManager.selectedUris.value.toList()
+        selectedUris = uris
+        _uiState.update { it.copy(songCount = uris.size) }
     }
 
 
@@ -191,7 +195,7 @@ class BatchEditViewModel(
             _uiState.update {
                 it.copy(
                     isSaving = true,
-                    saveProgressDialog = true,
+                    saveProgressBottomSheet = true,
                     saveProgress = 0,
                     saveTotal = selectedUris.size,
                     currentFile = "",
@@ -203,14 +207,16 @@ class BatchEditViewModel(
                     errorMessage = null
                 )
             }
-
-            for ((index, path) in selectedUris.withIndex()) {
-                val fileName = path.substringAfterLast('/')
-                _uiState.update { it.copy(currentFile = fileName) }
-                
+            for ((index, uri) in selectedUris.withIndex()) {
+                val fileName = UriUtils.getMediaStoreFileName(contentResolver, uri.toUri()) ?: "Unknown"
+                _uiState.update {
+                    it.copy(
+                        currentFile = fileName
+                    )
+                }
                 try {
                     val success = withContext(Dispatchers.IO) {
-                        updateAudioTags(path, state)
+                        updateAudioTags(uri, state)
                     }
                     if (success) {
                         val s = successCounter.incrementAndGet()
@@ -220,7 +226,7 @@ class BatchEditViewModel(
                         _uiState.update { it.copy(failureCount = f) }
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "批量编辑失败: $path", e)
+                    Log.e(TAG, "批量编辑失败: $uri", e)
                     val f = failureCounter.incrementAndGet()
                     _uiState.update { it.copy(failureCount = f) }
                 }
@@ -364,7 +370,7 @@ class BatchEditViewModel(
     fun closeSaveBottomSheet() {
         _uiState.update {
             it.copy(
-                saveProgressDialog = false,
+                saveProgressBottomSheet = false,
                 currentFile = "",
                 isSaving = false,
                 saveTimeMillis = 0,
@@ -383,7 +389,7 @@ class BatchEditViewModel(
         _uiState.update {
             it.copy(
                 isSaving = false,
-                saveProgressDialog = false,
+                saveProgressBottomSheet = false,
                 currentFile = "",
                 saveTimeMillis = 0,
                 successCount = 0,

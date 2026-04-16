@@ -1,6 +1,5 @@
 package com.lonx.lyrico.viewmodel
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioTagData
@@ -59,8 +58,7 @@ data class SongForBatchRename(
 class BatchRenameViewModel(
     private val settingsRepository: SettingsRepository,
     private val songRepository: SongRepository,
-    private val selectionManager: SharedSelectionManager,
-    private val appContext: Context
+    private val selectionManager: SharedSelectionManager
 ) : ViewModel() {
 
     private var renameJob: Job? = null
@@ -239,7 +237,7 @@ class BatchRenameViewModel(
                         val f = failureCounter.incrementAndGet()
                         _uiState.update { it.copy(failureCount = f) }
                     }
-                    
+
                     _uiState.update {
                         it.copy(
                             renameProgress = progress to total,
