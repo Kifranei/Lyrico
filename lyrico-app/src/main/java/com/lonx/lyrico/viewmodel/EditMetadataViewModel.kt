@@ -430,7 +430,7 @@ class EditMetadataViewModel(
                                         editingTagData = current.copy(
                                             replayGainTrackGain = replayGainScanner.formatGain(state.analysis),
                                             replayGainTrackPeak = replayGainScanner.formatPeak(state.analysis.peak),
-                                            replayGainReferenceLoudness = current.replayGainReferenceLoudness ?: "-18 LUFS"
+                                            replayGainReferenceLoudness = "-18 LUFS"
                                         ),
                                         isEditing = true,
                                         isReplayGainCalculating = false,
