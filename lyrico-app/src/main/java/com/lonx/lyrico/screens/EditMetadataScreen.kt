@@ -74,6 +74,7 @@ import com.lonx.lyrico.ui.components.rememberImageCropperState
 import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.ui.theme.LyricoColors
 import com.lonx.lyrico.viewmodel.EditMetadataViewModel
+import com.lonx.lyrico.viewmodel.isEqualIgnoringBlank
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.SearchCoverDestination
@@ -378,7 +379,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_title),
                                 value = editingTagData?.title ?: "",
                                 onValueChange = { viewModel.updateTag { copy(title = it) } },
-                                isModified = editingTagData?.title != originalTagData?.title,
+                                isModified = !editingTagData?.title.isEqualIgnoringBlank(originalTagData?.title),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -391,7 +392,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_artists),
                                 value = editingTagData?.artist ?: "",
                                 onValueChange = { viewModel.updateTag { copy(artist = it) } },
-                                isModified = editingTagData?.artist != originalTagData?.artist,
+                                isModified = !editingTagData?.artist.isEqualIgnoringBlank(originalTagData?.artist),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -404,7 +405,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_album_artist),
                                 value = editingTagData?.albumArtist ?: "",
                                 onValueChange = { viewModel.updateTag { copy(albumArtist = it) } },
-                                isModified = editingTagData?.albumArtist != originalTagData?.albumArtist,
+                                isModified = !editingTagData?.albumArtist.isEqualIgnoringBlank(originalTagData?.albumArtist),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -417,7 +418,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_album),
                                 value = editingTagData?.album ?: "",
                                 onValueChange = { viewModel.updateTag { copy(album = it) } },
-                                isModified = editingTagData?.album != originalTagData?.album,
+                                isModified = !editingTagData?.album.isEqualIgnoringBlank(originalTagData?.album),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -430,7 +431,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_date),
                                 value = editingTagData?.date ?: "",
                                 onValueChange = { viewModel.updateTag { copy(date = it) } },
-                                isModified = editingTagData?.date != originalTagData?.date,
+                                isModified = !editingTagData?.date.isEqualIgnoringBlank(originalTagData?.date),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -443,7 +444,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_genre),
                                 value = editingTagData?.genre ?: "",
                                 onValueChange = { viewModel.updateTag { copy(genre = it) } },
-                                isModified = editingTagData?.genre != originalTagData?.genre,
+                                isModified = !editingTagData?.genre.isEqualIgnoringBlank(originalTagData?.genre),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -466,7 +467,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_track_number),
                                 value = editingTagData?.trackNumber ?: "",
                                 onValueChange = { viewModel.updateTag { copy(trackNumber = it) } },
-                                isModified = editingTagData?.trackNumber != originalTagData?.trackNumber,
+                                isModified = !editingTagData?.trackNumber.isEqualIgnoringBlank(originalTagData?.trackNumber),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -496,7 +497,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_composer),
                                 value = editingTagData?.composer ?: "",
                                 onValueChange = { viewModel.updateTag { copy(composer = it) } },
-                                isModified = editingTagData?.composer != originalTagData?.composer,
+                                isModified = !editingTagData?.composer.isEqualIgnoringBlank(originalTagData?.composer),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -509,7 +510,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_lyricist),
                                 value = editingTagData?.lyricist ?: "",
                                 onValueChange = { viewModel.updateTag { copy(lyricist = it) } },
-                                isModified = editingTagData?.lyricist != originalTagData?.lyricist,
+                                isModified = !editingTagData?.lyricist.isEqualIgnoringBlank(originalTagData?.lyricist),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -522,14 +523,14 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_copyright),
                                 value = editingTagData?.copyright ?: "",
                                 onValueChange = { viewModel.updateTag { copy(copyright = it) } },
-                                isModified = editingTagData?.copyright != originalTagData?.copyright,
+                                isModified = !editingTagData?.copyright.isEqualIgnoringBlank(originalTagData?.copyright),
                                 onRevert = { viewModel.updateTag { copy(copyright = originalTagData?.copyright) } }
                             )
                             MetadataInputField(
                                 label = stringResource(R.string.label_comment),
                                 value = editingTagData?.comment ?: "",
                                 onValueChange = { viewModel.updateTag { copy(comment = it) } },
-                                isModified = editingTagData?.comment != originalTagData?.comment,
+                                isModified = !editingTagData?.comment.isEqualIgnoringBlank(originalTagData?.comment),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -619,7 +620,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_replaygain_track_gain),
                                 value = editingTagData?.replayGainTrackGain ?: "",
                                 onValueChange = { viewModel.updateTag { copy(replayGainTrackGain = it) } },
-                                isModified = editingTagData?.replayGainTrackGain != originalTagData?.replayGainTrackGain,
+                                isModified = !editingTagData?.replayGainTrackGain.isEqualIgnoringBlank(originalTagData?.replayGainTrackGain),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -633,7 +634,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_replaygain_track_peak),
                                 value = editingTagData?.replayGainTrackPeak ?: "",
                                 onValueChange = { viewModel.updateTag { copy(replayGainTrackPeak = it) } },
-                                isModified = editingTagData?.replayGainTrackPeak != originalTagData?.replayGainTrackPeak,
+                                isModified = !editingTagData?.replayGainTrackPeak.isEqualIgnoringBlank(originalTagData?.replayGainTrackPeak),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -647,7 +648,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_replaygain_album_gain),
                                 value = editingTagData?.replayGainAlbumGain ?: "",
                                 onValueChange = { viewModel.updateTag { copy(replayGainAlbumGain = it) } },
-                                isModified = editingTagData?.replayGainAlbumGain != originalTagData?.replayGainAlbumGain,
+                                isModified = !editingTagData?.replayGainAlbumGain.isEqualIgnoringBlank(originalTagData?.replayGainAlbumGain),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -661,7 +662,7 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_replaygain_album_peak),
                                 value = editingTagData?.replayGainAlbumPeak ?: "",
                                 onValueChange = { viewModel.updateTag { copy(replayGainAlbumPeak = it) } },
-                                isModified = editingTagData?.replayGainAlbumPeak != originalTagData?.replayGainAlbumPeak,
+                                isModified = !editingTagData?.replayGainAlbumPeak.isEqualIgnoringBlank(originalTagData?.replayGainAlbumPeak),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -681,7 +682,7 @@ fun EditMetadataScreen(
                                         )
                                     }
                                 },
-                                isModified = editingTagData?.replayGainReferenceLoudness != originalTagData?.replayGainReferenceLoudness,
+                                isModified = !editingTagData?.replayGainReferenceLoudness.isEqualIgnoringBlank(originalTagData?.replayGainReferenceLoudness),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -772,7 +773,7 @@ fun EditMetadataScreen(
                             label = stringResource(R.string.label_lyrics),
                             value = editingTagData?.lyrics ?: "",
                             onValueChange = { viewModel.updateTag { copy(lyrics = it) } },
-                            isModified = editingTagData?.lyrics != originalTagData?.lyrics,
+                            isModified = !editingTagData?.lyrics.isEqualIgnoringBlank(originalTagData?.lyrics),
                             onRevert = {
                                 viewModel.updateTag {
                                     copy(
