@@ -457,4 +457,5 @@
     <string name="option_free_ratio">自由比例</string>
     <string name="edit_cover">点击编辑</string>
     <string name="title_opensource_licence">开源代码许可</string>
+    <string name="batch_edit_processing">处理中</string>
 </resources>
