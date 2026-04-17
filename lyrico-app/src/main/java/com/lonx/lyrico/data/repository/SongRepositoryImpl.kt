@@ -417,7 +417,7 @@ class SongRepositoryImpl(
 
             AudioTagWriter.writeTags(pfdDescriptor, updates)
 
-            // 图片写入
+            // 图片写入：优先使用 picUrl，其次使用 pictures
             val picUrl = audioTagData.picUrl
             if (picUrl != null) {
                 if (picUrl.isEmpty()) {
@@ -429,6 +429,9 @@ class SongRepositoryImpl(
                         AudioTagWriter.writePictures(pfdDescriptor, listOf(picture))
                     }
                 }
+            } else if (audioTagData.pictures.isNotEmpty()) {
+                // 如果 picUrl 为 null，但 pictures 有数据，使用 pictures
+                AudioTagWriter.writePictures(pfdDescriptor, audioTagData.pictures)
             }
 
             return true

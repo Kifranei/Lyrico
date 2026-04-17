@@ -448,4 +448,9 @@
     <string name="edit_cover">Edit Cover</string>
     <string name="title_opensource_licence">Open source licence</string>
     <string name="batch_edit_processing">Processing</string>
+
+    <!-- Same Album Cover -->
+    <string name="msg_same_album_cover_applied">Applied same album cover</string>
+    <string name="msg_no_same_album_cover_found">No cover found in same album</string>
+    <string name="msg_load_same_album_cover_failed">Failed to load same album cover</string>
 </resources>

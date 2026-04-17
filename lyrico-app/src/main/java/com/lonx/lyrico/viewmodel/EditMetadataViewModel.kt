@@ -62,7 +62,12 @@ data class EditMetadataUiState(
      * 歌词导出导入状态
      */
     val exportLyricsResult: Boolean? = null,
-    val importLyricsResult: Boolean? = null
+    val importLyricsResult: Boolean? = null,
+
+    /**
+     * 同专辑封面加载结果消息
+     */
+    val sameAlbumCoverMessage: UiMessage? = null
 )
 
 class EditMetadataViewModel(
@@ -260,7 +265,7 @@ class EditMetadataViewModel(
         
         _uiState.update { state ->
             state.copy(
-                coverUri = bitmap,
+                coverUri = byteArray,
                 picture = audioPicture,
                 isEditing = true,
                 editingTagData = state.editingTagData?.copy(
@@ -668,5 +673,36 @@ class EditMetadataViewModel(
         }
 
         return covers
+    }
+
+    /**
+     * 加载同专辑封面（直接使用第一张）
+     */
+    fun loadSameAlbumCovers() {
+        viewModelScope.launch {
+            try {
+                val covers = getSameAlbumCovers()
+                if (covers.isNotEmpty()) {
+                    val (_, cover) = covers.first()
+                    when (cover) {
+                        is String -> updateCover(cover)
+                        is ByteArray -> {
+                            val bitmap = android.graphics.BitmapFactory.decodeByteArray(cover, 0, cover.size)
+                            updateCover(bitmap)
+                        }
+                    }
+                    _uiState.update { it.copy(sameAlbumCoverMessage = UiMessage.StringResource(R.string.msg_same_album_cover_applied)) }
+                } else {
+                    _uiState.update { it.copy(sameAlbumCoverMessage = UiMessage.StringResource(R.string.msg_no_same_album_cover_found)) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "加载同专辑封面失败", e)
+                _uiState.update { it.copy(sameAlbumCoverMessage = UiMessage.StringResource(R.string.msg_load_same_album_cover_failed)) }
+            }
+        }
+    }
+
+    fun clearSameAlbumCoverMessage() {
+        _uiState.update { it.copy(sameAlbumCoverMessage = null) }
     }
 }

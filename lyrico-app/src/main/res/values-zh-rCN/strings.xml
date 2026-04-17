@@ -458,4 +458,9 @@
     <string name="edit_cover">点击编辑</string>
     <string name="title_opensource_licence">开源代码许可</string>
     <string name="batch_edit_processing">处理中</string>
+
+    <!-- 同专辑封面 -->
+    <string name="msg_same_album_cover_applied">已应用同专辑封面</string>
+    <string name="msg_no_same_album_cover_found">未找到同专辑的歌曲封面</string>
+    <string name="msg_load_same_album_cover_failed">加载同专辑封面失败</string>
 </resources>
