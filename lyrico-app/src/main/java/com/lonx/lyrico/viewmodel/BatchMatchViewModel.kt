@@ -297,6 +297,7 @@ class BatchMatchViewModel(
                 BatchMatchField.TRACK_NUMBER -> song.trackerNumber.isNullOrBlank()
                 BatchMatchField.LYRICS -> song.lyrics.isNullOrBlank()
                 BatchMatchField.COVER -> true
+                BatchMatchField.REPLAY_GAIN -> song.rawProperties?.contains("REPLAYGAIN_TRACK_GAIN") != true
             }
         }
 
@@ -388,6 +389,25 @@ class BatchMatchViewModel(
             val shouldUpdateCover = shouldUpdate(matchConfig, BatchMatchField.COVER, null)
             val picUrl = if (shouldUpdateCover) finalMatch.result.picUrl else null
 
+            val shouldUpdateReplayGain = shouldUpdate(matchConfig, BatchMatchField.REPLAY_GAIN, null)
+            val replayGainData = if (shouldUpdateReplayGain) {
+                val extras = finalMatch.result.extras
+                fun pick(vararg keys: String): String? {
+                    return keys.firstNotNullOfOrNull { key ->
+                        extras[key]?.takeIf { it.isNotBlank() }
+                    }
+                }
+                val trackGain = pick("replaygain_track_gain", "rg_track_gain")
+                val trackPeak = pick("replaygain_track_peak", "rg_track_peak")
+                val albumGain = pick("replaygain_album_gain", "rg_album_gain")
+                val albumPeak = pick("replaygain_album_peak", "rg_album_peak")
+                var refLoudness = pick("replaygain_reference_loudness", "r128_reference_loudness")
+                if (refLoudness == null && trackGain != null) {
+                    refLoudness = "-18 LUFS"
+                }
+                ReplayGainData(trackGain, trackPeak, albumGain, albumPeak, refLoudness)
+            } else null
+
             val tagDataToWrite = AudioTagData(
                 title = newTitle,
                 artist = newArtist,
@@ -396,13 +416,19 @@ class BatchMatchViewModel(
                 date = newDate,
                 trackNumber = newTrack,
                 lyrics = newLyricsResolved,
-                picUrl = picUrl
+                picUrl = picUrl,
+                replayGainTrackGain = replayGainData?.trackGain,
+                replayGainTrackPeak = replayGainData?.trackPeak,
+                replayGainAlbumGain = replayGainData?.albumGain,
+                replayGainAlbumPeak = replayGainData?.albumPeak,
+                replayGainReferenceLoudness = replayGainData?.refLoudness
             )
 
             // Check if tagDataToWrite is effectively empty (no fields to update)
             val isEffectivelyEmpty = newTitle == null && newArtist == null && newAlbum == null &&
                     newGenre == null && newDate == null && newTrack == null &&
-                    newLyricsResolved == null && picUrl == null
+                    newLyricsResolved == null && picUrl == null &&
+                    replayGainData == null
 
             if (isEffectivelyEmpty) return@coroutineScope MatchResult(null, BatchMatchResult.SKIPPED)
 
@@ -448,6 +474,14 @@ class BatchMatchViewModel(
         batchMatchJob?.cancel()
         super.onCleared()
     }
+
+    private data class ReplayGainData(
+        val trackGain: String?,
+        val trackPeak: String?,
+        val albumGain: String?,
+        val albumPeak: String?,
+        val refLoudness: String?
+    )
 
     private data class MatchResult(val tagData: AudioTagData?, val status: BatchMatchResult)
 

@@ -1,32 +1,29 @@
 package com.lonx.lyrico.viewmodel
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioTagData
-import com.lonx.audiotag.rw.AudioTagReader
 import com.lonx.lyrico.data.model.CharacterMappingConfig
 import com.lonx.lyrico.data.model.RenamePreview
+import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.repository.SettingsRepository
+import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.utils.RenameEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import android.net.Uri
+import java.util.concurrent.atomic.AtomicInteger
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.SharedSelectionManager
 import com.lonx.lyrico.data.repository.SettingsDefaults
 import com.lonx.lyrico.utils.UiMessage
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import java.io.File
 
 data class BatchRenameUiState(
     val songCount: Int = 0,
@@ -43,7 +40,13 @@ data class BatchRenameUiState(
     val isGeneratingPreview: Boolean = false,
     val isRenamingInProgress: Boolean = false,
     val renameResult: RenameEngine.Result? = null,
-    val characterMappingConfig: CharacterMappingConfig? = null
+    val characterMappingConfig: CharacterMappingConfig? = null,
+    // 重命名进度显示相关字段
+    val renameProgress: Pair<Int, Int>? = null, // (当前进度, 总数)
+    val currentFile: String = "",
+    val renameTimeMillis: Long = 0,  // 批量重命名总用时（毫秒）
+    val successCount: Int = 0,  // 成功计数
+    val failureCount: Int = 0  // 失败计数
 )
 
 data class SongForBatchRename(
@@ -54,9 +57,11 @@ data class SongForBatchRename(
 
 class BatchRenameViewModel(
     private val settingsRepository: SettingsRepository,
-    private val selectionManager: SharedSelectionManager,
-    private val appContext: Context
+    private val songRepository: SongRepository,
+    private val selectionManager: SharedSelectionManager
 ) : ViewModel() {
+
+    private var renameJob: Job? = null
 
     private val _uiState = MutableStateFlow(BatchRenameUiState())
     val uiState: StateFlow<BatchRenameUiState> = _uiState
@@ -73,13 +78,22 @@ class BatchRenameViewModel(
             presetFormats = RenameEngine.getPresetFormats()
         )
 
-        val selectedPaths = selectionManager.selectedUris.value
-        if (selectedPaths.isNotEmpty()) {
-            // 转换数据并推入流中
-            val songList = selectedPaths.map { path ->
-                SongForBatchRename(path, path.substringAfterLast('/'), null)
+        val selectedUris = selectionManager.selectedUris.value
+        if (selectedUris.isNotEmpty()) {
+            // 从数据库获取歌曲信息，避免重复读取文件
+            viewModelScope.launch(Dispatchers.IO) {
+                val songList = selectedUris.mapNotNull { path ->
+                    val songEntity = songRepository.getSongByUri(path)
+                    songEntity?.let {
+                        SongForBatchRename(
+                            filePath = it.filePath,
+                            fileName = it.fileName,
+                            tagData = convertToAudioTagData(it)
+                        )
+                    }
+                }
+                setSongs(songList)
             }
-            setSongs(songList)
         }
 
         /** 同步 characterMappingConfig 到 uiState */
@@ -113,13 +127,10 @@ class BatchRenameViewModel(
                     try {
 
                         val songsForRename = songs.mapNotNull { song ->
-
-                            val tagData = song.tagData ?: loadTagData(song.filePath)
-
-                            tagData?.let {
+                            song.tagData?.let { tagData ->
                                 RenameEngine.SongForRename(
                                     originalPath = song.filePath,
-                                    tagData = it
+                                    tagData = tagData
                                 )
                             }
                         }
@@ -198,76 +209,156 @@ class BatchRenameViewModel(
 
         if (previews.isEmpty()) return
 
-
-        viewModelScope.launch(Dispatchers.IO) {
+        renameJob = viewModelScope.launch(Dispatchers.IO) {
+            val startTime = System.currentTimeMillis()
+            val successCounter = AtomicInteger(0)
+            val failureCounter = AtomicInteger(0)
 
             try {
 
                 _uiState.update {
                     it.copy(
                         isRenamingInProgress = true,
-                        saveProgress = 0,
-                        saveTotal = previews.size,
+                        renameProgress = 0 to previews.size,
+                        currentFile = "",
+                        renameTimeMillis = 0,
+                        successCount = 0,
+                        failureCount = 0,
                         errorMessage = null
                     )
                 }
 
 
-                val result = RenameEngine.renameFiles(previews) { progress, total ->
+                val result = RenameEngine.renameFiles(previews) { progress, total, fileName, isSuccess ->
+                    if (isSuccess) {
+                        val s = successCounter.incrementAndGet()
+                        _uiState.update { it.copy(successCount = s) }
+                    } else {
+                        val f = failureCounter.incrementAndGet()
+                        _uiState.update { it.copy(failureCount = f) }
+                    }
+
                     _uiState.update {
                         it.copy(
-                            saveProgress = progress,
-                            saveTotal = total
+                            renameProgress = progress to total,
+                            currentFile = fileName
                         )
                     }
                 }
 
+                val totalTime = System.currentTimeMillis() - startTime
+
+                // 更新成功重命名的预览，将原路径更新为新路径，让用户看到重命名后的结果
+                val updatedPreviews = previews.map { preview ->
+                    if (result.successful.contains(preview)) {
+                        preview.copy(originalPath = preview.newPath)
+                    } else {
+                        preview
+                    }
+                }
+
+                // 更新 songsFlow 中的文件路径，确保后续操作使用正确的路径
+                val currentSongs = songsFlow.value.toMutableList()
+                result.successful.forEach { successfulPreview ->
+                    val index = currentSongs.indexOfFirst { it.filePath == successfulPreview.originalPath }
+                    if (index != -1) {
+                        currentSongs[index] = currentSongs[index].copy(
+                            filePath = successfulPreview.newPath,
+                            fileName = successfulPreview.newPath.substringAfterLast('/')
+                        )
+                    }
+                }
+                songsFlow.value = currentSongs
+
                 _uiState.update {
                     it.copy(
+                        previews = updatedPreviews,
                         renameResult = result,
                         isRenamingInProgress = false,
-                        saveProgress = 0,
-                        saveTotal = 0
+                        // 不清除 renameProgress，让用户看到最终结果
+                        currentFile = "",
+                        renameTimeMillis = totalTime
                     )
                 }
 
             } catch (e: Exception) {
-
-                _uiState.update {
-                    it.copy(
-                        isRenamingInProgress = false,
-                        saveProgress = 0,
-                        saveTotal = 0,
-                        errorMessage = UiMessage.DynamicString(e.message)
-                    )
+                // 如果是被取消的，不显示错误
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    _uiState.update {
+                        it.copy(
+                            isRenamingInProgress = false,
+                            renameProgress = null,
+                            currentFile = "",
+                            renameTimeMillis = 0,
+                            errorMessage = UiMessage.DynamicString(e.message)
+                        )
+                    }
                 }
+            } finally {
+                renameJob = null
             }
         }
     }
 
     /**
-     * 读取标签
+     * 将 SongEntity 转换为 AudioTagData
      */
-    private suspend fun loadTagData(filePath: String): AudioTagData? {
+    private fun convertToAudioTagData(song: SongEntity): AudioTagData {
+        return AudioTagData(
+            title = song.title,
+            artist = song.artist,
+            album = song.album,
+            albumArtist = song.albumArtist,
+            genre = song.genre,
+            date = song.date,
+            trackNumber = song.trackerNumber,
+            discNumber = song.discNumber,
+            composer = song.composer,
+            lyricist = song.lyricist,
+            comment = song.comment,
+            lyrics = song.lyrics,
+            copyright = song.copyright,
+            rating = song.rating,
+            fileName = song.fileName,
+            durationMilliseconds = song.durationMilliseconds,
+            bitrate = song.bitrate,
+            sampleRate = song.sampleRate,
+            channels = song.channels
+        )
+    }
 
-        return try {
-
-            val uri = Uri.fromFile(File(filePath))
-
-            appContext.contentResolver
-                .openFileDescriptor(uri, "r")
-                ?.use { descriptor ->
-
-                    AudioTagReader.read(descriptor, true)
-                }
-
-        } catch (e: Exception) {
-            null
+    /**
+     * 关闭重命名进度对话框
+     */
+    fun closeRenameDialog() {
+        _uiState.update {
+            it.copy(
+                renameProgress = null,
+                currentFile = "",
+                isRenamingInProgress = false,
+                renameTimeMillis = 0,
+                successCount = 0,
+                failureCount = 0
+            )
         }
     }
 
-    fun clearResult() {
-        _uiState.update { it.copy(renameResult = null) }
+    /**
+     * 中止重命名
+     */
+    fun abortRename() {
+        renameJob?.cancel()
+        renameJob = null
+        _uiState.update {
+            it.copy(
+                isRenamingInProgress = false,
+                renameProgress = null,
+                currentFile = "",
+                renameTimeMillis = 0,
+                successCount = 0,
+                failureCount = 0
+            )
+        }
     }
 
     fun clearError() {
@@ -298,6 +389,7 @@ class BatchRenameViewModel(
         }
     }
     override fun onCleared() {
+        renameJob?.cancel()
         super.onCleared()
         selectionManager.clearAll()
     }

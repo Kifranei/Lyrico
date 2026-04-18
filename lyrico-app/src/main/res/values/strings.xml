@@ -68,9 +68,18 @@
     <string name="replay_gain_scan_title">Scan ReplayGain</string>
     <string name="replay_gain_scan_summary">Analyze the current music library and write ReplayGain track/album gain tags back to audio files.</string>
     <string name="replay_gain_no_songs">No songs available for ReplayGain scanning.</string>
-    <string name="action_scan_replay_gain">Scan current song ReplayGain</string>
-    <string name="replay_gain_scan_single_summary">Analyze the current track and fill ReplayGain tags here for manual adjustment.</string>
-    <string name="replay_gain_scan_in_progress">Scanning current track. This can take a few seconds.</string>
+    <string name="action_calculate_replay_gain">Calculate replayGain</string>
+    <string name="replay_gain_calculate_in_progress">Calculating now, click to stop</string>
+    <string name="replay_gain_calculate_success">ReplayGain calculation successful</string>
+    <string name="replay_gain_calculate_cancelled">ReplayGain calculation cancelled</string>
+    <string name="replay_gain_calculate_failed">ReplayGain calculation failed: %1$s</string>
+    <string name="replay_gain_error_no_audio_track">No valid audio track found</string>
+    <string name="replay_gain_error_unknown_mime_type">Unable to recognize audio codec</string>
+    <string name="replay_gain_error_zero_sample_count">Decoded data is empty</string>
+    <string name="replay_gain_error_unsupported_codec">Device does not support %1$s decoding</string>
+    <string name="replay_gain_error_alac_issue">System ALAC decoder is unstable, please try restarting</string>
+    <string name="replay_gain_error_codec_exception">Decoder exception: %1$s</string>
+    <string name="replay_gain_error_general">Scan failed: %1$s</string>
 
     <!-- Other -->
     <string name="batch_match_history">Batch Match History</string>
@@ -90,6 +99,8 @@
     <!-- App Info -->
     <string name="about_app_info">App Info</string>
     <string name="about_app_version">App Version</string>
+    <string name="about_project_section">Projects</string>
+    <string name="about_community_section">Community</string>
     <string name="about_project_url">GitHub</string>
     <string name="about_project_url_sub">View source code on GitHub</string>
     <string name="about_telegram">Telegram</string>
@@ -269,6 +280,8 @@
     <string name="label_lyricist">Lyricist</string>
     <string name="label_comment">Comment</string>
     <string name="label_lyrics">Lyrics</string>
+    <string name="label_replay_gain">ReplayGain</string>
+    <string name="label_replay_gain_summary">Only QQ Music source supports matching this field</string>
     <string name="group_replay_gain">ReplayGain</string>
     <string name="label_replaygain_track_gain">Track Gain</string>
     <string name="label_replaygain_track_peak">Track Peak</string>
@@ -386,7 +399,9 @@
     <string name="chinese_conversion_mode_traditional_to_simplified">CHT -> CHS</string>
     <string name="chinese_conversion_mode_simplified_to_traditional">CHS -> CHT</string>
     <string name="conversion_mode">Lyric Conversion Mode</string>
-    <string name="offset_adjust_hint">Adjsut Offset</string>
+    <string name="offset_adjust_hint">Adjust Offset</string>
+    <string name="label_lyrics_offset">Lyrics Offset (ms)</string>
+    <string name="batch_edit_lyrics_offset_hint">Supports positive and negative values. If no sign is provided, positive is assumed.</string>
 
     <string name="pull_to_refresh">Pull down to refresh</string>
     <string name="release_to_refresh">Release to refresh</string>
@@ -408,6 +423,7 @@
     <string name="batch_edit_cover_remove">Remove Cover</string>
     <string name="batch_edit_cover_revert">Revert Cover</string>
     <string name="batch_edit_cover_hint">Tap to select cover image</string>
+    <string name="batch_edit_cover_mismatch">Selected songs have different album/artist, cannot apply same album cover</string>
     <string name="batch_edit_field_remove_hint">Remove this field</string>
     <string name="batch_edit_info_summary">Learn how to use batch edit</string>
     <string name="batch_edit_info_content">Batch Edit Guide:
@@ -432,4 +448,6 @@
     <string name="label_image_ratio">Image ratio</string>
     <string name="option_free_ratio">Free ratio</string>
     <string name="edit_cover">Edit Cover</string>
+    <string name="title_opensource_licence">Open source licence</string>
+    <string name="batch_edit_processing">Processing</string>
 </resources>

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -27,20 +28,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.lonx.audiotag.model.CustomTagField
 import com.lonx.lyrico.R
 import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.ui.theme.LyricoColors
@@ -49,11 +53,13 @@ import com.lonx.lyrico.viewmodel.BatchEditViewModel
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.FloatingToolbar
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
@@ -64,18 +70,21 @@ import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.window.WindowDialog
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Undo
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import top.yukonga.miuix.kmp.window.WindowDialog
+import androidx.core.net.toUri
 
 
 @Composable
@@ -85,14 +94,50 @@ fun BatchEditScreen(
 ) {
     val viewModel: BatchEditViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
 
     var showCoverOptionsSheet by remember { mutableStateOf(false) }
     var showInfoDialog by remember { mutableStateOf(false) }
+    var showAddCustomTagDialog by remember { mutableStateOf(false) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri -> uri?.let { viewModel.updateCover(it) } }
+
+    val scope = rememberCoroutineScope()
+
+    // 加载同专辑封面（直接使用第一张）
+    fun loadSameAlbumCovers() {
+        scope.launch {
+            try {
+                val covers = viewModel.getSameAlbumCovers()
+                if (covers.isNotEmpty()) {
+                    val (_, cover) = covers.first()
+                    when (cover) {
+                        is String -> {
+                            viewModel.updateCover(cover.toUri())
+                        }
+
+                        is ByteArray -> {
+                            // 将 ByteArray 转换为 Bitmap，然后保存为临时文件
+                            val bitmap =
+                                android.graphics.BitmapFactory.decodeByteArray(cover, 0, cover.size)
+                            val tempFile = java.io.File.createTempFile("cover", ".jpg")
+                            tempFile.outputStream().use {
+                                bitmap.compress(
+                                    android.graphics.Bitmap.CompressFormat.JPEG,
+                                    100,
+                                    it
+                                )
+                            }
+                            viewModel.updateCover(android.net.Uri.fromFile(tempFile))
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // 错误处理
+            }
+        }
+    }
 
     val topAppBarScrollBehavior = MiuixScrollBehavior()
 
@@ -134,6 +179,26 @@ fun BatchEditScreen(
                 },
                 scrollBehavior = topAppBarScrollBehavior
             )
+        },
+        floatingToolbarPosition = ToolbarPosition.CenterEnd,
+        floatingToolbar = {
+            FloatingToolbar() {
+                Column(
+                    modifier = Modifier.padding(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    IconButton(
+                        onClick = {
+                            showAddCustomTagDialog = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Add,
+                            contentDescription = null
+                        )
+                    }
+                }
+            }
         }
     ) { paddingValues ->
 
@@ -155,34 +220,6 @@ fun BatchEditScreen(
                 SmallTitle(
                     text = stringResource(R.string.batch_edit_song_count, uiState.songCount)
                 )
-            }
-
-            // 保存进度
-            if (uiState.isSaving) {
-                item(key = "saving_progress") {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = stringResource(
-                                    R.string.batch_edit_saving_progress,
-                                    uiState.saveProgress,
-                                    uiState.saveTotal
-                                ),
-                                style = MiuixTheme.textStyles.body1
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            LinearProgressIndicator(
-                                progress = if (uiState.saveTotal > 0)
-                                    uiState.saveProgress.toFloat() / uiState.saveTotal
-                                else 0f
-                            )
-                        }
-                    }
-                }
             }
 
             // 封面编辑区
@@ -303,18 +340,56 @@ fun BatchEditScreen(
             }
 
 
-
+            // 自定义标签组
+            if (uiState.customFields.isNotEmpty()) {
+                item(key = "custom_fields") {
+                    SmallTitle(text = stringResource(R.string.group_custom_tags))
+                    Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                            uiState.customFields.forEachIndexed { index, field ->
+                                BatchEditCustomFieldItem(
+                                    field = field,
+                                    onKeyChange = { newKey ->
+                                        viewModel.updateCustomField(index, newKey, field.value)
+                                    },
+                                    onValueChange = { newValue ->
+                                        viewModel.updateCustomField(index, field.key, newValue)
+                                    },
+                                    onRemove = { viewModel.removeCustomField(index) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             // 歌词组
             item(key = "lyrics") {
                 Column {
                     SmallTitle(text = stringResource(R.string.label_lyrics))
                     Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                        BatchEditFieldItem(
-                            field = BatchEditField.LYRICS,
-                            value = uiState.lyrics,
-                            onValueChange = { viewModel.updateLyrics(it) },
-                            isMultiline = true
-                        )
+                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                            TextField(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                value = uiState.lyricsOffset,
+                                onValueChange = { viewModel.updateLyricsOffset(it) },
+                                label = stringResource(R.string.label_lyrics_offset),
+                            )
+                            Text(
+                                text = stringResource(R.string.batch_edit_lyrics_offset_hint),
+                                style = MiuixTheme.textStyles.footnote1,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp)
+                            )
+                            BatchEditFieldItem(
+                                field = BatchEditField.LYRICS,
+                                value = uiState.lyrics,
+                                onValueChange = { viewModel.updateLyrics(it) },
+                                isMultiline = true
+                            )
+                        }
                     }
                 }
             }
@@ -347,6 +422,13 @@ fun BatchEditScreen(
                                     ActivityResultContracts.PickVisualMedia.ImageOnly
                                 )
                             )
+                        }
+                    )
+                    ArrowPreference(
+                        title = "选择同专辑歌曲封面",
+                        onClick = {
+                            showCoverOptionsSheet = false
+                            loadSameAlbumCovers()
                         }
                     )
                     ArrowPreference(
@@ -396,32 +478,162 @@ fun BatchEditScreen(
         }
     }
 
-    // 保存结果对话框
-    uiState.saveResultMessage?.let { message ->
-        WindowDialog(
-            show = true,
-            title = stringResource(
-                if (uiState.saveSuccess == true)
-                    R.string.batch_edit_success_title
-                else
-                    R.string.batch_edit_finished_title
-            ),
-            summary = message.asString(context) ?: "",
-            onDismissRequest = {
-                viewModel.clearSaveResult()
+    // 保存进度对话框
+    WindowBottomSheet(
+        show = uiState.saveProgressBottomSheet,
+        onDismissRequest = {
+            if (!uiState.isSaving) viewModel.closeSaveBottomSheet()
+        },
+        onDismissFinished = {
+            if (uiState.saveSuccess == true) {
+                navigator.popBackStack()
             }
+        },
+        allowDismiss = !uiState.isSaving,
+        title = stringResource(R.string.batch_edit_title),
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(bottom = 32.dp)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
         ) {
+            Column(
+                modifier = Modifier.padding(bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 第一行：显示 标题/文件名 或 总用时
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (uiState.isSaving) {
+                            uiState.currentFile.ifEmpty { stringResource(R.string.batch_edit_processing) }
+                        } else {
+                            // 保存完成后显示总用时
+                            stringResource(R.string.batch_matching_total_time, uiState.saveTimeMillis / 1000.0)
+                        },
+                        style = MiuixTheme.textStyles.subtitle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text(
+                        text = "${uiState.saveProgress} / ${uiState.saveTotal}",
+                        style = MiuixTheme.textStyles.main,
+                        textAlign = TextAlign.End
+                    )
+                }
+
+                LinearProgressIndicator(
+                    progress = if (uiState.saveTotal > 0)
+                        uiState.saveProgress.toFloat() / uiState.saveTotal
+                    else 0f
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(
+                        R.string.batch_matching_success,
+                        uiState.successCount
+                    ),
+                    style = MiuixTheme.textStyles.main
+                )
+                Text(
+                    text = stringResource(
+                        R.string.batch_matching_failure,
+                        uiState.failureCount
+                    ),
+                    style = MiuixTheme.textStyles.main
+                )
+            }
+
             TextButton(
-                modifier = Modifier.fillMaxWidth(),
-                text = stringResource(R.string.confirm),
+                text = if (uiState.isSaving) stringResource(R.string.action_abort) else stringResource(
+                    R.string.confirm
+                ),
                 onClick = {
-                    viewModel.clearSaveResult()
-                    if (uiState.saveSuccess == true) {
-                        navigator.popBackStack()
+                    if (uiState.isSaving) {
+                        viewModel.abortSave()
+                    } else {
+                        viewModel.closeSaveBottomSheet()
                     }
                 },
-                colors = ButtonDefaults.textButtonColorsPrimary()
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.textButtonColorsPrimary(),
             )
+
+        }
+    }
+
+    // 添加自定义标签 BottomSheet
+    WindowDialog(
+        show = showAddCustomTagDialog,
+        title = stringResource(R.string.action_add_custom_tag),
+        onDismissRequest = { showAddCustomTagDialog = false }
+    ) {
+        // 临时存储新自定义标签内容
+        var newCustomTagKey by remember { mutableStateOf("") }
+        var newCustomTagValue by remember { mutableStateOf("") }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+        ) {
+
+            TextField(
+                value = newCustomTagKey,
+                onValueChange = { newCustomTagKey = it },
+                label = stringResource(R.string.label_custom_tag_name),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            TextField(
+                value = newCustomTagValue,
+                onValueChange = { newCustomTagValue = it },
+                label = stringResource(R.string.label_custom_tag_value),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                TextButton(
+                    text = stringResource(R.string.cancel),
+                    onClick = {
+                        showAddCustomTagDialog = false
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(20.dp))
+                TextButton(
+                    text = stringResource(R.string.confirm),
+                    onClick = {
+                        if (newCustomTagKey.isNotBlank()) {
+                            viewModel.addCustomField(
+                                CustomTagField(
+                                    newCustomTagKey,
+                                    newCustomTagValue
+                                )
+                            )
+                            showAddCustomTagDialog = false
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                )
+            }
         }
     }
 }
@@ -595,7 +807,7 @@ private fun BatchEditFieldItem(
     isMultiline: Boolean = false
 ) {
     val isKeep = value == "<keep>"
-    
+
     if (isMultiline) {
         Column(
             modifier = Modifier
@@ -633,7 +845,7 @@ private fun BatchEditFieldItem(
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.batch_edit_field_remove_hint),
+                            text = stringResource(R.string.action_undo_changes),
                             fontSize = 11.sp,
                             color = MiuixTheme.colorScheme.error,
                             fontWeight = FontWeight.Medium
@@ -660,19 +872,69 @@ private fun BatchEditFieldItem(
             onValueChange = onValueChange,
             label = stringResource(field.labelResId) + if (isKeep) " (无修改)" else "",
             trailingIcon = {
-                IconButton(onClick = { 
+                IconButton(onClick = {
                     onValueChange(if (isKeep) "" else "<keep>")
                 }) {
                     Icon(
                         imageVector = if (isKeep) MiuixIcons.Close else MiuixIcons.Undo,
                         contentDescription = null,
-                        tint = if (isKeep) 
-                            MiuixTheme.colorScheme.primary 
-                        else 
+                        tint = if (isKeep)
+                            MiuixTheme.colorScheme.primary
+                        else
                             MiuixTheme.colorScheme.error
                     )
                 }
             }
+        )
+    }
+}
+
+/**
+ * 自定义标签编辑字段
+ */
+@Composable
+private fun BatchEditCustomFieldItem(
+    field: CustomTagField,
+    onKeyChange: (String) -> Unit,
+    onValueChange: (String) -> Unit,
+    onRemove: () -> Unit
+) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.label_custom_tag),
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            IconButton(onClick = onRemove) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_delete_24dp),
+                    contentDescription = stringResource(R.string.action_remove_custom_tag)
+                )
+            }
+        }
+
+        TextField(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            value = field.key,
+            onValueChange = onKeyChange,
+            label = stringResource(R.string.label_custom_tag_name)
+        )
+        TextField(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            value = field.value,
+            onValueChange = onValueChange,
+            label = stringResource(R.string.label_custom_tag_value)
         )
     }
 }

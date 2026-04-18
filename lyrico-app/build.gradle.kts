@@ -4,10 +4,12 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
     id("kotlin-parcelize")
+    alias(libs.plugins.aboutLibraries)
 }
 
 android {
     namespace = "com.lonx.lyrico"
+    ndkVersion = "29.0.14206865"
     compileSdk {
         version = release(37)
     }
@@ -22,6 +24,11 @@ android {
         versionName = "1.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake {
+                cppFlags += ""
+            }
+        }
     }
 
     buildTypes {
@@ -49,6 +56,12 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "4.1.2"
+        }
     }
 }
 ksp {
@@ -78,6 +91,7 @@ dependencies {
     implementation(libs.miuix.preference.android)
     implementation(libs.miuix.ui.android)
     implementation(libs.miuix.icons.android)
+    implementation(libs.miuix.blur.android)
     implementation(libs.shapes)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
@@ -99,6 +113,7 @@ dependencies {
     implementation(libs.xxpermissions)
     implementation(libs.tinypinyin)
     implementation(libs.opencc4j)
+    implementation(libs.aboutlibraries.compose.core)
     // KSP
     ksp(libs.compose.destinations.ksp)
     ksp(libs.androidx.room.compiler)

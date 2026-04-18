@@ -68,9 +68,18 @@
     <string name="replay_gain_scan_title">扫描 ReplayGain</string>
     <string name="replay_gain_scan_summary">扫描当前音乐库并把 ReplayGain 曲目/专辑增益标签写回音频文件。</string>
     <string name="replay_gain_no_songs">当前没有可用于 ReplayGain 扫描的歌曲。</string>
-    <string name="action_scan_replay_gain">扫描当前歌曲 ReplayGain</string>
-    <string name="replay_gain_scan_single_summary">分析当前歌曲并填入 ReplayGain 标签，你可以继续手动调整。</string>
-    <string name="replay_gain_scan_in_progress">正在扫描当前歌曲，通常需要几秒钟。</string>
+    <string name="action_calculate_replay_gain">计算 ReplayGain</string>
+    <string name="replay_gain_calculate_in_progress">正在计算 ReplayGain，点击以中止</string>
+    <string name="replay_gain_calculate_success">ReplayGain 计算成功</string>
+    <string name="replay_gain_calculate_cancelled">ReplayGain 计算已取消</string>
+    <string name="replay_gain_calculate_failed">ReplayGain 计算失败: %1$s</string>
+    <string name="replay_gain_error_no_audio_track">未发现有效音轨</string>
+    <string name="replay_gain_error_unknown_mime_type">无法识别音频编码</string>
+    <string name="replay_gain_error_zero_sample_count">解码数据为空</string>
+    <string name="replay_gain_error_unsupported_codec">设备不支持 %1$s 解码</string>
+    <string name="replay_gain_error_alac_issue">系统 ALAC 解码器不稳定，请尝试重启</string>
+    <string name="replay_gain_error_codec_exception">解码器异常: %1$s</string>
+    <string name="replay_gain_error_general">扫描失败: %1$s</string>
 
     <!-- 其他 -->
     <string name="batch_match_history">批量匹配记录</string>
@@ -91,6 +100,8 @@
     <!-- 应用信息 -->
     <string name="about_app_info">应用信息</string>
     <string name="about_app_version">应用版本</string>
+    <string name="about_project_section">项目</string>
+    <string name="about_community_section">社区</string>
     <string name="about_project_url">GitHub</string>
     <string name="about_project_url_sub">在 GitHub 上查看项目源码</string>
     <string name="about_telegram">Telegram</string>
@@ -274,6 +285,8 @@
     <string name="label_lyricist">作词</string>
     <string name="label_comment">注释</string>
     <string name="label_lyrics">歌词</string>
+    <string name="label_replay_gain">回放增益</string>
+    <string name="label_replay_gain_summary">仅QQ源支持匹配该字段</string>
     <string name="group_replay_gain">ReplayGain</string>
     <string name="label_replaygain_track_gain">曲目增益</string>
     <string name="label_replaygain_track_peak">曲目峰值</string>
@@ -390,6 +403,8 @@
     <string name="chinese_conversion_mode_simplified_to_traditional">简体转繁体</string>
     <string name="conversion_mode">歌词转换</string>
     <string name="offset_adjust_hint">调整偏移</string>
+    <string name="label_lyrics_offset">歌词偏移 (毫秒)</string>
+    <string name="batch_edit_lyrics_offset_hint">支持正负值，未填写正负号默认为正</string>
     <string name="pull_to_refresh">下拉刷新</string>
     <string name="release_to_refresh">松开刷新</string>
     <string name="refreshing">正在刷新</string>
@@ -418,6 +433,7 @@
     <string name="batch_edit_cover_remove">移除封面</string>
     <string name="batch_edit_cover_revert">还原封面</string>
     <string name="batch_edit_cover_hint">点击选择封面图片</string>
+    <string name="batch_edit_cover_mismatch">选中的歌曲有不同的专辑/艺术家，无法应用同专辑封面</string>
     <string name="batch_edit_field_remove_hint">移除此标签</string>
     <string name="batch_edit_info_summary">了解批量编辑的使用方法</string>
     <string name="batch_edit_info_content">批量编辑说明：
@@ -442,4 +458,6 @@
     <string name="label_image_ratio">图片比例</string>
     <string name="option_free_ratio">自由比例</string>
     <string name="edit_cover">点击编辑</string>
+    <string name="title_opensource_licence">开源代码许可</string>
+    <string name="batch_edit_processing">处理中</string>
 </resources>

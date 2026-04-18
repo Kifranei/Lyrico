@@ -155,4 +155,16 @@ interface SongDao {
      */
     @RawQuery(observedEntities = [SongEntity::class])
     fun getSongs(query: SupportSQLiteQuery): Flow<List<SongEntity>>
+
+    /**
+     * 根据专辑和艺术家获取歌曲列表
+     * 优先返回同专辑且同艺术家的歌曲，然后返回同专辑的歌曲
+     */
+    @Query("""
+        SELECT s.* FROM songs AS s
+        INNER JOIN folders AS f ON s.folderId = f.id
+        WHERE f.isIgnored = 0 AND s.album = :album
+        ORDER BY CASE WHEN s.artist = :artist THEN 0 ELSE 1 END, s.trackerNumber ASC
+    """)
+    suspend fun getSongsByAlbum(album: String, artist: String): List<SongEntity>
 }

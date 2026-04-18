@@ -267,6 +267,13 @@ private fun BatchMatchFieldItem(
             style = MiuixTheme.textStyles.main,
             color = if (isSelected) MiuixTheme.colorScheme.onSurfaceContainer else MiuixTheme.colorScheme.onSecondaryContainer,
         )
+        if (field.summaryRes != 0) {
+            Text(
+                text = stringResource(field.summaryRes),
+                style = MiuixTheme.textStyles.footnote1,
+                color = MiuixTheme.colorScheme.onSurfaceVariantActions
+            )
+        }
     }
 }
 

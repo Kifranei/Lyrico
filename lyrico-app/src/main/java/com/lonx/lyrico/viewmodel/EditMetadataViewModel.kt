@@ -1,7 +1,6 @@
 package com.lonx.lyrico.viewmodel
 
 import android.app.RecoverableSecurityException
-import com.lonx.lyrico.data.model.ConversionMode
 import android.content.ContentValues
 import android.content.Context
 import android.content.IntentSender
@@ -16,20 +15,26 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioPicture
 import com.lonx.audiotag.model.AudioTagData
+import com.lonx.lyrico.R
+import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricsSearchResult
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.repository.PlaybackRepository
 import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.utils.LyricsUtils
-import com.lonx.lyrico.utils.ReplayGainScanResult
+import com.lonx.lyrico.utils.ReplayGainCalculateState
+import com.lonx.lyrico.utils.ReplayGainError
 import com.lonx.lyrico.utils.ReplayGainScanner
+import com.lonx.lyrico.utils.UiMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 data class EditMetadataUiState(
     val songInfo: SongInfo? = null,
@@ -37,6 +42,7 @@ data class EditMetadataUiState(
     val originalTagData: AudioTagData? = null,
     val editingTagData: AudioTagData? = null,
 
+    val replayGainCalculateProgress: Float? = null,
     val isEditing: Boolean = false,
     val fileName: String? = null,
     /**
@@ -49,9 +55,9 @@ data class EditMetadataUiState(
     val originalCover: Any? = null,
     val picture: AudioPicture? = null,
     val permissionIntentSender: IntentSender? = null,
-    val isReplayGainScanning: Boolean = false,
-    val replayGainScanMessage: String? = null,
-    
+    val isReplayGainCalculating: Boolean = false,
+    val replayGainScanMessage: UiMessage? = null,
+
     /**
      * 歌词导出导入状态
      */
@@ -72,7 +78,7 @@ class EditMetadataViewModel(
     // 存储当前正在操作的 URI 字符串
     private var currentSongUri: String? = null
     private var preOffsetLyrics: String? = null
-
+    private var scanJob: Job? = null
     // 记录当前的累计偏移量，供 UI 显示
     private val _currentShiftOffset = MutableStateFlow(0L)
     val currentShiftOffset: StateFlow<Long> = _currentShiftOffset.asStateFlow()
@@ -177,7 +183,24 @@ class EditMetadataViewModel(
                     )
                 )
             }
+            // 从 extras 解析 ReplayGain
+            val extras = result.extras
 
+            fun pick(vararg keys: String): String? {
+                return keys.firstNotNullOfOrNull { key ->
+                    extras[key]?.takeIf { it.isNotBlank() }
+                }
+            }
+
+            val trackGain = pick("replaygain_track_gain", "rg_track_gain")
+            val trackPeak = pick("replaygain_track_peak", "rg_track_peak")
+            val albumGain = pick("replaygain_album_gain", "rg_album_gain")
+            val albumPeak = pick("replaygain_album_peak", "rg_album_peak")
+            var refLoudness = pick("replaygain_reference_loudness", "r128_reference_loudness")
+
+            if (refLoudness == null && trackGain != null) {
+                refLoudness = "-18 LUFS"
+            }
             state.copy(
                 isEditing = true,
                 editingTagData = current.copy(
@@ -188,7 +211,12 @@ class EditMetadataViewModel(
                     date = result.date?.takeIf { it.isNotBlank() } ?: current.date,
                     trackNumber = result.trackerNumber?.takeIf { it.isNotBlank() }
                         ?: current.trackNumber,
-                    picUrl = result.picUrl?.takeIf { it.isNotBlank() } ?: current.picUrl
+                    picUrl = result.picUrl?.takeIf { it.isNotBlank() } ?: current.picUrl,
+                    replayGainTrackGain = trackGain ?: current.replayGainTrackGain,
+                    replayGainTrackPeak = trackPeak ?: current.replayGainTrackPeak,
+                    replayGainAlbumGain = albumGain ?: current.replayGainAlbumGain,
+                    replayGainAlbumPeak = albumPeak ?: current.replayGainAlbumPeak,
+                    replayGainReferenceLoudness = refLoudness ?: current.replayGainReferenceLoudness,
                 ),
                 coverUri = result.picUrl?.takeIf { it.isNotBlank() }?.toUri()
             )
@@ -374,59 +402,122 @@ class EditMetadataViewModel(
         }
     }
 
-    fun scanReplayGain() {
+    fun calculateReplayGain() {
         val uriString = currentSongUri ?: _uiState.value.songInfo?.uriString ?: return
-        if (_uiState.value.isReplayGainScanning) return
+        if (_uiState.value.isReplayGainCalculating) return
 
-        viewModelScope.launch {
+        scanJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
-                    isReplayGainScanning = true,
+                    isReplayGainCalculating = true,
+                    replayGainCalculateProgress = 0f,
                     replayGainScanMessage = null
                 )
             }
 
             try {
-                when (val result = withContext(Dispatchers.IO) {
-                    replayGainScanner.analyze(uriString)
-                }) {
-                    is ReplayGainScanResult.Success -> {
-                        _uiState.update { state ->
-                            val current = state.editingTagData ?: AudioTagData(fileName = state.fileName.orEmpty())
-                            state.copy(
-                                editingTagData = current.copy(
-                                    replayGainTrackGain = replayGainScanner.formatGain(result.analysis),
-                                    replayGainTrackPeak = replayGainScanner.formatPeak(result.analysis.peak),
-                                    replayGainReferenceLoudness = current.replayGainReferenceLoudness ?: "89.0 dB"
-                                ),
-                                isEditing = true,
-                                isReplayGainScanning = false,
-                                replayGainScanMessage = replayGainScanner.buildFailureMessage(result)
-                            )
-                        }
-                    }
+                replayGainScanner.analyze(uriString)
+                    .flowOn(Dispatchers.IO) // 将解码和 DSP 计算放入 IO 线程池，不卡顿 UI
+                    .collect { state ->     // 持续监听发射出来的状态
+                        when (state) {
+                            is ReplayGainCalculateState.Progress -> {
+                                // 实时刷新进度条
+                                _uiState.update {
+                                    it.copy(replayGainCalculateProgress = state.percent)
+                                }
+                            }
 
-                    else -> {
-                        _uiState.update {
-                            it.copy(
-                                isReplayGainScanning = false,
-                                replayGainScanMessage = replayGainScanner.buildFailureMessage(result)
-                            )
+                            is ReplayGainCalculateState.Success -> {
+                                // 扫描成功，写入标签
+                                _uiState.update { ui ->
+                                    val current = ui.editingTagData ?: AudioTagData(fileName = ui.fileName.orEmpty())
+                                    ui.copy(
+                                        editingTagData = current.copy(
+                                            replayGainTrackGain = replayGainScanner.formatGain(state.analysis),
+                                            replayGainTrackPeak = replayGainScanner.formatPeak(state.analysis.peak),
+                                            replayGainReferenceLoudness = "-18 LUFS"
+                                        ),
+                                        isEditing = true,
+                                        isReplayGainCalculating = false,
+                                        replayGainCalculateProgress = 1.0f,
+                                        replayGainScanMessage = UiMessage.StringResource(R.string.replay_gain_calculate_success)
+                                    )
+                                }
+                            }
+
+                            is ReplayGainCalculateState.Cancelled -> {
+                                // 这里处理 Flow 内部抛出异常前发出的 Cancelled 状态
+                                _uiState.update { it.copy(
+                                    isReplayGainCalculating = false,
+                                    replayGainCalculateProgress = 0f,
+                                    replayGainScanMessage = UiMessage.StringResource(R.string.replay_gain_calculate_cancelled)
+                                )}
+                            }
+
+                            is ReplayGainCalculateState.Failed -> {
+                                // 根据 state.error 映射具体的错误信息
+                                val errorMsg = mapErrorToUiMessage(state.mimeType, state.error)
+                                _uiState.update { it.copy(
+                                    isReplayGainCalculating = false,
+                                    replayGainCalculateProgress = 0f,
+                                    replayGainScanMessage = errorMsg
+                                )}
+                            }
                         }
                     }
+            } catch (e: CancellationException) {
+                // 协程被取消时，collect 可能会停止。如果是外部 job.cancel() 触发，
+                // 且 state 没有发回 Cancelled，这里可以补底线逻辑
+                if (_uiState.value.isReplayGainCalculating) {
+                    _uiState.update { it.copy(isReplayGainCalculating = false, replayGainScanMessage = UiMessage.StringResource(R.string.replay_gain_calculate_cancelled)) }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "扫描 ReplayGain 失败: $uriString", e)
-                _uiState.update {
-                    it.copy(
-                        isReplayGainScanning = false,
-                        replayGainScanMessage = "ReplayGain 扫描失败: ${e.message ?: "Unknown error"}"
-                    )
-                }
+                _uiState.update { it.copy(
+                    isReplayGainCalculating = false,
+                    replayGainCalculateProgress = 0f,
+                    replayGainScanMessage = UiMessage.StringResource(R.string.replay_gain_calculate_failed,e.localizedMessage?: "未知错误")
+                )}
+            } finally {
+                _uiState.update { it.copy(
+                    isReplayGainCalculating = false,
+                    replayGainCalculateProgress = if (it.replayGainCalculateProgress == 1f) 1f else null
+                )}
             }
         }
     }
 
+    /**
+     * 具体的 UI 文本映射逻辑
+     */
+    private fun mapErrorToUiMessage(mimeType: String?, error: ReplayGainError): UiMessage {
+        val format = when (mimeType?.lowercase()) {
+            "audio/alac" -> "ALAC"
+            "audio/flac" -> "FLAC"
+            "audio/mpeg" -> "MP3"
+            "audio/mp4a-latm" -> "AAC"
+            null -> "unknown"
+            else -> mimeType
+        }
+
+        return when (error) {
+            is ReplayGainError.NoAudioTrack -> UiMessage.StringResource(R.string.replay_gain_error_no_audio_track)
+            is ReplayGainError.UnknownMimeType -> UiMessage.StringResource(R.string.replay_gain_error_unknown_mime_type)
+            is ReplayGainError.ZeroSampleCount -> UiMessage.StringResource(R.string.replay_gain_error_zero_sample_count)
+            is ReplayGainError.UnsupportedCodec -> UiMessage.StringResource(R.string.replay_gain_error_unsupported_codec, format)
+            is ReplayGainError.CodecException -> {
+                if (error.isAlacIssue) UiMessage.StringResource(R.string.replay_gain_error_alac_issue)
+                else UiMessage.StringResource(R.string.replay_gain_error_codec_exception, error.message ?: "")
+            }
+            is ReplayGainError.GeneralException -> UiMessage.StringResource(R.string.replay_gain_error_general, error.message ?: "")
+        }
+    }
+    
+    fun cancelScan() {
+        scanJob?.cancel()  // 这会触发 ensureActive() 抛出 CancellationException
+        scanJob = null
+    }
+    
     fun clearReplayGainScanMessage() {
         _uiState.update { it.copy(replayGainScanMessage = null) }
     }
@@ -548,5 +639,34 @@ class EditMetadataViewModel(
     fun play(context: Context) {
         val uriStr = currentSong?.uri ?: currentSongUri ?: return
         playbackRepository.play(context, uriStr.toUri())
+    }
+
+    /**
+     * 获取同专辑歌曲封面
+     * 优先使用同专辑且同歌手的查询结果作为封面
+     */
+    suspend fun getSameAlbumCovers(): List<Pair<String, Any?>> {
+        val currentAlbum = _uiState.value.editingTagData?.album ?: return emptyList()
+        val currentArtist = _uiState.value.editingTagData?.artist ?: ""
+
+        val sameAlbumSongs = songRepository.getSongsByAlbum(currentAlbum, currentArtist)
+        val covers = mutableListOf<Pair<String, Any?>>()
+
+        for (song in sameAlbumSongs) {
+            if (song.uri == currentSongUri) continue // 跳过当前歌曲
+            
+            try {
+                val tagData = songRepository.readAudioTagData(song.uri)
+                val cover = tagData.pictures.firstOrNull()?.data ?: tagData.picUrl
+                if (cover != null) {
+                    val title = "${song.title} - ${song.artist}"
+                    covers.add(title to cover)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "读取同专辑歌曲封面失败: ${song.uri}", e)
+            }
+        }
+
+        return covers
     }
 }

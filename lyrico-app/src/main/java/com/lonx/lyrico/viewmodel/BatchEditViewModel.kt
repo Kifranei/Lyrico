@@ -1,21 +1,28 @@
 package com.lonx.lyrico.viewmodel
 
+import android.app.Application
 import android.net.Uri
 import android.util.Log
+import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioTagData
+import com.lonx.audiotag.model.CustomTagField
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.SharedSelectionManager
 import com.lonx.lyrico.data.repository.SongRepository
+import com.lonx.lyrico.utils.LyricsUtils
 import com.lonx.lyrico.utils.UiMessage
+import com.lonx.lyrico.utils.UriUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 可批量编辑的标签字段枚举
@@ -67,15 +74,31 @@ data class BatchEditUiState(
 
     /** 封面相关 */
     val coverUri: Any? = null,
-    val removeCover: Boolean = false
+    val removeCover: Boolean = false,
+
+    /** 歌词偏移（毫秒） */
+    val lyricsOffset: String = "",
+
+    /** 自定义标签 */
+    val customFields: List<CustomTagField> = emptyList(),
+
+    /** 保存进度显示相关字段 */
+    val saveProgressBottomSheet: Boolean = false,  // 是否显示保存进度对话框
+    val currentFile: String = "",  // 当前处理的文件名
+    val successCount: Int = 0,  // 成功计数
+    val failureCount: Int = 0,  // 失败计数
+    val saveTimeMillis: Long = 0  // 保存总用时（毫秒）
 )
 
 class BatchEditViewModel(
     private val songRepository: SongRepository,
-    private val selectionManager: SharedSelectionManager
+    private val selectionManager: SharedSelectionManager,
+    private val application: Application
 ) : ViewModel() {
 
     private val TAG = "BatchEditVM"
+    private val contentResolver = application.contentResolver
+    private var saveJob: Job? = null
 
     private val _uiState = MutableStateFlow(BatchEditUiState())
     val uiState: StateFlow<BatchEditUiState> = _uiState.asStateFlow()
@@ -84,9 +107,9 @@ class BatchEditViewModel(
     private var selectedUris: List<String> = emptyList()
 
     init {
-        val paths = selectionManager.selectedUris.value.toList()
-        selectedUris = paths
-        _uiState.update { it.copy(songCount = paths.size) }
+        val uris = selectionManager.selectedUris.value.toList()
+        selectedUris = uris
+        _uiState.update { it.copy(songCount = uris.size) }
     }
 
 
@@ -113,6 +136,36 @@ class BatchEditViewModel(
         _uiState.update { it.copy(rating = 0, ratingModified = false) } 
     }
 
+    // ── 歌词偏移 ──────────────────────────────────────────
+
+    fun updateLyricsOffset(value: String) { _uiState.update { it.copy(lyricsOffset = value) } }
+
+    // ── 自定义标签 ──────────────────────────────────────────
+
+    fun addCustomField(field: CustomTagField) {
+        _uiState.update { it.copy(customFields = it.customFields + field) }
+    }
+
+    fun updateCustomField(index: Int, key: String, value: String) {
+        _uiState.update {
+            it.copy(
+                customFields = it.customFields.toMutableList().apply {
+                    this[index] = this[index].copy(key = key, value = value)
+                }
+            )
+        }
+    }
+
+    fun removeCustomField(index: Int) {
+        _uiState.update {
+            it.copy(
+                customFields = it.customFields.toMutableList().apply {
+                    removeAt(index)
+                }
+            )
+        }
+    }
+
 
     // ── 封面管理 ──────────────────────────────────────────
 
@@ -134,44 +187,66 @@ class BatchEditViewModel(
         val state = _uiState.value
         if (state.isSaving || selectedUris.isEmpty()) return
 
-        viewModelScope.launch {
+        saveJob = viewModelScope.launch {
+            val startTime = System.currentTimeMillis()
+            val successCounter = AtomicInteger(0)
+            val failureCounter = AtomicInteger(0)
+            
             _uiState.update {
                 it.copy(
                     isSaving = true,
+                    saveProgressBottomSheet = true,
                     saveProgress = 0,
                     saveTotal = selectedUris.size,
+                    currentFile = "",
+                    successCount = 0,
+                    failureCount = 0,
+                    saveTimeMillis = 0,
                     saveSuccess = null,
                     saveResultMessage = null,
                     errorMessage = null
                 )
             }
-
-            var successCount = 0
-            var failCount = 0
-
-            for ((index, path) in selectedUris.withIndex()) {
+            for ((index, uri) in selectedUris.withIndex()) {
+                val fileName = UriUtils.getMediaStoreFileName(contentResolver, uri.toUri()) ?: "Unknown"
+                _uiState.update {
+                    it.copy(
+                        currentFile = fileName
+                    )
+                }
                 try {
                     val success = withContext(Dispatchers.IO) {
-                        updateAudioTags(path, state)
+                        updateAudioTags(uri, state)
                     }
-                    if (success) successCount++ else failCount++
+                    if (success) {
+                        val s = successCounter.incrementAndGet()
+                        _uiState.update { it.copy(successCount = s) }
+                    } else {
+                        val f = failureCounter.incrementAndGet()
+                        _uiState.update { it.copy(failureCount = f) }
+                    }
                 } catch (e: Exception) {
-                    Log.e(TAG, "批量编辑失败: $path", e)
-                    failCount++
+                    Log.e(TAG, "批量编辑失败: $uri", e)
+                    val f = failureCounter.incrementAndGet()
+                    _uiState.update { it.copy(failureCount = f) }
                 }
 
                 _uiState.update { it.copy(saveProgress = index + 1) }
             }
+            
+            val totalTime = System.currentTimeMillis() - startTime
 
             _uiState.update {
                 it.copy(
                     isSaving = false,
-                    saveSuccess = failCount == 0,
+                    currentFile = "",
+                    saveTimeMillis = totalTime,
+                    saveSuccess = failureCounter.get() == 0,
                     saveResultMessage = UiMessage.StringResource(
                         R.string.batch_edit_result_summary,
-                        successCount,
+                        successCounter.get(),
                         selectedUris.size,
-                        failCount
+                        failureCounter.get()
                     )
                 )
             }
@@ -239,7 +314,48 @@ class BatchEditViewModel(
             tag = tag.copy(picUrl = state.coverUri.toString())
         }
 
+        // 处理歌词偏移（直接修改歌词文本中的时间戳）
+        if (state.lyricsOffset.isNotBlank() && tag.lyrics != null) {
+            val offsetValue = parseLyricsOffset(state.lyricsOffset)
+            if (offsetValue != 0) {
+                val shiftedLyrics = LyricsUtils.shiftLyricsOffset(tag.lyrics!!, offsetValue.toLong())
+                tag = tag.copy(lyrics = shiftedLyrics)
+            }
+        }
+
+        // 处理自定义标签
+        if (state.customFields.isNotEmpty()) {
+            tag = tag.copy(customFields = tag.customFields.toMutableList().apply {
+                state.customFields.forEach { newField ->
+                    val existingIndex = indexOfFirst { it.key == newField.key }
+                    if (existingIndex >= 0) {
+                        this[existingIndex] = newField
+                    } else {
+                        add(newField)
+                    }
+                }
+            })
+        }
+
         return tag
+    }
+
+    /**
+     * 解析歌词偏移值
+     * 支持正负号，未填写正负号默认为正
+     */
+    private fun parseLyricsOffset(input: String): Int {
+        return try {
+            val trimmed = input.trim()
+            if (trimmed.startsWith("+") || trimmed.startsWith("-")) {
+                trimmed.toInt()
+            } else {
+                // 未填写正负号，默认为正
+                trimmed.toInt()
+            }
+        } catch (e: NumberFormatException) {
+            0
+        }
     }
 
     // ── 状态清理 ──────────────────────────────────────────
@@ -248,11 +364,127 @@ class BatchEditViewModel(
         _uiState.update { it.copy(saveSuccess = null, saveResultMessage = null) }
     }
 
+    /**
+     * 关闭保存进度对话框
+     */
+    fun closeSaveBottomSheet() {
+        _uiState.update {
+            it.copy(
+                saveProgressBottomSheet = false,
+                currentFile = "",
+                isSaving = false,
+                saveTimeMillis = 0,
+                successCount = 0,
+                failureCount = 0
+            )
+        }
+    }
+
+    /**
+     * 中止保存
+     */
+    fun abortSave() {
+        saveJob?.cancel()
+        saveJob = null
+        _uiState.update {
+            it.copy(
+                isSaving = false,
+                saveProgressBottomSheet = false,
+                currentFile = "",
+                saveTimeMillis = 0,
+                successCount = 0,
+                failureCount = 0
+            )
+        }
+    }
+
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
 
+    /**
+     * 获取同专辑歌曲封面
+     * 优先使用同专辑且同歌手的查询结果作为封面
+     * 如果专辑或艺术家字段被修改过，则使用修改后的值进行查询
+     */
+    suspend fun getSameAlbumCovers(): List<Pair<String, Any?>> {
+        val uiState = _uiState.value
+        val editedAlbum = uiState.album
+        val editedArtist = uiState.artist
+
+        // 确定使用的专辑和艺术家值
+        val targetAlbum: String
+        val targetArtist: String
+
+        if (editedAlbum != "<keep>" && editedAlbum.isNotBlank()) {
+            // 如果专辑被修改过，使用修改后的值
+            targetAlbum = editedAlbum
+            targetArtist = if (editedArtist != "<keep>" && editedArtist.isNotBlank()) editedArtist else ""
+        } else {
+            // 如果专辑没被修改，检查所有选中歌曲的专辑和艺术家是否一致
+            var commonAlbum: String? = null
+            var commonArtist: String? = null
+            var hasMismatch = false
+
+            for (uri in selectedUris) {
+                try {
+                    val tagData = songRepository.readAudioTagData(uri)
+                    val album = tagData.album
+                    val artist = tagData.artist
+
+                    if (commonAlbum == null && commonArtist == null) {
+                        commonAlbum = album
+                        commonArtist = artist
+                    } else {
+                        if (album != commonAlbum || artist != commonArtist) {
+                            hasMismatch = true
+                            break
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "读取歌曲标签失败: $uri", e)
+                    hasMismatch = true
+                    break
+                }
+            }
+
+            // 如果存在不一致的情况，更新错误消息并返回空列表
+            if (hasMismatch || commonAlbum.isNullOrBlank()) {
+                _uiState.update { 
+                    it.copy(errorMessage = UiMessage.StringResource(R.string.batch_edit_cover_mismatch)) 
+                }
+                return emptyList()
+            }
+
+            targetAlbum = commonAlbum
+            targetArtist = if (editedArtist != "<keep>" && editedArtist.isNotBlank()) editedArtist else (commonArtist ?: "")
+        }
+
+        // 清除之前的错误消息
+        _uiState.update { it.copy(errorMessage = null) }
+
+        // 查询同专辑的歌曲封面
+        val sameAlbumSongs = songRepository.getSongsByAlbum(targetAlbum, targetArtist)
+        val covers = mutableListOf<Pair<String, Any?>>()
+
+        for (song in sameAlbumSongs) {
+            try {
+                val tagData = songRepository.readAudioTagData(song.uri)
+                val cover = tagData.pictures.firstOrNull()?.data ?: tagData.picUrl
+                if (cover != null) {
+                    val title = "${song.title} - ${song.artist}"
+                    covers.add(title to cover)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "读取同专辑歌曲封面失败: ${song.uri}", e)
+            }
+        }
+
+        return covers
+    }
+
     override fun onCleared() {
+        saveJob?.cancel()
         super.onCleared()
         selectionManager.clearAll()
     }

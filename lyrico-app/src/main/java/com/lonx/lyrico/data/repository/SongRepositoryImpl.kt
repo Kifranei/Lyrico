@@ -616,4 +616,10 @@ class SongRepositoryImpl(
         // 最后的 fallback
         return contentUri.substringAfterLast("/")
     }
+
+    override suspend fun getSongsByAlbum(album: String, artist: String): List<SongEntity> {
+        return withContext(Dispatchers.IO) {
+            songDao.getSongsByAlbum(album, artist)
+        }
+    }
 }

@@ -1,9 +1,11 @@
 package com.lonx.lyrico.utils
 
+import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 
 object UriUtils {
 
@@ -41,6 +43,33 @@ object UriUtils {
         } catch (e: Exception) {
             e.printStackTrace()
             return null
+        }
+    }
+
+    /**
+     * 从 MediaStore URI 获取文件名
+     * 适用于 content://media/external/audio/media/xxx 格式的 URI
+     */
+    fun getMediaStoreFileName(contentResolver: ContentResolver, mediaUri: Uri): String? {
+        return try {
+            val projection = arrayOf(MediaStore.Audio.Media.DISPLAY_NAME)
+            contentResolver.query(
+                mediaUri,
+                projection,
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val displayNameIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+                    cursor.getString(displayNameIndex)
+                } else {
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 

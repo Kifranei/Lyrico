@@ -69,7 +69,7 @@ object RenameEngine {
 
     suspend fun renameFiles(
         previews: List<RenamePreview>,
-        onProgressUpdate: ((Int, Int) -> Unit)? = null
+        onProgressUpdate: ((Int, Int, String, Boolean) -> Unit)? = null
     ): Result {
         val result = Result(
             successful = mutableListOf(),
@@ -78,6 +78,9 @@ object RenameEngine {
 
         val total = previews.size
         for ((index, preview) in previews.withIndex()) {
+            val currentFileName = preview.originalPath.substringAfterLast('/')
+            var isSuccess = false
+            
             try {
                 val oldFile = File(preview.originalPath)
                 val newFile = File(preview.newPath)
@@ -86,6 +89,7 @@ object RenameEngine {
 
                 if (oldFile.renameTo(newFile)) {
                     result.successful.add(preview)
+                    isSuccess = true
                 } else {
                     result.failed.add(preview to "Failed to rename file")
                 }
@@ -95,7 +99,7 @@ object RenameEngine {
 
 
             val current = index + 1
-            onProgressUpdate?.invoke(current, total)
+            onProgressUpdate?.invoke(current, total, currentFileName, isSuccess)
 
             if (index < previews.lastIndex) {
                 delay(50L)
@@ -109,10 +113,8 @@ object RenameEngine {
         val successful: MutableList<RenamePreview> = mutableListOf(),
         val failed: MutableList<Pair<RenamePreview, String>> = mutableListOf()
     ) {
-        val totalCount: Int get() = successful.size + failed.size
         val successCount: Int get() = successful.size
         val failureCount: Int get() = failed.size
-        val isSuccessful: Boolean get() = failed.isEmpty()
     }
 
     fun getPresetFormats(): List<String> {

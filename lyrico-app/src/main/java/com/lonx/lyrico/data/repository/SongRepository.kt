@@ -120,4 +120,14 @@ interface SongRepository {
      */
     fun getDisplayName(contentUri: String): String
 
+    /**
+     * 根据专辑和艺术家获取歌曲列表
+     * 优先返回同专辑且同艺术家的歌曲，然后返回同专辑的歌曲
+     *
+     * @param album 专辑名称
+     * @param artist 艺术家名称
+     * @return 歌曲列表
+     */
+    suspend fun getSongsByAlbum(album: String, artist: String): List<SongEntity>
+
 }

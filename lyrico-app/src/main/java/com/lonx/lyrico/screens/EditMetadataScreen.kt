@@ -18,14 +18,36 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,7 +89,6 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.FloatingToolbar
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -112,6 +133,7 @@ fun EditMetadataScreen(
 ) {
     val viewModel: EditMetadataViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsState()
+    val replayGainCalculateProgress = uiState.replayGainCalculateProgress
     val originalTagData = uiState.originalTagData
     val editingTagData = uiState.editingTagData
     val snackbarHostState = remember { SnackbarHostState() }
@@ -197,8 +219,35 @@ fun EditMetadataScreen(
 
     LaunchedEffect(uiState.replayGainScanMessage) {
         uiState.replayGainScanMessage?.let { message ->
-            scope.launch { snackbarHostState.showSnackbar(message) }
+            scope.launch {
+                message.asString(context)?.let { it1 -> snackbarHostState.showSnackbar(it1) }
+            }
             viewModel.clearReplayGainScanMessage()
+        }
+    }
+
+    // 加载同专辑封面（直接使用第一张）
+    fun loadSameAlbumCovers() {
+        scope.launch {
+            try {
+                val covers = viewModel.getSameAlbumCovers()
+                if (covers.isNotEmpty()) {
+                    val (_, cover) = covers.first()
+                    when (cover) {
+                        is String -> viewModel.updateCover(cover)
+                        is ByteArray -> {
+                            // 将 ByteArray 转换为 Bitmap
+                            val bitmap = android.graphics.BitmapFactory.decodeByteArray(cover, 0, cover.size)
+                            viewModel.updateCover(bitmap)
+                        }
+                    }
+                    scope.launch { snackbarHostState.showSnackbar("已应用同专辑封面") }
+                } else {
+                    scope.launch { snackbarHostState.showSnackbar("未找到同专辑的歌曲封面") }
+                }
+            } catch (e: Exception) {
+                scope.launch { snackbarHostState.showSnackbar("加载同专辑封面失败") }
+            }
         }
     }
 
@@ -281,7 +330,7 @@ fun EditMetadataScreen(
                             )
                         }
                     }
-                    if (uiState.coverUri != null){
+                    if (uiState.coverUri != null) {
                         IconButton(
                             onClick = {
                                 showCoverOptionsSheet = true
@@ -515,15 +564,73 @@ fun EditMetadataScreen(
                     SmallTitle(text = stringResource(R.string.group_replay_gain))
                     Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
                         Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                            ArrowPreference(
-                                title = stringResource(R.string.action_scan_replay_gain),
-                                summary = if (uiState.isReplayGainScanning) {
-                                    stringResource(R.string.replay_gain_scan_in_progress)
-                                } else {
-                                    stringResource(R.string.replay_gain_scan_single_summary)
-                                },
-                                onClick = { viewModel.scanReplayGain() }
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(start = 4.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = uiState.isReplayGainCalculating,
+                                        enter = fadeIn(),
+                                        exit = fadeOut()
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            // 环形进度条
+                                            androidx.compose.material3.CircularProgressIndicator(
+                                                progress = { replayGainCalculateProgress ?: 0f },
+                                                modifier = Modifier.size(20.dp),
+                                                color = MiuixTheme.colorScheme.primary,
+                                                strokeWidth = 2.5.dp,
+                                                trackColor = MiuixTheme.colorScheme.primary.copy(
+                                                    alpha = 0.2f
+                                                )
+                                            )
+
+                                            Spacer(modifier = Modifier.width(8.dp))
+
+                                            // 进度百分比文本
+                                            Text(
+                                                text = "${((replayGainCalculateProgress ?: 0f) * 100).toInt()}%",
+                                                fontSize = 12.sp,
+                                                color = MiuixTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(MiuixTheme.colorScheme.primary)
+                                        .clickable {
+                                            if (!uiState.isReplayGainCalculating) {
+                                                viewModel.calculateReplayGain()
+                                            } else {
+                                                viewModel.cancelScan()
+                                            }
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (uiState.isReplayGainCalculating) {
+                                            stringResource(R.string.replay_gain_calculate_in_progress)
+                                        } else {
+                                            stringResource(R.string.action_calculate_replay_gain)
+                                        },
+                                        fontSize = 11.sp,
+                                        color = MiuixTheme.colorScheme.onPrimary,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
                             MetadataInputField(
                                 label = stringResource(R.string.label_replaygain_track_gain),
                                 value = editingTagData?.replayGainTrackGain ?: "",
@@ -531,7 +638,10 @@ fun EditMetadataScreen(
                                 isModified = editingTagData?.replayGainTrackGain != originalTagData?.replayGainTrackGain,
                                 onRevert = {
                                     viewModel.updateTag {
-                                        copy(replayGainTrackGain = originalTagData?.replayGainTrackGain ?: "")
+                                        copy(
+                                            replayGainTrackGain = originalTagData?.replayGainTrackGain
+                                                ?: ""
+                                        )
                                     }
                                 }
                             )
@@ -542,7 +652,10 @@ fun EditMetadataScreen(
                                 isModified = editingTagData?.replayGainTrackPeak != originalTagData?.replayGainTrackPeak,
                                 onRevert = {
                                     viewModel.updateTag {
-                                        copy(replayGainTrackPeak = originalTagData?.replayGainTrackPeak ?: "")
+                                        copy(
+                                            replayGainTrackPeak = originalTagData?.replayGainTrackPeak
+                                                ?: ""
+                                        )
                                     }
                                 }
                             )
@@ -553,7 +666,10 @@ fun EditMetadataScreen(
                                 isModified = editingTagData?.replayGainAlbumGain != originalTagData?.replayGainAlbumGain,
                                 onRevert = {
                                     viewModel.updateTag {
-                                        copy(replayGainAlbumGain = originalTagData?.replayGainAlbumGain ?: "")
+                                        copy(
+                                            replayGainAlbumGain = originalTagData?.replayGainAlbumGain
+                                                ?: ""
+                                        )
                                     }
                                 }
                             )
@@ -564,18 +680,30 @@ fun EditMetadataScreen(
                                 isModified = editingTagData?.replayGainAlbumPeak != originalTagData?.replayGainAlbumPeak,
                                 onRevert = {
                                     viewModel.updateTag {
-                                        copy(replayGainAlbumPeak = originalTagData?.replayGainAlbumPeak ?: "")
+                                        copy(
+                                            replayGainAlbumPeak = originalTagData?.replayGainAlbumPeak
+                                                ?: ""
+                                        )
                                     }
                                 }
                             )
                             MetadataInputField(
                                 label = stringResource(R.string.label_replaygain_reference_loudness),
                                 value = editingTagData?.replayGainReferenceLoudness ?: "",
-                                onValueChange = { viewModel.updateTag { copy(replayGainReferenceLoudness = it) } },
+                                onValueChange = {
+                                    viewModel.updateTag {
+                                        copy(
+                                            replayGainReferenceLoudness = it
+                                        )
+                                    }
+                                },
                                 isModified = editingTagData?.replayGainReferenceLoudness != originalTagData?.replayGainReferenceLoudness,
                                 onRevert = {
                                     viewModel.updateTag {
-                                        copy(replayGainReferenceLoudness = originalTagData?.replayGainReferenceLoudness ?: "")
+                                        copy(
+                                            replayGainReferenceLoudness = originalTagData?.replayGainReferenceLoudness
+                                                ?: ""
+                                        )
                                     }
                                 }
                             )
@@ -672,7 +800,7 @@ fun EditMetadataScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 8.dp),
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(
                                         6.dp,
@@ -809,6 +937,13 @@ fun EditMetadataScreen(
                         }
                         showCoverOptionsSheet = false
                         navigator.navigate(SearchCoverDestination(keyword))
+                    }
+                )
+                ArrowPreference(
+                    title = "选择同专辑歌曲封面",
+                    onClick = {
+                        showCoverOptionsSheet = false
+                        loadSameAlbumCovers()
                     }
                 )
                 ArrowPreference(

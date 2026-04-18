@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlin.math.pow
 import kotlin.random.Random
 
 class QmSource(
@@ -64,6 +65,23 @@ class QmSource(
                 } else {
                     ""
                 }
+                val extrasMap = mutableMapOf<String, String>()
+
+                item.volume?.let { v ->
+                    val gain = v.gain.toDoubleOrNull()
+                    val peak = v.peak.toDoubleOrNull()
+
+                    gain?.let {
+                        extrasMap["replaygain_track_gain"] = "${"%.3f".format(it)} dB"
+                    }
+                    v.lra.toDoubleOrNull()?.let {
+                        extrasMap["replaygain_loudness_range"] = "${"%.3f".format(it)} LU"
+                    }
+                    peak?.let {
+                        extrasMap["replaygain_track_peak"] = "%.6f".format(it)
+                    }
+                    extrasMap["replaygain_reference_loudness"] = "-18 LUFS"
+                }
                 SongSearchResult(
                     id = item.id,
                     title = item.title,
@@ -73,7 +91,8 @@ class QmSource(
                     source = Source.QM,
                     date = item.timePublic ?: "",
                     trackerNumber = item.trackerNumber,
-                    picUrl = picUrl
+                    picUrl = picUrl,
+                    extras = extrasMap
                 )
             }
         } catch (e: Exception) {
