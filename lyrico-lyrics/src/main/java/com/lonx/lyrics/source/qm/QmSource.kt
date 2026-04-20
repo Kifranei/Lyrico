@@ -61,7 +61,7 @@ class QmSource(
             songs.map { item ->
                 val singerList = item.singer.map { it.name }
                 val picUrl = if (item.album.name.isNotEmpty()) {
-                    "https://y.gtimg.cn/music/photo_new/T002R800x800M000${item.album.mid}.jpg"
+                    "https://y.gtimg.cn/music/photo_new/T002R1200x1200M000${item.album.mid}.jpg"
                 } else {
                     ""
                 }
@@ -132,7 +132,7 @@ class QmSource(
 
             songs.take(pageSize).mapNotNull { item ->
                 val picUrl = if (item.album.mid.isNotEmpty()) {
-                    "https://y.gtimg.cn/music/photo_new/T002R800x800M000${item.album.mid}.jpg"
+                    "https://y.gtimg.cn/music/photo_new/T002R1200x1200M000${item.album.mid}.jpg"
                 } else {
                     ""
                 }
