@@ -63,7 +63,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.request.allowHardware
+import coil3.size.Size
 import com.lonx.audiotag.model.CustomTagField
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.ConversionMode
@@ -1139,6 +1144,28 @@ private fun CoverSection(
     val surfaceVariant = MiuixTheme.colorScheme.surfaceVariant
     val onSurface = MiuixTheme.colorScheme.onSurface
     val onSurfaceDim = MiuixTheme.colorScheme.onSurfaceVariantSummary
+    val context = LocalContext.current
+    var imageSize by remember(coverUri) { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    // 加载图片尺寸
+    LaunchedEffect(coverUri) {
+        if (coverUri != null) {
+            val imageLoader = SingletonImageLoader.get(context)
+            val request = ImageRequest.Builder(context)
+                .data(coverUri)
+                .size(Size.ORIGINAL)
+                .allowHardware(false)
+                .build()
+
+            val result = imageLoader.execute(request)
+            if (result is SuccessResult) {
+                val image = result.image
+                if (image.width > 0 && image.height > 0) {
+                    imageSize = image.width to image.height
+                }
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -1218,6 +1245,27 @@ private fun CoverSection(
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
+                        }
+
+                        // 尺寸标签
+                        imageSize?.let {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(8.dp)
+                                    .background(
+                                        color = Color.Black.copy(alpha = 0.6f),
+                                        shape = RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "${it.first}×${it.second}",
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
 
                         androidx.compose.animation.AnimatedVisibility(
