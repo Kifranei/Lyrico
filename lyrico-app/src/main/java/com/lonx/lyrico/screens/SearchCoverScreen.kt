@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TextButton
@@ -57,11 +59,15 @@ import com.lonx.lyrico.viewmodel.CoverSearchViewModel
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.result.ResultBackNavigator
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.TabRow
+import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -76,8 +82,9 @@ fun SearchCoverScreen(
     val viewModel: CoverSearchViewModel = koinViewModel()
     val uiState by viewModel.coverUiState.collectAsState()
     
-
     val keyboardController = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState { uiState.availableSources.size + 1 }
 
     LaunchedEffect(keyword) {
         keyword?.let { viewModel.performCoverSearch(it) }
@@ -129,41 +136,80 @@ fun SearchCoverScreen(
                 return@Column
             }
 
-            when {
-                uiState.isSearching -> {
-                    Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        CircularProgressIndicator()
+            /**
+             * Tabs
+             */
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 12.dp)
+            ) {
+                val tabs = listOf(stringResource(id = R.string.search_type_all)) + uiState.availableSources.map { stringResource(id = it.labelRes) }
+                TabRowWithContour(
+                    tabs = tabs,
+                    minWidth = 80.dp,
+                    selectedTabIndex = pagerState.currentPage,
+                    onTabSelected = { index ->
+                        scope.launch {
+                            pagerState.animateScrollToPage(index)
+                        }
                     }
+                )
+            }
+
+            /**
+             * Pager
+             */
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val results = if (page == 0) {
+                    // 全部tab显示所有结果
+                    uiState.coverResults
+                } else {
+                    // 其他tab显示对应来源的结果
+                    val source = uiState.availableSources.getOrNull(page - 1)
+                    uiState.coverResults.filter { it.source == source }
                 }
-                uiState.searchError != null -> {
-                    Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        Text(
-                            text = uiState.searchError!!,
-                            fontSize = 14.sp,
-                            color = MiuixTheme.colorScheme.error
-                        )
+
+                when {
+                    uiState.isSearching -> {
+                        Box(Modifier.fillMaxSize(), Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
                     }
-                }
-                uiState.coverResults.isEmpty() -> {
-                    Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        Text(stringResource(id = R.string.cd_no_results))
-                    }
-                }
-                else -> {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 150.dp),
-                        contentPadding = PaddingValues(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(uiState.coverResults, key = { it.id + it.url }) { cover ->
-                            CoverGridItem(
-                                cover = cover,
-                                onClick = {
-                                    resultNavigator.navigateBack(cover.url)
-                                }
+                    uiState.searchError != null -> {
+                        Box(Modifier.fillMaxSize(), Alignment.Center) {
+                            Text(
+                                text = uiState.searchError!!,
+                                fontSize = 14.sp,
+                                color = MiuixTheme.colorScheme.error
                             )
+                        }
+                    }
+                    results.isEmpty() -> {
+                        Box(Modifier.fillMaxSize(), Alignment.Center) {
+                            Text(stringResource(id = R.string.cd_no_results))
+                        }
+                    }
+                    else -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 150.dp),
+                            contentPadding = PaddingValues(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(results, key = { it.id + it.url }) { cover ->
+                                CoverGridItem(
+                                    cover = cover,
+                                    onClick = {
+                                        resultNavigator.navigateBack(cover.url)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
