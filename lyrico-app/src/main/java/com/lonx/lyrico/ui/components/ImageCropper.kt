@@ -11,7 +11,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -31,12 +33,17 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
+import androidx.core.graphics.scale
 
 // ============================================================
 // 裁剪状态持有者 —— 供外部读取和触发裁剪
 // ============================================================
 class ImageCropperState internal constructor(
-    internal val bitmap: Bitmap
+    /** 原始全尺寸 Bitmap，用于最终裁剪 */
+    internal val originalBitmap: Bitmap,
+    /** 缩小后的显示用 Bitmap，用于 Canvas 绘制 */
+    internal val displayBitmap: Bitmap
 ) {
     internal var imageBounds by mutableStateOf(Rect.Zero)
     internal var cropRect by mutableStateOf(Rect.Zero)
@@ -46,8 +53,21 @@ class ImageCropperState internal constructor(
      * 外部调用此方法执行裁剪，返回裁剪后的 Bitmap
      */
     fun crop(): Bitmap {
-        return cropActualBitmap(bitmap, imageBounds, cropRect)
+        return cropActualBitmap(originalBitmap, displayBitmap, imageBounds, cropRect)
     }
+}
+
+/**
+ * 将 Bitmap 缩放到不超过 maxPixels 总像素数（默认 16M 像素）
+ */
+private fun downscaleBitmap(bitmap: Bitmap, maxPixels: Long = 16_000_000L): Bitmap {
+    val currentPixels = bitmap.width.toLong() * bitmap.height.toLong()
+    if (currentPixels <= maxPixels) return bitmap
+
+    val scale = sqrt(maxPixels.toFloat() / currentPixels.toFloat())
+    val newWidth = (bitmap.width * scale).toInt().coerceAtLeast(1)
+    val newHeight = (bitmap.height * scale).toInt().coerceAtLeast(1)
+    return bitmap.scale(newWidth, newHeight)
 }
 
 /**
@@ -55,7 +75,13 @@ class ImageCropperState internal constructor(
  */
 @Composable
 fun rememberImageCropperState(bitmap: Bitmap): ImageCropperState {
-    return remember(bitmap) { ImageCropperState(bitmap) }
+    return remember(bitmap) {
+        val display = downscaleBitmap(bitmap)
+        ImageCropperState(
+            originalBitmap = bitmap,
+            displayBitmap = display
+        )
+    }
 }
 
 enum class DragHandle {
@@ -69,19 +95,19 @@ fun ImageCropper(
     modifier: Modifier = Modifier,
     showRatioBar: Boolean = true
 ) {
-    val bitmap = state.bitmap
+    // ★ 使用缩小后的 displayBitmap 进行绘制
+    val bitmap = state.displayBitmap
     var viewSize by remember { mutableStateOf(Size.Zero) }
 
     val density = LocalDensity.current
     val touchTolerance = with(density) { 24.dp.toPx() }
     val minCropSize = with(density) { 60.dp.toPx() }
 
-    // 缓存 ImageBitmap
-    val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
-    // 记住初始宽高比，避免重组期间变化
+    val imageBitmap: ImageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
     val bitmapAspectRatio = remember(bitmap) {
         bitmap.width.toFloat() / bitmap.height.toFloat()
     }
+
     // 计算图片在视图中的显示区域
     LaunchedEffect(viewSize, bitmap) {
         if (viewSize.width == 0f || viewSize.height == 0f) return@LaunchedEffect
@@ -95,7 +121,6 @@ fun ImageCropper(
         val top = (viewSize.height - imageHeight) / 2f
         state.imageBounds = Rect(left, top, left + imageWidth, top + imageHeight)
 
-        // 初始化裁剪框
         val initSize = min(imageWidth, imageHeight) * 0.8f
         val ratio = state.aspectRatio
         val (w, h) = if (ratio != null) {
@@ -131,26 +156,15 @@ fun ImageCropper(
             (h * ratio) to h
         }
 
-        var l = center.x - nw / 2;
-        var t = center.y - nh / 2
-        var r = center.x + nw / 2;
-        var b = center.y + nh / 2
-        if (l < ib.left) {
-            l = ib.left; r = l + nw
-        }
-        if (r > ib.right) {
-            r = ib.right; l = r - nw
-        }
-        if (t < ib.top) {
-            t = ib.top; b = t + nh
-        }
-        if (b > ib.bottom) {
-            b = ib.bottom; t = b - nh
-        }
+        var l = center.x - nw / 2; var t = center.y - nh / 2
+        var r = center.x + nw / 2; var b = center.y + nh / 2
+        if (l < ib.left) { l = ib.left; r = l + nw }
+        if (r > ib.right) { r = ib.right; l = r - nw }
+        if (t < ib.top) { t = ib.top; b = t + nh }
+        if (b > ib.bottom) { b = ib.bottom; t = b - nh }
         state.cropRect = Rect(l, t, r, b)
     }
 
-    // 用 rememberUpdatedState 避免 pointerInput 重启
     val cropRectRef = rememberUpdatedState(state.cropRect)
     val imageBoundsRef = rememberUpdatedState(state.imageBounds)
     val aspectRatioRef = rememberUpdatedState(state.aspectRatio)
@@ -158,7 +172,6 @@ fun ImageCropper(
 
     val freeRatio = stringResource(id = R.string.option_free_ratio)
     Column(modifier = modifier.fillMaxWidth()) {
-        // 可选的比例选择栏
         if (showRatioBar) {
             val ratioOptions = remember {
                 listOf(
@@ -196,8 +209,6 @@ fun ImageCropper(
             }
         }
 
-
-        // 裁剪画布
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -225,8 +236,8 @@ fun ImageCropper(
                         }
                     )
                 }
-        )  {
-            Canvas(modifier = Modifier.fillMaxWidth()) {
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
                 val ib = state.imageBounds
                 val cr = state.cropRect
                 if (ib.isEmpty) return@Canvas
@@ -241,34 +252,14 @@ fun ImageCropper(
 
                 // ② 四块遮罩（不覆盖裁剪框内部）
                 val overlay = Color.Black.copy(alpha = 0.6f)
-                // 上
-                if (cr.top > ib.top) {
+                if (cr.top > ib.top)
                     drawRect(overlay, Offset(ib.left, ib.top), Size(ib.width, cr.top - ib.top))
-                }
-                // 下
-                if (cr.bottom < ib.bottom) {
-                    drawRect(
-                        overlay,
-                        Offset(ib.left, cr.bottom),
-                        Size(ib.width, ib.bottom - cr.bottom)
-                    )
-                }
-                // 左
-                if (cr.left > ib.left) {
-                    drawRect(
-                        overlay,
-                        Offset(ib.left, cr.top),
-                        Size(cr.left - ib.left, cr.height)
-                    )
-                }
-                // 右
-                if (cr.right < ib.right) {
-                    drawRect(
-                        overlay,
-                        Offset(cr.right, cr.top),
-                        Size(ib.right - cr.right, cr.height)
-                    )
-                }
+                if (cr.bottom < ib.bottom)
+                    drawRect(overlay, Offset(ib.left, cr.bottom), Size(ib.width, ib.bottom - cr.bottom))
+                if (cr.left > ib.left)
+                    drawRect(overlay, Offset(ib.left, cr.top), Size(cr.left - ib.left, cr.height))
+                if (cr.right < ib.right)
+                    drawRect(overlay, Offset(cr.right, cr.top), Size(ib.right - cr.right, cr.height))
 
                 // ③ 白色边框
                 drawRect(Color.White, cr.topLeft, cr.size, style = Stroke(2.dp.toPx()))
@@ -286,6 +277,40 @@ fun ImageCropper(
 // ============================================================
 // 工具函数
 // ============================================================
+
+/**
+ * 将显示坐标映射回原始 Bitmap 坐标
+ */
+fun cropActualBitmap(
+    originalBitmap: Bitmap,
+    displayBitmap: Bitmap,
+    imageDisplayBounds: Rect,
+    cropRect: Rect
+): Bitmap {
+    // 从显示区域坐标 → 显示 Bitmap 像素坐标
+    val displayScaleX = displayBitmap.width / imageDisplayBounds.width
+    val displayScaleY = displayBitmap.height / imageDisplayBounds.height
+
+    // 从显示 Bitmap 像素坐标 → 原始 Bitmap 像素坐标
+    val originalScaleX = originalBitmap.width.toFloat() / displayBitmap.width.toFloat()
+    val originalScaleY = originalBitmap.height.toFloat() / displayBitmap.height.toFloat()
+
+    // 合并缩放
+    val totalScaleX = displayScaleX * originalScaleX
+    val totalScaleY = displayScaleY * originalScaleY
+
+    val cropX = ((cropRect.left - imageDisplayBounds.left) * totalScaleX).toInt()
+    val cropY = ((cropRect.top - imageDisplayBounds.top) * totalScaleY).toInt()
+    val cropWidth = (cropRect.width * totalScaleX).toInt()
+    val cropHeight = (cropRect.height * totalScaleY).toInt()
+
+    val safeX = max(0, cropX)
+    val safeY = max(0, cropY)
+    val safeWidth = min(originalBitmap.width - safeX, cropWidth).coerceAtLeast(1)
+    val safeHeight = min(originalBitmap.height - safeY, cropHeight).coerceAtLeast(1)
+
+    return Bitmap.createBitmap(originalBitmap, safeX, safeY, safeWidth, safeHeight)
+}
 
 fun getHitHandle(touch: Offset, rect: Rect, tolerance: Float): DragHandle {
     val leftHit = touch.x in (rect.left - tolerance)..(rect.left + tolerance)
@@ -376,7 +401,6 @@ fun calculateNewRect(
             if (w < safeMinW) { w = safeMinW; h = w / aspectRatio }
         }
 
-        // 根据手柄重新定位
         when (handle) {
             DragHandle.TOP_LEFT -> { left = right - w; top = bottom - h }
             DragHandle.TOP_RIGHT -> { right = left + w; top = bottom - h }
@@ -404,52 +428,15 @@ fun calculateNewRect(
             }
         }
 
-        if (left < bounds.left) {
-            val offset = bounds.left - left
-            left += offset; right += offset
-        }
-        if (right > bounds.right) {
-            val offset = right - bounds.right
-            left -= offset; right -= offset
-        }
-        if (top < bounds.top) {
-            val offset = bounds.top - top
-            top += offset; bottom += offset
-        }
-        if (bottom > bounds.bottom) {
-            val offset = bottom - bounds.bottom
-            top -= offset; bottom -= offset
-        }
-
-        // 6. 最后的极端情况兜底：如果比例裁剪框依然大于图片，强制缩小
-        if (right - left > bounds.width) {
-            left = bounds.left
-            right = bounds.right
-        }
-        if (bottom - top > bounds.height) {
-            top = bounds.top
-            bottom = bounds.bottom
-        }
+        if (left < bounds.left) { val o = bounds.left - left; left += o; right += o }
+        if (right > bounds.right) { val o = right - bounds.right; left -= o; right -= o }
+        if (top < bounds.top) { val o = bounds.top - top; top += o; bottom += o }
+        if (bottom > bounds.bottom) { val o = bottom - bounds.bottom; top -= o; bottom -= o }
+        if (right - left > bounds.width) { left = bounds.left; right = bounds.right }
+        if (bottom - top > bounds.height) { top = bounds.top; bottom = bounds.bottom }
     }
 
     return Rect(left, top, right, bottom)
-}
-
-fun cropActualBitmap(originalBitmap: Bitmap, imageDisplayBounds: Rect, cropRect: Rect): Bitmap {
-    val scaleX = originalBitmap.width / imageDisplayBounds.width
-    val scaleY = originalBitmap.height / imageDisplayBounds.height
-
-    val cropX = ((cropRect.left - imageDisplayBounds.left) * scaleX).toInt()
-    val cropY = ((cropRect.top - imageDisplayBounds.top) * scaleY).toInt()
-    val cropWidth = (cropRect.width * scaleX).toInt()
-    val cropHeight = (cropRect.height * scaleY).toInt()
-
-    val safeX = max(0, cropX)
-    val safeY = max(0, cropY)
-    val safeWidth = min(originalBitmap.width - safeX, cropWidth).coerceAtLeast(1)
-    val safeHeight = min(originalBitmap.height - safeY, cropHeight).coerceAtLeast(1)
-
-    return Bitmap.createBitmap(originalBitmap, safeX, safeY, safeWidth, safeHeight)
 }
 
 fun DrawScope.drawGridLines(rect: Rect) {
@@ -473,40 +460,10 @@ fun DrawScope.drawCorners(rect: Rect) {
     val color = Color.White
     drawLine(color, Offset(rect.left, rect.top), Offset(rect.left + length, rect.top), strokeWidth)
     drawLine(color, Offset(rect.left, rect.top), Offset(rect.left, rect.top + length), strokeWidth)
-    drawLine(
-        color,
-        Offset(rect.right, rect.top),
-        Offset(rect.right - length, rect.top),
-        strokeWidth
-    )
-    drawLine(
-        color,
-        Offset(rect.right, rect.top),
-        Offset(rect.right, rect.top + length),
-        strokeWidth
-    )
-    drawLine(
-        color,
-        Offset(rect.left, rect.bottom),
-        Offset(rect.left + length, rect.bottom),
-        strokeWidth
-    )
-    drawLine(
-        color,
-        Offset(rect.left, rect.bottom),
-        Offset(rect.left, rect.bottom - length),
-        strokeWidth
-    )
-    drawLine(
-        color,
-        Offset(rect.right, rect.bottom),
-        Offset(rect.right - length, rect.bottom),
-        strokeWidth
-    )
-    drawLine(
-        color,
-        Offset(rect.right, rect.bottom),
-        Offset(rect.right, rect.bottom - length),
-        strokeWidth
-    )
+    drawLine(color, Offset(rect.right, rect.top), Offset(rect.right - length, rect.top), strokeWidth)
+    drawLine(color, Offset(rect.right, rect.top), Offset(rect.right, rect.top + length), strokeWidth)
+    drawLine(color, Offset(rect.left, rect.bottom), Offset(rect.left + length, rect.bottom), strokeWidth)
+    drawLine(color, Offset(rect.left, rect.bottom), Offset(rect.left, rect.bottom - length), strokeWidth)
+    drawLine(color, Offset(rect.right, rect.bottom), Offset(rect.right - length, rect.bottom), strokeWidth)
+    drawLine(color, Offset(rect.right, rect.bottom), Offset(rect.right, rect.bottom - length), strokeWidth)
 }

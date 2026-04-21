@@ -4,8 +4,6 @@ import android.annotation.SuppressLint
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,7 +35,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,12 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.request.SuccessResult
-import coil3.request.allowHardware
-import coil3.size.Size
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricFormat
@@ -578,24 +570,25 @@ fun SearchResultItem(
     onApplyClick: () -> Unit,
     onApplyLyricsOnlyClick: () -> Unit
 ) {
-    val context = LocalContext.current
 
     var imageSize by remember(song.picUrl) { mutableStateOf<Pair<Int, Int>?>(null) }
 
     LaunchedEffect(song.picUrl) {
         if (song.picUrl.isNotBlank()) {
-            val imageLoader = SingletonImageLoader.get(context)
-            val request = ImageRequest.Builder(context)
-                .data(song.picUrl)
-                .size(Size.ORIGINAL)
-                .allowHardware(false)
-                .build()
-
-            val result = imageLoader.execute(request)
-            if (result is SuccessResult) {
-                val image = result.image
-                if (image.width > 0 && image.height > 0) {
-                    imageSize = image.width to image.height
+            imageSize = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    android.graphics.BitmapFactory.decodeStream(
+                        java.net.URL(song.picUrl).openStream(),
+                        null,
+                        options
+                    )
+                    if (options.outWidth > 0 && options.outHeight > 0) {
+                        options.outWidth to options.outHeight
+                    } else null
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
                 }
             }
         }

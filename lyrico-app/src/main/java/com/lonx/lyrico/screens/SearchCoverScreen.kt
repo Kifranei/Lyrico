@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,22 +32,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.request.SuccessResult
-import coil3.request.allowHardware
-import coil3.size.Size
 import com.lonx.lyrico.R
 import com.lonx.lyrico.ui.components.bar.SearchBar
 import com.lonx.lyrico.ui.components.rememberTintedPainter
@@ -59,14 +51,11 @@ import com.lonx.lyrico.viewmodel.CoverSearchViewModel
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.result.ResultBackNavigator
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -223,23 +212,24 @@ fun CoverGridItem(
     cover: CoverSearchResult,
     onClick: () -> Unit
 ) {
-    val context = LocalContext.current
     var imageSize by remember(cover.url) { mutableStateOf<Pair<Int, Int>?>(null) }
 
     LaunchedEffect(cover.url) {
         if (cover.url.isNotBlank()) {
-            val imageLoader = SingletonImageLoader.get(context)
-            val request = ImageRequest.Builder(context)
-                .data(cover.url)
-                .size(Size.ORIGINAL)
-                .allowHardware(false)
-                .build()
-
-            val result = imageLoader.execute(request)
-            if (result is SuccessResult) {
-                val image = result.image
-                if (image.width > 0 && image.height > 0) {
-                    imageSize = image.width to image.height
+            imageSize = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    android.graphics.BitmapFactory.decodeStream(
+                        java.net.URL(cover.url).openStream(),
+                        null,
+                        options
+                    )
+                    if (options.outWidth > 0 && options.outHeight > 0) {
+                        options.outWidth to options.outHeight
+                    } else null
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
                 }
             }
         }

@@ -3,6 +3,8 @@ package com.lonx.lyrico.screens
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -63,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -1150,18 +1153,42 @@ private fun CoverSection(
     // 加载图片尺寸
     LaunchedEffect(coverUri) {
         if (coverUri != null) {
-            val imageLoader = SingletonImageLoader.get(context)
-            val request = ImageRequest.Builder(context)
-                .data(coverUri)
-                .size(Size.ORIGINAL)
-                .allowHardware(false)
-                .build()
-
-            val result = imageLoader.execute(request)
-            if (result is SuccessResult) {
-                val image = result.image
-                if (image.width > 0 && image.height > 0) {
-                    imageSize = image.width to image.height
+            imageSize = withContext(Dispatchers.IO) {
+                try {
+                    when (coverUri) {
+                        is ByteArray -> {
+                            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            BitmapFactory.decodeByteArray(coverUri, 0, coverUri.size, options)
+                            if (options.outWidth > 0 && options.outHeight > 0) {
+                                options.outWidth to options.outHeight
+                            } else null
+                        }
+                        is Uri -> {
+                            context.contentResolver.openInputStream(coverUri)?.use { stream ->
+                                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                BitmapFactory.decodeStream(stream, null, options)
+                                if (options.outWidth > 0 && options.outHeight > 0) {
+                                    options.outWidth to options.outHeight
+                                } else null
+                            }
+                        }
+                        is String -> {
+                            context.contentResolver.openInputStream(coverUri.toUri())?.use { stream ->
+                                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                BitmapFactory.decodeStream(stream, null, options)
+                                if (options.outWidth > 0 && options.outHeight > 0) {
+                                    options.outWidth to options.outHeight
+                                } else null
+                            }
+                        }
+                        is Bitmap -> {
+                            coverUri.width to coverUri.height
+                        }
+                        else -> null
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
                 }
             }
         }
