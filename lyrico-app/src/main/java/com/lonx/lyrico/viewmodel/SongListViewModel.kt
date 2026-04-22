@@ -57,6 +57,7 @@ data class SongListUiState(
     val isBatchMatching: Boolean = false,
     val showDeleteDialog: Boolean = false,
     val showBatchDeleteDialog: Boolean = false,
+    val showRenameDialog: Boolean = false,
     val batchProgress: Pair<Int, Int>? = null, // (当前第几首, 总共几首)
     val successCount: Int = 0,
     val failureCount: Int = 0,
@@ -161,6 +162,25 @@ class SongListViewModel(
     }
     fun dismissDeleteDialog() {
         _uiState.update { it.copy(showDeleteDialog = false) }
+    }
+
+    fun showRenameDialog() {
+        _uiState.update { it.copy(showRenameDialog = true) }
+    }
+    fun dismissRenameDialog() {
+        _uiState.update { it.copy(showRenameDialog = false) }
+    }
+
+    fun renameSong(newFileName: String) {
+        val song = _sheetState.value.menuSong ?: return
+        viewModelScope.launch {
+            val success = songRepository.renameSong(song, newFileName)
+            if (success) {
+                dismissRenameDialog()
+                dismissAll()
+                triggerSync(isAuto = true)
+            }
+        }
     }
 
     fun showDetail(song: SongEntity) {

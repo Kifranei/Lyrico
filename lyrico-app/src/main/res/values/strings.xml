@@ -310,6 +310,9 @@
     <string name="menu_action_share">Share Song</string>
     <string name="menu_action_delete">Delete Song</string>
     <string name="menu_action_delete_sub">This will delete the file and cannot be undone</string>
+    <string name="menu_action_rename">Rename File</string>
+    <string name="dialog_rename_title">Rename</string>
+    <string name="msg_copied_to_clipboard">Copied to clipboard</string>
 
     <string name="dialog_action_go_update">Update</string>
     <string name="dialog_title_update_available">New version available: %s</string>

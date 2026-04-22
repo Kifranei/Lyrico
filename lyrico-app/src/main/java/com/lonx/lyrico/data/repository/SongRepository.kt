@@ -130,4 +130,6 @@ interface SongRepository {
      */
     suspend fun getSongsByAlbum(album: String, artist: String): List<SongEntity>
 
+    suspend fun renameSong(song: SongEntity, newFileName: String): Boolean
+
 }

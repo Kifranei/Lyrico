@@ -625,4 +625,32 @@ class SongRepositoryImpl(
             songDao.getSongsByAlbum(album, artist)
         }
     }
+
+    override suspend fun renameSong(song: SongEntity, newFileName: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val oldFile = File(song.filePath)
+                if (!oldFile.exists()) {
+                    Log.e(TAG, "重命名失败: 文件不存在 ${song.filePath}")
+                    return@withContext false
+                }
+                val newFile = File(oldFile.parent, newFileName)
+                if (newFile.exists()) {
+                    Log.e(TAG, "重命名失败: 目标文件已存在 ${newFile.absolutePath}")
+                    return@withContext false
+                }
+                if (oldFile.renameTo(newFile)) {
+                    songDao.deleteByUri(song.uri)
+                    Log.d(TAG, "文件重命名成功: ${song.fileName} -> $newFileName")
+                    true
+                } else {
+                    Log.e(TAG, "重命名失败: ${song.fileName}")
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "重命名异常: ${song.fileName}", e)
+                false
+            }
+        }
+    }
 }

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.provider.MediaStore
 import android.text.format.Formatter
 import android.view.HapticFeedbackConstants
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -78,10 +79,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -142,6 +145,7 @@ import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBarDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.More
@@ -167,9 +171,11 @@ private val SECTIONS_ASC = listOf(
 ) + ('A'..'Z').map { it.toString() } + listOf("#")
 
 private val SECTIONS_DESC = SECTIONS_ASC.asReversed()
+
 enum class TopBarState {
     Selection, Search, Default
 }
+
 @SuppressLint("LocalContextGetResourceValueCall")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -288,7 +294,7 @@ fun SongListScreen(
                             onClick = {
                                 songListViewModel.setSelectionUris()
                                 batchMatchViewModel.openBatchMatchConfig()
-                                      },
+                            },
                             icon = MiuixIcons.Edit
                         )
                         FloatingNavigationBarItem(
@@ -331,12 +337,18 @@ fun SongListScreen(
                         val animationDuration = 300
                         val enter = fadeIn(tween(animationDuration)) +
                                 slideInVertically(
-                                    animationSpec = tween(animationDuration, easing = FastOutSlowInEasing),
+                                    animationSpec = tween(
+                                        animationDuration,
+                                        easing = FastOutSlowInEasing
+                                    ),
                                     initialOffsetY = { -it / 3 } // 从上方 1/3 处滑入
                                 )
                         val exit = fadeOut(tween(animationDuration)) +
                                 slideOutVertically(
-                                    animationSpec = tween(animationDuration, easing = FastOutSlowInEasing),
+                                    animationSpec = tween(
+                                        animationDuration,
+                                        easing = FastOutSlowInEasing
+                                    ),
                                     targetOffsetY = { -it / 3 } // 向上方 1/3 处滑出
                                 )
 
@@ -486,7 +498,12 @@ fun SongListScreen(
                                                             } else {
                                                                 SortOrder.ASC
                                                             }
-                                                            songListViewModel.onSortChange(SortInfo(type, newOrder))
+                                                            songListViewModel.onSortChange(
+                                                                SortInfo(
+                                                                    type,
+                                                                    newOrder
+                                                                )
+                                                            )
                                                         }
                                                     )
                                                 }
@@ -496,7 +513,9 @@ fun SongListScreen(
                                                     summary = stringResource(R.string.show_scroll_top_button_hint),
                                                     checked = showScrollTopButton,
                                                     onCheckedChange = {
-                                                        songListViewModel.setScrollToTopButtonEnabled(it)
+                                                        songListViewModel.setScrollToTopButtonEnabled(
+                                                            it
+                                                        )
                                                     }
                                                 )
                                             }
@@ -525,7 +544,7 @@ fun SongListScreen(
                     exit = slideOutVertically(
                         targetOffsetY = { -it }
                     ) + fadeOut()
-                ){
+                ) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -576,7 +595,11 @@ fun SongListScreen(
                                     trailingContent = {
                                         Box(modifier = Modifier.padding(end = 8.dp)) {
                                             if (!isSelectionMode) {
-                                                IconButton(onClick = { songListViewModel.showMenu(song) }) {
+                                                IconButton(onClick = {
+                                                    songListViewModel.showMenu(
+                                                        song
+                                                    )
+                                                }) {
                                                     Icon(
                                                         imageVector = MiuixIcons.More,
                                                         contentDescription = "More"
@@ -585,7 +608,11 @@ fun SongListScreen(
                                             } else {
                                                 Checkbox(
                                                     state = if (selectedSongIds.contains(song.mediaId)) ToggleableState.On else ToggleableState.Off,
-                                                    onClick = { songListViewModel.toggleSelection(song.mediaId) }
+                                                    onClick = {
+                                                        songListViewModel.toggleSelection(
+                                                            song.mediaId
+                                                        )
+                                                    }
                                                 )
                                             }
                                         }
@@ -653,7 +680,8 @@ fun SongListScreen(
                                     context.getString(R.string.share_chooser_title)
                                 )
                             )
-                        }
+                        },
+                        onRename = { songListViewModel.showRenameDialog() }
                     )
                 }
             }
@@ -666,6 +694,7 @@ fun SongListScreen(
             }
             WindowBottomSheet(
                 show = showDetailSheet,
+                enableNestedScroll = false,
                 onDismissRequest = { showDetailSheet = false },
                 onDismissFinished = { songListViewModel.dismissDetail() },
             ) {
@@ -697,6 +726,56 @@ fun SongListScreen(
                                 songListViewModel.dismissDeleteDialog()
                                 songListViewModel.dismissAll()
                                 songListViewModel.delete(sheetUiState.menuSong!!)
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.textButtonColorsPrimary()
+                        )
+                    }
+                }
+            }
+            WindowDialog(
+                title = stringResource(R.string.dialog_rename_title),
+                show = songListUiState.showRenameDialog && sheetUiState.menuSong != null,
+                onDismissRequest = { songListViewModel.dismissRenameDialog() },
+            ) {
+                val renameSong = sheetUiState.menuSong
+                val fileExtension = renameSong?.fileName?.substringAfterLast('.', "") ?: ""
+                val extensionDot = if (fileExtension.isNotEmpty()) ".$fileExtension" else ""
+                val oldName = renameSong?.fileName?.substringBeforeLast('.') ?: ""
+                var newName by remember(renameSong) {
+                    mutableStateOf(oldName)
+                }
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    top.yukonga.miuix.kmp.basic.TextField(
+                        value = newName,
+                        onValueChange = { newName = it },
+                        maxLines = 1,
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            if (extensionDot.isNotEmpty()) {
+                                Text(
+                                    text = extensionDot,
+                                    style = MiuixTheme.textStyles.footnote1,
+                                    modifier = Modifier.padding(end = 12.dp)
+                                )
+                            }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.SpaceBetween) {
+                        top.yukonga.miuix.kmp.basic.TextButton(
+                            text = stringResource(R.string.cancel),
+                            onClick = { songListViewModel.dismissRenameDialog() },
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(20.dp))
+                        top.yukonga.miuix.kmp.basic.TextButton(
+                            text = stringResource(R.string.confirm),
+                            onClick = {
+                                val fullNewName = newName.trim() + extensionDot
+                                if (newName.isNotBlank() && fullNewName != renameSong?.fileName) {
+                                    songListViewModel.renameSong(fullNewName)
+                                }
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.textButtonColorsPrimary()
@@ -1195,192 +1274,225 @@ fun SongMenuBottomSheetContent(
     showInfo: () -> Unit = {},
     onDelete: () -> Unit = {},
     onShare: () -> Unit = {},
+    onRename: () -> Unit = {},
 ) {
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 32.dp)
-            .scrollEndHaptic()
-            .overScrollVertical(),
-        overscrollEffect = null,
+            .verticalScroll(rememberScrollState()),
     ) {
-        item(key = "song_menu_title") {
-            val songTitle = song.title.takeIf { !it.isNullOrBlank() } ?: song.fileName
-            val text =
-                song.artist.takeIf { !it.isNullOrBlank() }?.let { "$songTitle - $it" } ?: songTitle
-            Text(
-                text = text,
-                style = MiuixTheme.textStyles.footnote1,
-                color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+        val songTitle = song.title.takeIf { !it.isNullOrBlank() } ?: song.fileName
+        val text =
+            song.artist.takeIf { !it.isNullOrBlank() }?.let { "$songTitle - $it" } ?: songTitle
+        Text(
+            text = text,
+            style = MiuixTheme.textStyles.footnote1,
+            color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+        )
+
+
+        Card(
+            modifier = Modifier.padding(bottom = 12.dp),
+            colors = CardDefaults.defaultColors(
+                color = MiuixTheme.colorScheme.secondaryContainer,
+            )
+        ) {
+            ArrowPreference(
+                title = stringResource(R.string.menu_action_play),
+                summary = stringResource(R.string.menu_action_play_sub),
+                onClick = { onPlay() }
+            )
+            ArrowPreference(
+                title = stringResource(R.string.menu_action_info),
+                onClick = { showInfo() }
+            )
+            ArrowPreference(
+                title = stringResource(R.string.menu_action_share),
+                onClick = { onShare() }
+            )
+            ArrowPreference(
+                title = stringResource(R.string.menu_action_rename),
+                onClick = { onRename() }
+            )
+            ArrowPreference(
+                title = stringResource(R.string.menu_action_delete),
+                summary = stringResource(R.string.menu_action_delete_sub),
+                titleColor = BasicComponentColors(
+                    MiuixTheme.colorScheme.error,
+                    MiuixTheme.colorScheme.disabledOnSecondaryVariant
+                ),
+                onClick = { onDelete() }
             )
         }
 
-        item(key = "song_menu_actions") {
-            Card(
-                modifier = Modifier.padding(bottom = 12.dp),
-                colors = CardDefaults.defaultColors(
-                    color = MiuixTheme.colorScheme.secondaryContainer,
-                )
-            ) {
-                ArrowPreference(
-                    title = stringResource(R.string.menu_action_play),
-                    summary = stringResource(R.string.menu_action_play_sub),
-                    onClick = { onPlay() }
-                )
-                ArrowPreference(
-                    title = stringResource(R.string.menu_action_info),
-                    onClick = { showInfo() }
-                )
-                ArrowPreference(
-                    title = stringResource(R.string.menu_action_share),
-                    onClick = { onShare() }
-                )
-                ArrowPreference(
-                    title = stringResource(R.string.menu_action_delete),
-                    summary = stringResource(R.string.menu_action_delete_sub),
-                    titleColor = BasicComponentColors(
-                        MiuixTheme.colorScheme.error,
-                        MiuixTheme.colorScheme.disabledOnSecondaryVariant
-                    ),
-                    onClick = { onDelete() }
-                )
-            }
-        }
     }
 }
 
 @SuppressLint("DefaultLocale")
 @Composable
 fun SongDetailBottomSheetContent(context: Context, song: SongEntity) {
+    val clipboardManager = LocalClipboardManager.current
     val dateFormat = remember {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     }
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 32.dp)
-            .scrollEndHaptic()
-            .overScrollVertical(),
-        overscrollEffect = null,
+            .verticalScroll(rememberScrollState()),
     ) {
-        item {
-            Row(
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            AsyncImage(
+                model = CoverRequest(song.getUri, song.fileLastModified),
+                contentDescription = stringResource(R.string.cd_cover),
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                AsyncImage(
-                    model = CoverRequest(song.getUri, song.fileLastModified),
-                    contentDescription = stringResource(R.string.cd_cover),
-                    modifier = Modifier
-                        .size(100.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Crop,
-                    placeholder = painterResource(R.drawable.ic_album_24dp),
-                    error = painterResource(R.drawable.ic_album_24dp)
-                )
+                    .size(100.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop,
+                placeholder = painterResource(R.drawable.ic_album_24dp),
+                error = painterResource(R.drawable.ic_album_24dp)
+            )
 
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = song.title.takeIf { !it.isNullOrBlank() } ?: song.fileName,
-                        style = MiuixTheme.textStyles.title3,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = song.artist.takeIf { !it.isNullOrBlank() }
-                            ?: stringResource(R.string.unknown_artist),
-                        style = MiuixTheme.textStyles.footnote1,
-                        color = MiuixTheme.colorScheme.primary
-                    )
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = song.title.takeIf { !it.isNullOrBlank() } ?: song.fileName,
+                    style = MiuixTheme.textStyles.title3,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = song.artist.takeIf { !it.isNullOrBlank() }
+                        ?: stringResource(R.string.unknown_artist),
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = MiuixTheme.colorScheme.primary
+                )
             }
         }
 
-        item {
-            Card(
-                modifier = Modifier.padding(bottom = 12.dp),
-                colors = CardDefaults.defaultColors(
-                    color = MiuixTheme.colorScheme.secondaryContainer,
-                )
-            ) {
-                SongDetailItem(stringResource(R.string.label_album), song.album)
-                SongDetailItem(stringResource(R.string.label_date), song.date)
-                SongDetailItem(stringResource(R.string.label_genre), song.genre)
-                SongDetailItem(stringResource(R.string.label_track_number), song.trackerNumber)
-                SongDetailItem(
-                    stringResource(R.string.label_duration),
-                    if (song.durationMilliseconds > 0) {
-                        val min = song.durationMilliseconds / 60000
-                        val sec = (song.durationMilliseconds % 60000) / 1000
-                        String.format("%d:%02d", min, sec)
-                    } else null
-                )
 
-                SongDetailItem(
-                    stringResource(R.string.label_bitrate),
-                    if (song.bitrate > 0) "${song.bitrate} kbps" else null
-                )
-
-                SongDetailItem(
-                    stringResource(R.string.label_sample_rate),
-                    if (song.sampleRate > 0) "${song.sampleRate} Hz" else null
-                )
-
-                SongDetailItem(
-                    stringResource(R.string.label_channels),
-                    if (song.channels > 0) "${song.channels}" else null
-                )
-                SongDetailItem(
-                    stringResource(R.string.label_date_added),
-                    if (song.fileAdded > 0)
-                        dateFormat.format(Date(song.fileAdded))
-                    else null
-                )
-
-                SongDetailItem(
-                    stringResource(R.string.label_date_modified),
-                    if (song.fileLastModified > 0)
-                        dateFormat.format(Date(song.fileLastModified))
-                    else null
-                )
-
-                SongDetailItem(
-                    stringResource(R.string.label_file_path),
-                    song.filePath
-                )
-
-                SongDetailItem(
-                    stringResource(R.string.label_file_size),
-                    if (song.fileSize > 0)
-                        Formatter.formatFileSize(context, song.fileSize)
-                    else null
-                )
-
-                if (BuildConfig.DEBUG) {
-                    SongDetailItem(
-                        label = "文件URI",
-                        value = song.uri
-                    )
-                    SongDetailItem(
-                        label = "文件ID",
-                        value = song.id.toString()
-                    )
-                    SongDetailItem(
-                        label = "文件名",
-                        value = song.fileName
-                    )
-                }
+        Card(
+            modifier = Modifier.padding(bottom = 12.dp),
+            colors = CardDefaults.defaultColors(
+                color = MiuixTheme.colorScheme.secondaryContainer,
+            )
+        ) {
+            val copyToClipboard: (String) -> Unit = { text ->
+                clipboardManager.setText(AnnotatedString(text))
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.msg_copied_to_clipboard),
+                    Toast.LENGTH_SHORT
+                ).show()
             }
+            SongDetailItem(
+                stringResource(R.string.label_album),
+                song.album,
+                onCopy = copyToClipboard
+            )
+            SongDetailItem(stringResource(R.string.label_date), song.date, onCopy = copyToClipboard)
+            SongDetailItem(
+                stringResource(R.string.label_genre),
+                song.genre,
+                onCopy = copyToClipboard
+            )
+            SongDetailItem(
+                stringResource(R.string.label_track_number),
+                song.trackerNumber,
+                onCopy = copyToClipboard
+            )
+            SongDetailItem(
+                stringResource(R.string.label_duration),
+                if (song.durationMilliseconds > 0) {
+                    val min = song.durationMilliseconds / 60000
+                    val sec = (song.durationMilliseconds % 60000) / 1000
+                    String.format("%d:%02d", min, sec)
+                } else null,
+                onCopy = copyToClipboard
+            )
+
+            SongDetailItem(
+                stringResource(R.string.label_bitrate),
+                if (song.bitrate > 0) "${song.bitrate} kbps" else null,
+                onCopy = copyToClipboard
+            )
+
+            SongDetailItem(
+                stringResource(R.string.label_sample_rate),
+                if (song.sampleRate > 0) "${song.sampleRate} Hz" else null,
+                onCopy = copyToClipboard
+            )
+
+            SongDetailItem(
+                stringResource(R.string.label_channels),
+                if (song.channels > 0) "${song.channels}" else null,
+                onCopy = copyToClipboard
+            )
+            SongDetailItem(
+                stringResource(R.string.label_date_added),
+                if (song.fileAdded > 0)
+                    dateFormat.format(Date(song.fileAdded))
+                else null,
+                onCopy = copyToClipboard
+            )
+
+            SongDetailItem(
+                stringResource(R.string.label_date_modified),
+                if (song.fileLastModified > 0)
+                    dateFormat.format(Date(song.fileLastModified))
+                else null,
+                onCopy = copyToClipboard
+            )
+
+            SongDetailItem(
+                stringResource(R.string.label_file_path),
+                song.filePath,
+                onCopy = copyToClipboard
+            )
+
+            SongDetailItem(
+                stringResource(R.string.label_file_size),
+                if (song.fileSize > 0)
+                    Formatter.formatFileSize(context, song.fileSize)
+                else null,
+                onCopy = copyToClipboard
+            )
+
+            if (BuildConfig.DEBUG) {
+                SongDetailItem(
+                    label = "文件URI",
+                    value = song.uri,
+                    onCopy = copyToClipboard
+                )
+                SongDetailItem(
+                    label = "文件ID",
+                    value = song.id.toString(),
+                    onCopy = copyToClipboard
+                )
+                SongDetailItem(
+                    label = "文件名",
+                    value = song.fileName,
+                    onCopy = copyToClipboard
+                )
+            }
+
         }
     }
 }
 
 @Composable
-fun SongDetailItem(label: String, value: String?) {
+fun SongDetailItem(
+    label: String,
+    value: String?,
+    onCopy: ((String) -> Unit)? = null
+) {
     if (value.isNullOrBlank()) return
 
     Column(
@@ -1392,16 +1504,39 @@ fun SongDetailItem(label: String, value: String?) {
             text = label,
             style = MiuixTheme.textStyles.footnote1,
         )
-        Text(
-            text = value,
-            style = MiuixTheme.textStyles.main,
-            modifier = Modifier.padding(top = 2.dp)
-        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = value,
+                style = MiuixTheme.textStyles.main,
+                modifier = Modifier.weight(1f)
+            )
+
+            if (onCopy != null) {
+                IconButton(
+                    modifier = Modifier.size(20.dp),
+                    onClick = { onCopy(value) }
+                ) {
+                    Icon(
+                        modifier = Modifier.size(16.dp),
+                        imageVector = MiuixIcons.Copy,
+                        contentDescription = "复制"
+                    )
+                }
+            }
+        }
     }
 }
+
 enum class ScrollDirection {
     UP, DOWN, NONE
 }
+
 @Composable
 fun rememberDragSelectionModifier(
     listState: LazyListState,
@@ -1534,11 +1669,15 @@ fun rememberDragSelectionModifier(
 
                         autoScrollSpeed = when (scrollDirection) {
                             ScrollDirection.DOWN -> {
-                                ((dragDistance - startThreshold) * speedFactor).coerceAtMost(maxSpeed)
+                                ((dragDistance - startThreshold) * speedFactor).coerceAtMost(
+                                    maxSpeed
+                                )
                             }
+
                             ScrollDirection.UP -> {
                                 ((dragDistance + startThreshold) * speedFactor).coerceAtLeast(-maxSpeed)
                             }
+
                             ScrollDirection.NONE -> 0f
                         }
                     }
