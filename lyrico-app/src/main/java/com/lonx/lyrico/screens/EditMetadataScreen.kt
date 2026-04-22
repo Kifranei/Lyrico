@@ -1173,13 +1173,33 @@ private fun CoverSection(
                             }
                         }
                         is String -> {
-                            context.contentResolver.openInputStream(coverUri.toUri())?.use { stream ->
-                                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                                BitmapFactory.decodeStream(stream, null, options)
-                                if (options.outWidth > 0 && options.outHeight > 0) {
-                                    options.outWidth to options.outHeight
-                                } else null
+                            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+
+                            when {
+                                // 网络 URL
+                                coverUri.startsWith("http://") || coverUri.startsWith("https://") -> {
+                                    java.net.URL(coverUri).openStream().use { stream ->
+                                        BitmapFactory.decodeStream(stream, null, options)
+                                    }
+                                }
+
+                                // content:// 或 file:// 统一用 Uri 处理
+                                coverUri.startsWith("content://") || coverUri.startsWith("file://") -> {
+                                    val uri = coverUri.toUri()
+                                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                                        BitmapFactory.decodeStream(stream, null, options)
+                                    }
+                                }
+
+                                // 普通文件路径
+                                else -> {
+                                    BitmapFactory.decodeFile(coverUri, options)
+                                }
                             }
+
+                            if (options.outWidth > 0 && options.outHeight > 0) {
+                                options.outWidth to options.outHeight
+                            } else null
                         }
                         is Bitmap -> {
                             coverUri.width to coverUri.height
