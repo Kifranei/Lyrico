@@ -820,8 +820,8 @@ fun SongListScreen(
                     batchMatchViewModel.saveBatchMatchConfig(config)
                     batchMatchViewModel.closeBatchMatchConfig()
                 },
-                onConfirm = {
-                    batchMatchViewModel.batchMatch(songs)
+                onConfirm = { config ->
+                    batchMatchViewModel.batchMatch(songs, config)
                 }
             )
 

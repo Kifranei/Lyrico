@@ -58,7 +58,7 @@ fun BatchMatchConfigBottomSheet(
     show: Boolean,
     initialConfig: BatchMatchConfig,
     onDismissRequest: (BatchMatchConfig) -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: (BatchMatchConfig) -> Unit
 ) {
     var config by remember { mutableStateOf(initialConfig) }
 
@@ -212,7 +212,7 @@ fun BatchMatchConfigBottomSheet(
                     text = stringResource(R.string.confirm),
                     onClick = {
                         onDismissRequest(config)
-                        onConfirm()
+                        onConfirm(config)
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.textButtonColorsPrimary(),

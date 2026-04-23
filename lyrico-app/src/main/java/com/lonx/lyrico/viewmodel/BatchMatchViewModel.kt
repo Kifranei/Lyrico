@@ -129,11 +129,10 @@ class BatchMatchViewModel(
     /**
      * 执行批量匹配
      */
-    fun batchMatch(songs: List<SongEntity>) {
+    fun batchMatch(songs: List<SongEntity>, matchConfig: BatchMatchConfig) {
         val selectedIds = selectionManager.selectedUris.value
         if (selectedIds.isEmpty()) return
 
-        val matchConfig = batchMatchConfig.value
         val separatorValue = separator.value
 
         // 关闭配置对话框
