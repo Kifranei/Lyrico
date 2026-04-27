@@ -794,7 +794,7 @@ fun SongListScreen(
                                 }
                             },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.textButtonColorsPrimary()
+                            colors = MiuixButtonDefaults.textButtonColorsPrimary()
                         )
                     }
                 }
