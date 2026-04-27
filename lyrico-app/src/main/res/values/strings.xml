@@ -451,9 +451,24 @@
     <string name="edit_cover">Edit Cover</string>
     <string name="title_opensource_licence">Open source licence</string>
     <string name="batch_edit_processing">Processing</string>
+    <string name="batch_edit_remove_replay_gain">Remove ReplayGain</string>
+    <string name="batch_edit_remove_replay_gain_desc">Remove all replay gain tags from selected songs</string>
 
     <!-- Same Album Cover -->
     <string name="msg_same_album_cover_applied">Applied same album cover</string>
     <string name="msg_no_same_album_cover_found">No cover found in same album</string>
     <string name="msg_load_same_album_cover_failed">Failed to load same album cover</string>
+
+    <!-- Batch ReplayGain -->
+    <string name="action_batch_replay_gain">Batch Compute ReplayGain</string>
+    <string name="batch_replay_gain_concurrency">Concurrency</string>
+    <string name="batch_replay_gain_concurrency_label">Concurrency (1-5)</string>
+    <string name="batch_replay_gain_concurrency_tip">Higher concurrency leads to faster scanning but may consume more CPU and memory resources.</string>
+    <string name="batch_replay_gain_current">Scanning: %s</string>
+    <string name="batch_replay_gain_writing">Writing: %s</string>
+    <string name="batch_replay_gain_total_time">Total time: %.2f s</string>
+    <string name="batch_replay_gain_success">Success: %d</string>
+    <string name="batch_replay_gain_skipped">Skipped: %d</string>
+    <string name="batch_replay_gain_failure">Failure: %d</string>
+    <string name="action_start">Start</string>
 </resources>

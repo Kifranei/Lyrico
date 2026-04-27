@@ -461,9 +461,22 @@
     <string name="edit_cover">点击编辑</string>
     <string name="title_opensource_licence">开源代码许可</string>
     <string name="batch_edit_processing">处理中</string>
+    <string name="batch_edit_remove_replay_gain">删除回放增益</string>
+    <string name="batch_edit_remove_replay_gain_desc">从选中的歌曲中删除所有回放增益标签</string>
 
     <!-- 同专辑封面 -->
     <string name="msg_same_album_cover_applied">已应用同专辑封面</string>
     <string name="msg_no_same_album_cover_found">未找到同专辑的歌曲封面</string>
     <string name="msg_load_same_album_cover_failed">加载同专辑封面失败</string>
+
+    <!-- 批量 ReplayGain -->
+    <string name="action_batch_replay_gain">批量计算回放增益</string>
+    <string name="batch_replay_gain_concurrency">并发数</string>
+    <string name="batch_replay_gain_concurrency_tip">并发数越高，扫描速度越快，但可能消耗更多 CPU 和内存资源。</string>
+    <string name="batch_replay_gain_current">扫描: %s</string>
+    <string name="batch_replay_gain_total_time">用时 %.2f 秒</string>
+    <string name="batch_replay_gain_success">成功: %d</string>
+    <string name="batch_replay_gain_skipped">跳过: %d</string>
+    <string name="batch_replay_gain_failure">失败: %d</string>
+    <string name="action_start">开始</string>
 </resources>

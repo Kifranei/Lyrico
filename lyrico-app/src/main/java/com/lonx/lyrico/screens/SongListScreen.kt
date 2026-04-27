@@ -55,6 +55,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -100,9 +101,11 @@ import com.lonx.lyrico.ui.components.DropdownItem
 import com.lonx.lyrico.ui.components.bar.SearchBar
 import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.ui.dialog.BatchMatchConfigBottomSheet
+import com.lonx.lyrico.ui.dialog.ReplayGainConfigBottomSheet
 import com.lonx.lyrico.ui.theme.LyricoColors
 import com.lonx.lyrico.utils.coil.CoverRequest
 import com.lonx.lyrico.viewmodel.BatchMatchViewModel
+import com.lonx.lyrico.viewmodel.BatchReplayGainViewModel
 import com.lonx.lyrico.viewmodel.SongListViewModel
 import com.lonx.lyrico.viewmodel.SortBy
 import com.lonx.lyrico.viewmodel.SortInfo
@@ -123,7 +126,6 @@ import my.nanihadesuka.compose.ScrollbarSelectionMode
 import my.nanihadesuka.compose.ScrollbarSettings
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.BasicComponentColors
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Checkbox
@@ -185,8 +187,10 @@ fun SongListScreen(
 ) {
     val songListViewModel: SongListViewModel = koinViewModel()
     val batchMatchViewModel: BatchMatchViewModel = koinViewModel()
+    val batchReplayGainViewModel: BatchReplayGainViewModel = koinViewModel()
     val songListUiState by songListViewModel.uiState.collectAsState()
     val batchMatchUiState by batchMatchViewModel.uiState.collectAsState()
+    val batchReplayGainUiState by batchReplayGainViewModel.uiState.collectAsStateWithLifecycle()
     val sortInfo by songListViewModel.sortInfo.collectAsState()
     val songs by songListViewModel.songs.collectAsState()
     val searchType by songListViewModel.searchType.collectAsState()
@@ -318,6 +322,18 @@ fun SongListScreen(
                                 }
                             },
                             icon = MiuixIcons.Rename
+                        )
+                        FloatingNavigationBarItem(
+                            selected = hasSelection,
+                            enabled = hasSelection,
+                            label = stringResource(R.string.action_batch_replay_gain),
+                            onClick = {
+                                batchReplayGainViewModel.setSelectionUris(songListViewModel.selectedSongIds.value.map { mediaId ->
+                                    songs.find { it.mediaId == mediaId }?.uri ?: ""
+                                }.filter { it.isNotEmpty() })
+                                batchReplayGainViewModel.openReplayGainConfig()
+                            },
+                            icon = MiuixIcons.Edit
                         )
                     }
                 }
@@ -728,7 +744,7 @@ fun SongListScreen(
                                 songListViewModel.delete(sheetUiState.menuSong!!)
                             },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.textButtonColorsPrimary()
+                            colors = MiuixButtonDefaults.textButtonColorsPrimary()
                         )
                     }
                 }
@@ -807,7 +823,7 @@ fun SongListScreen(
                                 songListViewModel.batchDelete(songs)
                             },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.textButtonColorsPrimary()
+                            colors = MiuixButtonDefaults.textButtonColorsPrimary()
                         )
                     }
                 }
@@ -928,8 +944,137 @@ fun SongListScreen(
                                 }
                             },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.textButtonColorsPrimary(),
+                            colors = MiuixButtonDefaults.textButtonColorsPrimary(),
                         )
+                    }
+                }
+            }
+
+            // ReplayGain配置BottomSheet
+            ReplayGainConfigBottomSheet(
+                show = batchReplayGainUiState.showConfigDialog,
+                initialConcurrency = batchReplayGainUiState.concurrency,
+                onDismissRequest = { concurrency ->
+                    batchReplayGainViewModel.setConcurrency(concurrency)
+                    batchReplayGainViewModel.closeReplayGainConfig()
+                },
+                onConfirm = { _ ->
+                    batchReplayGainViewModel.startBatchScan()
+                }
+            )
+
+            WindowBottomSheet(
+                show = batchReplayGainUiState.showProgressDialog,
+                onDismissRequest = {
+                    if (!batchReplayGainUiState.isRunning) batchReplayGainViewModel.closeProgressDialog()
+                },
+                onDismissFinished = {
+                    if (batchReplayGainUiState.isSuccess) {
+                        batchReplayGainViewModel.closeProgressDialog()
+                    }
+                },
+                allowDismiss = !batchReplayGainUiState.isRunning,
+                title = stringResource(R.string.action_batch_replay_gain),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(bottom = 32.dp)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Column(
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        batchReplayGainUiState.progress?.let { (current, total) ->
+                            val progress = if (total > 0) current.toFloat() / total.toFloat() else 0f
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (batchReplayGainUiState.isRunning) {
+                                        batchReplayGainUiState.currentFile.ifEmpty { stringResource(R.string.batch_edit_processing) }
+                                    } else {
+                                        stringResource(
+                                            R.string.batch_replay_gain_total_time,
+                                            batchReplayGainUiState.totalTimeMillis / 1000.0
+                                        )
+                                    },
+                                    style = MiuixTheme.textStyles.subtitle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Text(
+                                    text = "$current / $total",
+                                    style = MiuixTheme.textStyles.main,
+                                    textAlign = TextAlign.End
+                                )
+                            }
+
+                            LinearProgressIndicator(
+                                progress = progress,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.batch_replay_gain_success,
+                                batchReplayGainUiState.successCount
+                            ),
+                            style = MiuixTheme.textStyles.main
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.batch_replay_gain_skipped,
+                                batchReplayGainUiState.skippedCount
+                            ),
+                            style = MiuixTheme.textStyles.main
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.batch_replay_gain_failure,
+                                batchReplayGainUiState.failureCount
+                            ),
+                            style = MiuixTheme.textStyles.main
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.SpaceBetween) {
+                        top.yukonga.miuix.kmp.basic.TextButton(
+                            text = if (batchReplayGainUiState.isRunning) stringResource(R.string.action_abort) else stringResource(R.string.action_close),
+                            onClick = {
+                                if (batchReplayGainUiState.isRunning) {
+                                    batchReplayGainViewModel.abortBatchScan()
+                                } else {
+                                    batchReplayGainViewModel.closeProgressDialog()
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (!batchReplayGainUiState.isRunning) {
+                            Spacer(Modifier.width(20.dp))
+                            top.yukonga.miuix.kmp.basic.TextButton(
+                                text = stringResource(R.string.confirm),
+                                onClick = { batchReplayGainViewModel.closeProgressDialog() },
+                                modifier = Modifier.weight(1f),
+                                colors = MiuixButtonDefaults.textButtonColorsPrimary(),
+                            )
+                        }
                     }
                 }
             }

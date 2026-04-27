@@ -393,6 +393,22 @@ fun BatchEditScreen(
                     }
                 }
             }
+
+            // 回放增益组
+            item(key = "replay_gain") {
+                Column {
+                    SmallTitle(text = stringResource(R.string.group_replay_gain))
+                    Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                            BatchEditFieldItem(
+                                field = BatchEditField.REPLAY_GAIN,
+                                value = uiState.replayGain,
+                                onValueChange = { viewModel.updateReplayGain(it) }
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 

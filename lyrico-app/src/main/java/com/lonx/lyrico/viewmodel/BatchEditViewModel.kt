@@ -41,6 +41,7 @@ enum class BatchEditField(val labelResId: Int) {
     COPYRIGHT(R.string.label_copyright),
     COMMENT(R.string.label_comment),
     LYRICS(R.string.label_lyrics),
+    REPLAY_GAIN(R.string.label_replay_gain),
     COVER(R.string.label_cover),
     RATING(R.string.label_rating),
 }
@@ -78,6 +79,9 @@ data class BatchEditUiState(
 
     /** 歌词偏移（毫秒） */
     val lyricsOffset: String = "",
+
+    /** 回放增益（"<keep>"表示不修改，""表示清除） */
+    val replayGain: String = "<keep>",
 
     /** 自定义标签 */
     val customFields: List<CustomTagField> = emptyList(),
@@ -139,6 +143,10 @@ class BatchEditViewModel(
     // ── 歌词偏移 ──────────────────────────────────────────
 
     fun updateLyricsOffset(value: String) { _uiState.update { it.copy(lyricsOffset = value) } }
+
+    // ── 回放增益 ──────────────────────────────────────────
+
+    fun updateReplayGain(value: String) { _uiState.update { it.copy(replayGain = value) } }
 
     // ── 自定义标签 ──────────────────────────────────────────
 
@@ -303,6 +311,11 @@ class BatchEditViewModel(
         if (state.copyright != "<keep>") tag = tag.copy(copyright = state.copyright)
         if (state.comment != "<keep>") tag = tag.copy(comment = state.comment)
         if (state.lyrics != "<keep>") tag = tag.copy(lyrics = state.lyrics)
+        
+        // 处理回放增益
+        if (state.replayGain != "<keep>") {
+            tag = tag.copy(replayGainTrackGain = if (state.replayGain.isEmpty()) null else state.replayGain)
+        }
         
         // 处理 rating - 只在明确修改时才更新
         if (state.ratingModified) tag = tag.copy(rating = state.rating)

@@ -25,6 +25,7 @@ import com.lonx.lyrico.viewmodel.BatchEditViewModel
 import com.lonx.lyrico.viewmodel.BatchMatchHistoryViewModel
 import com.lonx.lyrico.viewmodel.BatchMatchViewModel
 import com.lonx.lyrico.viewmodel.BatchRenameViewModel
+import com.lonx.lyrico.viewmodel.BatchReplayGainViewModel
 import com.lonx.lyrico.viewmodel.CoverSearchViewModel
 import com.lonx.lyrico.viewmodel.EditMetadataViewModel
 import com.lonx.lyrico.viewmodel.FolderManagerViewModel
@@ -216,5 +217,6 @@ val appModule = module {
     }
     viewModel { BatchRenameViewModel(get(), get(), get()) }
     viewModel { BatchEditViewModel(get(), get(), get())}
+    viewModel { BatchReplayGainViewModel(get(), get(), androidContext()) }
 }
 
