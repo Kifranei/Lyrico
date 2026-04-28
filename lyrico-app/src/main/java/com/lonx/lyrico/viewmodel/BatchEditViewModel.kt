@@ -117,36 +117,79 @@ class BatchEditViewModel(
     }
 
 
-
     // ── 标签值更新 ──────────────────────────────────────────
 
-    fun updateTitle(value: String) { _uiState.update { it.copy(title = value) } }
-    fun updateArtist(value: String) { _uiState.update { it.copy(artist = value) } }
-    fun updateAlbumArtist(value: String) { _uiState.update { it.copy(albumArtist = value) } }
-    fun updateAlbum(value: String) { _uiState.update { it.copy(album = value) } }
-    fun updateDate(value: String) { _uiState.update { it.copy(date = value) } }
-    fun updateGenre(value: String) { _uiState.update { it.copy(genre = value) } }
-    fun updateTrackNumber(value: String) { _uiState.update { it.copy(trackNumber = value) } }
-    fun updateDiscNumber(value: String) { _uiState.update { it.copy(discNumber = value) } }
-    fun updateComposer(value: String) { _uiState.update { it.copy(composer = value) } }
-    fun updateLyricist(value: String) { _uiState.update { it.copy(lyricist = value) } }
-    fun updateCopyright(value: String) { _uiState.update { it.copy(copyright = value) } }
-    fun updateComment(value: String) { _uiState.update { it.copy(comment = value) } }
-    fun updateLyrics(value: String) { _uiState.update { it.copy(lyrics = value) } }
-    fun updateRating(value: Int) { 
-        _uiState.update { it.copy(rating = value, ratingModified = true) } 
+    fun updateTitle(value: String) {
+        _uiState.update { it.copy(title = value) }
     }
-    fun resetRating() { 
-        _uiState.update { it.copy(rating = 0, ratingModified = false) } 
+
+    fun updateArtist(value: String) {
+        _uiState.update { it.copy(artist = value) }
+    }
+
+    fun updateAlbumArtist(value: String) {
+        _uiState.update { it.copy(albumArtist = value) }
+    }
+
+    fun updateAlbum(value: String) {
+        _uiState.update { it.copy(album = value) }
+    }
+
+    fun updateDate(value: String) {
+        _uiState.update { it.copy(date = value) }
+    }
+
+    fun updateGenre(value: String) {
+        _uiState.update { it.copy(genre = value) }
+    }
+
+    fun updateTrackNumber(value: String) {
+        _uiState.update { it.copy(trackNumber = value) }
+    }
+
+    fun updateDiscNumber(value: String) {
+        _uiState.update { it.copy(discNumber = value) }
+    }
+
+    fun updateComposer(value: String) {
+        _uiState.update { it.copy(composer = value) }
+    }
+
+    fun updateLyricist(value: String) {
+        _uiState.update { it.copy(lyricist = value) }
+    }
+
+    fun updateCopyright(value: String) {
+        _uiState.update { it.copy(copyright = value) }
+    }
+
+    fun updateComment(value: String) {
+        _uiState.update { it.copy(comment = value) }
+    }
+
+    fun updateLyrics(value: String) {
+        _uiState.update { it.copy(lyrics = value) }
+    }
+
+    fun updateRating(value: Int) {
+        _uiState.update { it.copy(rating = value, ratingModified = true) }
+    }
+
+    fun resetRating() {
+        _uiState.update { it.copy(rating = 0, ratingModified = false) }
     }
 
     // ── 歌词偏移 ──────────────────────────────────────────
 
-    fun updateLyricsOffset(value: String) { _uiState.update { it.copy(lyricsOffset = value) } }
+    fun updateLyricsOffset(value: String) {
+        _uiState.update { it.copy(lyricsOffset = value) }
+    }
 
     // ── 回放增益 ──────────────────────────────────────────
 
-    fun updateReplayGain(value: String) { _uiState.update { it.copy(replayGain = value) } }
+    fun updateReplayGain(value: String) {
+        _uiState.update { it.copy(replayGain = value) }
+    }
 
     // ── 自定义标签 ──────────────────────────────────────────
 
@@ -199,7 +242,7 @@ class BatchEditViewModel(
             val startTime = System.currentTimeMillis()
             val successCounter = AtomicInteger(0)
             val failureCounter = AtomicInteger(0)
-            
+
             _uiState.update {
                 it.copy(
                     isSaving = true,
@@ -216,7 +259,8 @@ class BatchEditViewModel(
                 )
             }
             for ((index, uri) in selectedUris.withIndex()) {
-                val fileName = UriUtils.getMediaStoreFileName(contentResolver, uri.toUri()) ?: "Unknown"
+                val fileName =
+                    UriUtils.getMediaStoreFileName(contentResolver, uri.toUri()) ?: "Unknown"
                 _uiState.update {
                     it.copy(
                         currentFile = fileName
@@ -241,7 +285,7 @@ class BatchEditViewModel(
 
                 _uiState.update { it.copy(saveProgress = index + 1) }
             }
-            
+
             val totalTime = System.currentTimeMillis() - startTime
 
             _uiState.update {
@@ -305,18 +349,29 @@ class BatchEditViewModel(
         if (state.date != "<keep>") tag = tag.copy(date = state.date)
         if (state.genre != "<keep>") tag = tag.copy(genre = state.genre)
         if (state.trackNumber != "<keep>") tag = tag.copy(trackNumber = state.trackNumber)
-        if (state.discNumber != "<keep>") tag = tag.copy(discNumber = state.discNumber.toIntOrNull())
+        if (state.discNumber != "<keep>") tag =
+            tag.copy(discNumber = state.discNumber.toIntOrNull())
         if (state.composer != "<keep>") tag = tag.copy(composer = state.composer)
         if (state.lyricist != "<keep>") tag = tag.copy(lyricist = state.lyricist)
         if (state.copyright != "<keep>") tag = tag.copy(copyright = state.copyright)
         if (state.comment != "<keep>") tag = tag.copy(comment = state.comment)
         if (state.lyrics != "<keep>") tag = tag.copy(lyrics = state.lyrics)
-        
+
         // 处理回放增益
         if (state.replayGain != "<keep>") {
-            tag = tag.copy(replayGainTrackGain = if (state.replayGain.isEmpty()) null else state.replayGain)
+            tag = if (state.replayGain.isEmpty()) {
+                tag.copy(
+                    replayGainTrackGain = null,
+                    replayGainReferenceLoudness = null,
+                    replayGainAlbumGain = null,
+                    replayGainTrackPeak = null,
+                    replayGainAlbumPeak = null
+                )
+            } else {
+                tag.copy(replayGainTrackGain = state.replayGain)
+            }
         }
-        
+
         // 处理 rating - 只在明确修改时才更新
         if (state.ratingModified) tag = tag.copy(rating = state.rating)
 
@@ -331,7 +386,8 @@ class BatchEditViewModel(
         if (state.lyricsOffset.isNotBlank() && tag.lyrics != null) {
             val offsetValue = parseLyricsOffset(state.lyricsOffset)
             if (offsetValue != 0) {
-                val shiftedLyrics = LyricsUtils.shiftLyricsOffset(tag.lyrics!!, offsetValue.toLong())
+                val shiftedLyrics =
+                    LyricsUtils.shiftLyricsOffset(tag.lyrics!!, offsetValue.toLong())
                 tag = tag.copy(lyrics = shiftedLyrics)
             }
         }
@@ -432,7 +488,8 @@ class BatchEditViewModel(
         if (editedAlbum != "<keep>" && editedAlbum.isNotBlank()) {
             // 如果专辑被修改过，使用修改后的值
             targetAlbum = editedAlbum
-            targetArtist = if (editedArtist != "<keep>" && editedArtist.isNotBlank()) editedArtist else ""
+            targetArtist =
+                if (editedArtist != "<keep>" && editedArtist.isNotBlank()) editedArtist else ""
         } else {
             // 如果专辑没被修改，检查所有选中歌曲的专辑和艺术家是否一致
             var commonAlbum: String? = null
@@ -463,14 +520,16 @@ class BatchEditViewModel(
 
             // 如果存在不一致的情况，更新错误消息并返回空列表
             if (hasMismatch || commonAlbum.isNullOrBlank()) {
-                _uiState.update { 
-                    it.copy(errorMessage = UiMessage.StringResource(R.string.batch_edit_cover_mismatch)) 
+                _uiState.update {
+                    it.copy(errorMessage = UiMessage.StringResource(R.string.batch_edit_cover_mismatch))
                 }
                 return emptyList()
             }
 
             targetAlbum = commonAlbum
-            targetArtist = if (editedArtist != "<keep>" && editedArtist.isNotBlank()) editedArtist else (commonArtist ?: "")
+            targetArtist =
+                if (editedArtist != "<keep>" && editedArtist.isNotBlank()) editedArtist else (commonArtist
+                    ?: "")
         }
 
         // 清除之前的错误消息
