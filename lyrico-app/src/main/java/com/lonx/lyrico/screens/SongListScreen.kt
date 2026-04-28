@@ -15,6 +15,7 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -31,6 +32,7 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +43,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -72,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -98,6 +102,7 @@ import com.lonx.lyrico.data.model.LocalSearchType
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.model.entity.getUri
 import com.lonx.lyrico.ui.components.DropdownItem
+import com.lonx.lyrico.ui.components.FabMenuItem
 import com.lonx.lyrico.ui.components.bar.SearchBar
 import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.ui.dialog.BatchMatchConfigBottomSheet
@@ -129,6 +134,7 @@ import top.yukonga.miuix.kmp.basic.BasicComponentColors
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Checkbox
+import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarDisplayMode
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
@@ -147,6 +153,7 @@ import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBarDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
@@ -208,7 +215,8 @@ fun SongListScreen(
             showScrollTopButton && listState.firstVisibleItemIndex > 0
         }
     }
-
+    var isFabMenuExpanded by remember { mutableStateOf(false) }
+    val hasSelection = selectedSongIds.isNotEmpty()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val sectionIndexMap = remember(songs, sortInfo) {
@@ -248,8 +256,10 @@ fun SongListScreen(
         songListViewModel = songListViewModel,
         isSelectionMode = isSelectionMode
     )
-    BackHandler(enabled = isSelectionMode || isSearchMode) {
-        if (isSelectionMode) {
+    BackHandler(enabled = isSelectionMode || isSearchMode || isFabMenuExpanded) {
+        if (isFabMenuExpanded) {
+            isFabMenuExpanded = false
+        } else if (isSelectionMode) {
             songListViewModel.exitSelectionMode()
         } else if (isSearchMode) {
             isSearchMode = false
@@ -266,78 +276,6 @@ fun SongListScreen(
     Box {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            floatingToolbar = {
-                AnimatedVisibility(
-                    visible = isSelectionMode,
-                    enter = slideInVertically { it },
-                    exit = slideOutVertically { it }
-                ) {
-                    val hasSelection = selectedSongIds.isNotEmpty()
-
-                    FloatingNavigationBar(
-                        mode = FloatingNavigationBarDisplayMode.IconAndText
-                    ) {
-                        FloatingNavigationBarItem(
-                            selected = hasSelection,
-                            enabled = hasSelection,
-                            label = stringResource(R.string.action_share),
-                            onClick = { songListViewModel.batchShare(context, songs) },
-                            icon = MiuixIcons.Share
-                        )
-                        FloatingNavigationBarItem(
-                            selected = hasSelection,
-                            enabled = hasSelection,
-                            label = stringResource(R.string.action_delete),
-                            onClick = { songListViewModel.showBatchDeleteDialog() },
-                            icon = MiuixIcons.Delete
-                        )
-                        FloatingNavigationBarItem(
-                            selected = hasSelection,
-                            enabled = hasSelection,
-                            label = stringResource(R.string.action_batch_match),
-                            onClick = {
-                                songListViewModel.setSelectionUris()
-                                batchMatchViewModel.openBatchMatchConfig()
-                            },
-                            icon = MiuixIcons.Edit
-                        )
-                        FloatingNavigationBarItem(
-                            selected = hasSelection,
-                            enabled = hasSelection,
-                            label = stringResource(R.string.batch_edit_title),
-                            onClick = {
-                                if (songListViewModel.setSelectionUris()) {
-                                    navigator.navigate(BatchEditDestination())
-                                }
-                            },
-                            icon = MiuixIcons.Edit
-                        )
-                        FloatingNavigationBarItem(
-                            selected = hasSelection,
-                            enabled = hasSelection,
-                            label = stringResource(R.string.action_batch_rename),
-                            onClick = {
-                                if (songListViewModel.setSelectionUris()) {
-                                    navigator.navigate(BatchRenameDestination)
-                                }
-                            },
-                            icon = MiuixIcons.Rename
-                        )
-                        FloatingNavigationBarItem(
-                            selected = hasSelection,
-                            enabled = hasSelection,
-                            label = stringResource(R.string.action_batch_replay_gain),
-                            onClick = {
-                                batchReplayGainViewModel.setSelectionUris(songListViewModel.selectedSongIds.value.map { mediaId ->
-                                    songs.find { it.mediaId == mediaId }?.uri ?: ""
-                                }.filter { it.isNotEmpty() })
-                                batchReplayGainViewModel.openReplayGainConfig()
-                            },
-                            icon = MiuixIcons.Edit
-                        )
-                    }
-                }
-            },
             topBar = {
                 val topBarState = when {
                     isSelectionMode -> TopBarState.Selection
@@ -1115,6 +1053,125 @@ fun SongListScreen(
                         text = stringResource(R.string.action_scroll_to_top),
                         style = MiuixTheme.textStyles.button,
                         color = MiuixTheme.colorScheme.onPrimary
+                    )
+                }
+            }
+        }
+        AnimatedVisibility(
+            visible = isSelectionMode && isFabMenuExpanded,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.2f)) // 加上淡淡的暗色遮罩层，让用户的视觉聚焦在菜单上
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { isFabMenuExpanded = false }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = isSelectionMode,
+            enter = scaleIn() + fadeIn(),
+            exit = scaleOut() + fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = 24.dp)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 向上展开的子菜单
+                AnimatedVisibility(
+                    visible = isFabMenuExpanded && hasSelection,
+                    enter = slideInVertically { it / 2 } + fadeIn(),
+                    exit = slideOutVertically { it / 2 } + fadeOut()
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        FabMenuItem(
+                            label = stringResource(R.string.action_batch_replay_gain),
+                            icon = MiuixIcons.Edit,
+                            onClick = {
+                                isFabMenuExpanded = false
+                                batchReplayGainViewModel.setSelectionUris(songListViewModel.selectedSongIds.value.map { mediaId ->
+                                    songs.find { it.mediaId == mediaId }?.uri ?: ""
+                                }.filter { it.isNotEmpty() })
+                                batchReplayGainViewModel.openReplayGainConfig()
+                            }
+                        )
+                        FabMenuItem(
+                            label = stringResource(R.string.action_batch_rename),
+                            icon = MiuixIcons.Rename,
+                            onClick = {
+                                isFabMenuExpanded = false
+                                if (songListViewModel.setSelectionUris()) {
+                                    navigator.navigate(BatchRenameDestination)
+                                }
+                            }
+                        )
+                        FabMenuItem(
+                            label = stringResource(R.string.batch_edit_title),
+                            icon = MiuixIcons.Edit,
+                            onClick = {
+                                isFabMenuExpanded = false
+                                if (songListViewModel.setSelectionUris()) {
+                                    navigator.navigate(BatchEditDestination())
+                                }
+                            }
+                        )
+                        FabMenuItem(
+                            label = stringResource(R.string.action_batch_match),
+                            icon = MiuixIcons.Edit,
+                            onClick = {
+                                isFabMenuExpanded = false
+                                songListViewModel.setSelectionUris()
+                                batchMatchViewModel.openBatchMatchConfig()
+                            }
+                        )
+                        FabMenuItem(
+                            label = stringResource(R.string.action_delete),
+                            icon = MiuixIcons.Delete,
+                            onClick = {
+                                isFabMenuExpanded = false
+                                songListViewModel.showBatchDeleteDialog()
+                            }
+                        )
+                        FabMenuItem(
+                            label = stringResource(R.string.action_share),
+                            icon = MiuixIcons.Share,
+                            onClick = {
+                                isFabMenuExpanded = false
+                                songListViewModel.batchShare(context, songs)
+                            }
+                        )
+                    }
+                }
+
+                // 主 FAB 按钮
+                FloatingActionButton(
+                    onClick = {
+                        if (hasSelection) {
+                            isFabMenuExpanded = !isFabMenuExpanded
+                        }
+                    }
+                ) {
+                    // 添加旋转动画
+                    val rotation by animateFloatAsState(targetValue = if (isFabMenuExpanded) 45f else 0f)
+                    Icon(
+                        imageVector = MiuixIcons.Add,
+                        contentDescription = "Batch Actions",
+                        tint = MiuixTheme.colorScheme.onPrimary,
+                        modifier = Modifier.rotate(rotation)
                     )
                 }
             }
