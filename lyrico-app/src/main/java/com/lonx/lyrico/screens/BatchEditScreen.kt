@@ -346,9 +346,29 @@ fun BatchEditScreen(
                     Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
                         Column(modifier = Modifier.padding(vertical = 6.dp)) {
                             BatchEditFieldItem(
-                                field = BatchEditField.REPLAY_GAIN,
-                                value = uiState.replayGain,
-                                onValueChange = { viewModel.updateReplayGain(it) }
+                                field = BatchEditField.REPLAY_GAIN_TRACK_GAIN,
+                                value = uiState.replayGainTrackGain,
+                                onValueChange = { viewModel.updateReplayGainTrackGain(it) }
+                            )
+                            BatchEditFieldItem(
+                                field = BatchEditField.REPLAY_GAIN_TRACK_PEAK,
+                                value = uiState.replayGainTrackPeak,
+                                onValueChange = { viewModel.updateReplayGainTrackPeak(it) }
+                            )
+                            BatchEditFieldItem(
+                                field = BatchEditField.REPLAY_GAIN_ALBUM_GAIN,
+                                value = uiState.replayGainAlbumGain,
+                                onValueChange = { viewModel.updateReplayGainAlbumGain(it) }
+                            )
+                            BatchEditFieldItem(
+                                field = BatchEditField.REPLAY_GAIN_ALBUM_PEAK,
+                                value = uiState.replayGainAlbumPeak,
+                                onValueChange = { viewModel.updateReplayGainAlbumPeak(it) }
+                            )
+                            BatchEditFieldItem(
+                                field = BatchEditField.REPLAY_GAIN_REFERENCE_LOUDNESS,
+                                value = uiState.replayGainReferenceLoudness,
+                                onValueChange = { viewModel.updateReplayGainReferenceLoudness(it) }
                             )
                         }
                     }

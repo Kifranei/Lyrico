@@ -41,7 +41,11 @@ enum class BatchEditField(val labelResId: Int) {
     COPYRIGHT(R.string.label_copyright),
     COMMENT(R.string.label_comment),
     LYRICS(R.string.label_lyrics),
-    REPLAY_GAIN(R.string.label_replay_gain),
+    REPLAY_GAIN_TRACK_GAIN(R.string.label_replaygain_track_gain),
+    REPLAY_GAIN_TRACK_PEAK(R.string.label_replaygain_track_peak),
+    REPLAY_GAIN_ALBUM_GAIN(R.string.label_replaygain_album_gain),
+    REPLAY_GAIN_ALBUM_PEAK(R.string.label_replaygain_album_peak),
+    REPLAY_GAIN_REFERENCE_LOUDNESS(R.string.label_replaygain_reference_loudness),
     COVER(R.string.label_cover),
     RATING(R.string.label_rating),
 }
@@ -81,7 +85,11 @@ data class BatchEditUiState(
     val lyricsOffset: String = "",
 
     /** 回放增益（"<keep>"表示不修改，""表示清除） */
-    val replayGain: String = "<keep>",
+    val replayGainTrackGain: String = "<keep>",
+    val replayGainTrackPeak: String = "<keep>",
+    val replayGainAlbumGain: String = "<keep>",
+    val replayGainAlbumPeak: String = "<keep>",
+    val replayGainReferenceLoudness: String = "<keep>",
 
     /** 自定义标签 */
     val customFields: List<CustomTagField> = emptyList(),
@@ -187,8 +195,24 @@ class BatchEditViewModel(
 
     // ── 回放增益 ──────────────────────────────────────────
 
-    fun updateReplayGain(value: String) {
-        _uiState.update { it.copy(replayGain = value) }
+    fun updateReplayGainTrackGain(value: String) {
+        _uiState.update { it.copy(replayGainTrackGain = value) }
+    }
+
+    fun updateReplayGainTrackPeak(value: String) {
+        _uiState.update { it.copy(replayGainTrackPeak = value) }
+    }
+
+    fun updateReplayGainAlbumGain(value: String) {
+        _uiState.update { it.copy(replayGainAlbumGain = value) }
+    }
+
+    fun updateReplayGainAlbumPeak(value: String) {
+        _uiState.update { it.copy(replayGainAlbumPeak = value) }
+    }
+
+    fun updateReplayGainReferenceLoudness(value: String) {
+        _uiState.update { it.copy(replayGainReferenceLoudness = value) }
     }
 
     // ── 自定义标签 ──────────────────────────────────────────
@@ -358,18 +382,20 @@ class BatchEditViewModel(
         if (state.lyrics != "<keep>") tag = tag.copy(lyrics = state.lyrics)
 
         // 处理回放增益
-        if (state.replayGain != "<keep>") {
-            tag = if (state.replayGain.isEmpty()) {
-                tag.copy(
-                    replayGainTrackGain = null,
-                    replayGainReferenceLoudness = null,
-                    replayGainAlbumGain = null,
-                    replayGainTrackPeak = null,
-                    replayGainAlbumPeak = null
-                )
-            } else {
-                tag.copy(replayGainTrackGain = state.replayGain)
-            }
+        if (state.replayGainTrackGain != "<keep>") {
+            tag = tag.copy(replayGainTrackGain = state.replayGainTrackGain)
+        }
+        if (state.replayGainTrackPeak != "<keep>") {
+            tag = tag.copy(replayGainTrackPeak = state.replayGainTrackPeak)
+        }
+        if (state.replayGainAlbumGain != "<keep>") {
+            tag = tag.copy(replayGainAlbumGain = state.replayGainAlbumGain)
+        }
+        if (state.replayGainAlbumPeak != "<keep>") {
+            tag = tag.copy(replayGainAlbumPeak = state.replayGainAlbumPeak)
+        }
+        if (state.replayGainReferenceLoudness != "<keep>") {
+            tag = tag.copy(replayGainReferenceLoudness = state.replayGainReferenceLoudness)
         }
 
         // 处理 rating - 只在明确修改时才更新
