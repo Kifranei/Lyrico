@@ -217,6 +217,6 @@ val appModule = module {
     }
     viewModel { BatchRenameViewModel(get(), get(), get()) }
     viewModel { BatchEditViewModel(get(), get(), get())}
-    viewModel { BatchReplayGainViewModel(get(), get(), androidContext()) }
+    viewModel { BatchReplayGainViewModel(get(), get()) }
 }
 

@@ -1,11 +1,10 @@
 package com.lonx.lyrico.viewmodel
 
-import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioTagData
-import com.lonx.lyrico.R
 import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.utils.ReplayGainAnalysis
 import com.lonx.lyrico.utils.ReplayGainCalculateState
@@ -33,18 +32,19 @@ data class BatchReplayGainUiState(
     val successCount: Int = 0,
     val failureCount: Int = 0,
     val skippedCount: Int = 0,
-    val currentFile: String = "",
     val totalTimeMillis: Long = 0,
     val showConfigDialog: Boolean = false,
     val showProgressDialog: Boolean = false,
     val isSuccess: Boolean = false,
     val resultMessage: UiMessage? = null,
+    val startTimeMillis: Long = 0L,  // 记录开始时间
+    val finalTimeMillis: Long = 0L, // 记录结束时的最终总时间
+    val fileProgressMap: Map<String, Float> = emptyMap(),
 )
 
 class BatchReplayGainViewModel(
     private val songRepository: SongRepository,
-    private val replayGainScanner: ReplayGainScanner,
-    private val context: Context
+    private val replayGainScanner: ReplayGainScanner
 ) : ViewModel() {
 
     private val TAG = "BatchReplayGainVM"
@@ -88,7 +88,7 @@ class BatchReplayGainViewModel(
         if (uris.isEmpty()) return
 
         val concurrency = _uiState.value.concurrency
-
+        val startTime = SystemClock.elapsedRealtime()
         batchScanJob = viewModelScope.launch {
             val (songsToScan, songsToSkip) = uris.partition { isReplayGainExisting(it).not() }
             val total = songsToScan.size
@@ -104,7 +104,8 @@ class BatchReplayGainViewModel(
                         successCount = 0,
                         failureCount = 0,
                         skippedCount = skipCount,
-                        totalTimeMillis = 0
+                        startTimeMillis = startTime,
+                        finalTimeMillis = 0L
                     )
                 }
                 return@launch
@@ -124,7 +125,7 @@ class BatchReplayGainViewModel(
                     successCount = 0,
                     failureCount = 0,
                     skippedCount = skipCount,
-                    currentFile = "",
+                    fileProgressMap = emptyMap(),
                     totalTimeMillis = 0
                 )
             }
@@ -141,7 +142,6 @@ class BatchReplayGainViewModel(
                                 null
                             }
                             val fileName = song?.fileName ?: uri.substringAfterLast("/")
-                            _uiState.update { it.copy(currentFile = context.getString(R.string.batch_replay_gain_current, fileName)) }
 
                             var analysisSuccess = false
                             var analysisResult: ReplayGainAnalysis? = null
@@ -149,6 +149,11 @@ class BatchReplayGainViewModel(
                             try {
                                 replayGainScanner.analyze(uri).collect { state ->
                                     when (state) {
+                                        is ReplayGainCalculateState.Progress -> {
+                                            _uiState.update { 
+                                                it.copy(fileProgressMap = it.fileProgressMap + (fileName to state.percent)) 
+                                            }
+                                        }
                                         is ReplayGainCalculateState.Success -> {
                                             analysisResult = state.analysis
                                             analysisSuccess = true
@@ -157,12 +162,15 @@ class BatchReplayGainViewModel(
                                         is ReplayGainCalculateState.Failed -> {
                                             analysisSuccess = false
                                         }
-                                        else -> {}
                                     }
                                 }
 
                                 if (analysisSuccess && analysisResult != null) {
-                                    _uiState.update { it.copy(currentFile = context.getString(R.string.batch_replay_gain_writing, fileName)) }
+                                    _uiState.update { 
+                                        it.copy(
+                                            fileProgressMap = it.fileProgressMap - fileName
+                                        ) 
+                                    }
                                     val tagData = AudioTagData(
                                         replayGainTrackGain = replayGainScanner.formatGain(analysisResult),
                                         replayGainTrackPeak = replayGainScanner.formatPeak(analysisResult.peak),
@@ -194,7 +202,8 @@ class BatchReplayGainViewModel(
                                     it.copy(
                                         progress = current to total,
                                         successCount = successCount,
-                                        failureCount = failureCount
+                                        failureCount = failureCount,
+                                        fileProgressMap = it.fileProgressMap - fileName
                                     )
                                 }
                             }
@@ -209,7 +218,6 @@ class BatchReplayGainViewModel(
                         it.copy(
                             isRunning = false,
                             totalTimeMillis = totalTime,
-                            currentFile = "",
                             successCount = successCounter.get(),
                             failureCount = failureCounter.get(),
                             isSuccess = failureCounter.get() == 0
@@ -230,9 +238,8 @@ class BatchReplayGainViewModel(
             it.copy(
                 showProgressDialog = false,
                 progress = null,
-                currentFile = "",
                 isRunning = false,
-                totalTimeMillis = 0
+                finalTimeMillis = 0
             )
         }
     }

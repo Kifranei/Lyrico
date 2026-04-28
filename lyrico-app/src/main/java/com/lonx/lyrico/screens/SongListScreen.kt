@@ -27,7 +27,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -76,7 +75,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
@@ -103,11 +101,10 @@ import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.model.entity.getUri
 import com.lonx.lyrico.ui.components.DropdownItem
 import com.lonx.lyrico.ui.components.FabMenuItem
+import com.lonx.lyrico.ui.components.SongListItem
 import com.lonx.lyrico.ui.components.bar.SearchBar
-import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.ui.dialog.BatchMatchConfigBottomSheet
 import com.lonx.lyrico.ui.dialog.ReplayGainConfigBottomSheet
-import com.lonx.lyrico.ui.theme.LyricoColors
 import com.lonx.lyrico.utils.coil.CoverRequest
 import com.lonx.lyrico.viewmodel.BatchMatchViewModel
 import com.lonx.lyrico.viewmodel.BatchReplayGainViewModel
@@ -120,7 +117,6 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.BatchEditDestination
 import com.ramcosta.composedestinations.generated.destinations.BatchMatchHistoryDetailDestination
 import com.ramcosta.composedestinations.generated.destinations.BatchRenameDestination
-import com.ramcosta.composedestinations.generated.destinations.EditMetadataDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.delay
@@ -135,9 +131,6 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBarDisplayMode
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -934,7 +927,7 @@ fun SongListScreen(
                             ) {
                                 Text(
                                     text = if (batchReplayGainUiState.isRunning) {
-                                        batchReplayGainUiState.currentFile.ifEmpty { stringResource(R.string.batch_edit_processing) }
+                                        stringResource(R.string.batch_edit_processing)
                                     } else {
                                         stringResource(
                                             R.string.batch_replay_gain_total_time,
@@ -960,6 +953,42 @@ fun SongListScreen(
                                 progress = progress,
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            
+                            // 显示并发任务的进度条
+                            if (batchReplayGainUiState.isRunning && batchReplayGainUiState.fileProgressMap.isNotEmpty()) {
+                                Column(
+                                    modifier = Modifier.padding(top = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    batchReplayGainUiState.fileProgressMap.forEach { (fileName, fileProgress) ->
+                                        val progressPercent = (fileProgress * 100).toInt()
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = fileName,
+                                                style = MiuixTheme.textStyles.footnote1,
+                                                color = MiuixTheme.colorScheme.onSurfaceContainer,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "$progressPercent%",
+                                                style = MiuixTheme.textStyles.footnote1,
+                                                color = MiuixTheme.colorScheme.onSurfaceContainer
+                                            )
+                                        }
+                                        LinearProgressIndicator(
+                                            progress = fileProgress,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -1308,165 +1337,7 @@ fun AlphabetSideBar(
     }
 }
 
-@SuppressLint("DefaultLocale")
-@Composable
-fun SongListItem(
-    song: SongEntity,
-    navigator: DestinationsNavigator,
-    modifier: Modifier = Modifier,
-    trailingContent: (@Composable () -> Unit)? = null,
-    isSelectionMode: Boolean? = null,
-    isSelected: Boolean? = null,
-    onToggleSelection: (() -> Unit)? = null,
-) {
-    val view = LocalView.current
-    val backgroundColor =
-        if (isSelected == true) MiuixTheme.colorScheme.primary.copy(alpha = 0.1f) else MiuixTheme.colorScheme.surface
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(backgroundColor)
-            .combinedClickable(
-                onClick = {
-                    if (isSelectionMode == true) {
-                        onToggleSelection?.let { it() }
-                    } else {
-                        navigator.navigate(EditMetadataDestination(songFileUri = song.uri))
-                    }
-                },
-                onLongClick = if (isSelectionMode == true) null else {
-                    {
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        onToggleSelection?.let { it() }
-                    }
-                }
-            )
-            .padding(vertical = 8.dp)
-    ) {
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(LyricoColors.coverPlaceholder)
-            ) {
-                AsyncImage(
-                    model = CoverRequest(song.getUri, song.fileLastModified),
-                    contentDescription = song.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    placeholder = rememberTintedPainter(
-                        painter = painterResource(R.drawable.ic_album_24dp),
-                        tint = LyricoColors.coverPlaceholderIcon
-                    ),
-                    error = rememberTintedPainter(
-                        painter = painterResource(R.drawable.ic_album_24dp),
-                        tint = LyricoColors.coverPlaceholderIcon
-                    )
-                )
-
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    MiuixTheme.colorScheme.onSecondaryContainer
-                                ),
-                            )
-                        )
-                ) {
-                    Text(
-                        text = song.fileName.substringAfterLast('.', "").uppercase(),
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.secondaryContainer,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(bottom = 1.dp)
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = song.title.takeIf { !it.isNullOrBlank() } ?: song.fileName,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = song.artist.takeIf { !it.isNullOrBlank() }
-                            ?: stringResource(R.string.unknown_artist),
-                        color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (!song.album.isNullOrBlank()) {
-                        Text(
-                            text = " - ${song.album}",
-                            color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
-                            fontSize = 13.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                    }
-                }
-            }
-
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.Center
-            ) {
-                if (song.durationMilliseconds > 0) {
-                    val minutes = song.durationMilliseconds / 60000
-                    val seconds = (song.durationMilliseconds % 60000) / 1000
-                    Text(
-                        text = String.format("%d:%02d", minutes, seconds),
-                        color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
-                        fontSize = 12.sp
-                    )
-                }
-
-                if (song.bitrate > 0) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "${song.bitrate}kbps",
-                        fontSize = 10.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
-                        fontWeight = FontWeight.Normal
-                    )
-                }
-            }
-            trailingContent?.let {
-                Box(
-                    modifier = Modifier.size(36.dp),
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    trailingContent()
-                }
-            }
-        }
-    }
-}
 
 @SuppressLint("DefaultLocale")
 @Composable
