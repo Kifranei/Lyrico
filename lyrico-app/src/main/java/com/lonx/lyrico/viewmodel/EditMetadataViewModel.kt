@@ -29,6 +29,7 @@ import com.lonx.lyrico.utils.ReplayGainCalculateState
 import com.lonx.lyrico.utils.ReplayGainError
 import com.lonx.lyrico.utils.ReplayGainScanner
 import com.lonx.lyrico.utils.UiMessage
+import com.lonx.lyrics.model.isWordByWord
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -660,7 +661,7 @@ class EditMetadataViewModel(
                     original = lines,
                     translated = null,
                     romanization = null,
-                    isWordByWord = true
+                    isWordByWord = lines.isWordByWord()
                 )
 
                 // 3. 配置渲染参数
