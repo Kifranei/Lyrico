@@ -11,7 +11,7 @@ import com.lonx.audiotag.model.CustomTagField
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.SharedSelectionManager
 import com.lonx.lyrico.data.repository.SongRepository
-import com.lonx.lyrico.utils.LyricsUtils
+import com.lonx.lyrico.utils.LyricEncoder
 import com.lonx.lyrico.utils.UiMessage
 import com.lonx.lyrico.utils.UriUtils
 import kotlinx.coroutines.Dispatchers
@@ -413,7 +413,7 @@ class BatchEditViewModel(
             val offsetValue = parseLyricsOffset(state.lyricsOffset)
             if (offsetValue != 0) {
                 val shiftedLyrics =
-                    LyricsUtils.shiftLyricsOffset(tag.lyrics!!, offsetValue.toLong())
+                    LyricEncoder.shiftLyricsOffset(tag.lyrics!!, offsetValue.toLong())
                 tag = tag.copy(lyrics = shiftedLyrics)
             }
         }

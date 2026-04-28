@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricFormat
 import com.lonx.lyrico.data.repository.SettingsRepository
-import com.lonx.lyrico.utils.LyricsUtils
+import com.lonx.lyrico.utils.LyricEncoder
 import com.lonx.lyrics.model.LyricsResult
 import com.lonx.lyrics.model.SearchSource
 import com.lonx.lyrics.model.SongSearchResult
@@ -83,7 +83,7 @@ class SearchViewModel(
             val raw = lyricsState.lyricsResult
 
             val rendered = if (raw != null) {
-                LyricsUtils.formatLrcResult(
+                LyricEncoder.encode(
                     result = raw,
                     config = config
                 )
@@ -315,7 +315,7 @@ class SearchViewModel(
 
         val config = settingsRepository.getLyricRenderConfig()
 
-        return LyricsUtils.formatLrcResult(
+        return LyricEncoder.encode(
             result = lyricsResult,
             config = config
         )

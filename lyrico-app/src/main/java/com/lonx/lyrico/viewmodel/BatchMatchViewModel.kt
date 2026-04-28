@@ -17,7 +17,7 @@ import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.repository.BatchMatchHistoryRepository
 import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.data.repository.SongRepository
-import com.lonx.lyrico.utils.LyricsUtils
+import com.lonx.lyrico.utils.LyricEncoder
 import com.lonx.lyrico.utils.MusicMatchUtils
 import com.lonx.lyrics.model.SearchSource
 import com.lonx.lyrics.model.SongSearchResult
@@ -372,7 +372,7 @@ class BatchMatchViewModel(
         try {
             val lyricsDeferred = async(Dispatchers.Default) {
                 finalMatch.source.getLyrics(finalMatch.result)?.let { result ->
-                    LyricsUtils.formatLrcResult(result = result, config = lyricConfig)
+                    LyricEncoder.encode(result = result, config = lyricConfig)
                 }
             }
             val newLyrics = lyricsDeferred.await()

@@ -17,11 +17,14 @@ import com.lonx.audiotag.model.AudioPicture
 import com.lonx.audiotag.model.AudioTagData
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.ConversionMode
+import com.lonx.lyrico.data.model.LyricFormat
+import com.lonx.lyrico.data.model.LyricRenderConfig
 import com.lonx.lyrico.data.model.LyricsSearchResult
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.repository.PlaybackRepository
 import com.lonx.lyrico.data.repository.SongRepository
-import com.lonx.lyrico.utils.LyricsUtils
+import com.lonx.lyrico.utils.LyricDecoder
+import com.lonx.lyrico.utils.LyricEncoder
 import com.lonx.lyrico.utils.ReplayGainCalculateState
 import com.lonx.lyrico.utils.ReplayGainError
 import com.lonx.lyrico.utils.ReplayGainScanner
@@ -154,7 +157,7 @@ class EditMetadataViewModel(
         _currentShiftOffset.value = totalOffset
 
         // 2. 永远基于 originalLyrics (快照) 进行偏移，避免来回计算导致的精度丢失或触底失真
-        val shiftedLyrics = LyricsUtils.shiftLyricsOffset(originalLyrics, totalOffset)
+        val shiftedLyrics = LyricEncoder.shiftLyricsOffset(originalLyrics, totalOffset)
 
         _uiState.update { state ->
             state.copy(
@@ -633,8 +636,50 @@ class EditMetadataViewModel(
         val currentLyrics = _uiState.value.editingTagData?.lyrics ?: return
         if (currentLyrics.isBlank()) return
 
-        val convertedLyrics = LyricsUtils.convertLyricsText(currentLyrics, conversionMode)
+        val convertedLyrics = LyricEncoder.convertLyricsText(currentLyrics, conversionMode)
         updateTag { copy(lyrics = convertedLyrics) }
+    }
+
+    /**
+     * 转换歌词格式
+     * @param targetFormat 目标格式
+     */
+    fun convertLyricsFormat(targetFormat: LyricFormat) {
+        val currentLyrics = _uiState.value.editingTagData?.lyrics ?: return
+        if (currentLyrics.isBlank()) return
+
+        viewModelScope.launch {
+            try {
+                // 1. 解码：String → Model
+                val lines = LyricDecoder.decode(currentLyrics)
+                if (lines.isEmpty()) return@launch
+
+                // 2. 组合：List<LyricsLine> → LyricsResult
+                val lyricsResult = com.lonx.lyrics.model.LyricsResult(
+                    tags = emptyMap(),
+                    original = lines,
+                    translated = null,
+                    romanization = null,
+                    isWordByWord = true
+                )
+
+                // 3. 配置渲染参数
+                val config = LyricRenderConfig(
+                    format = targetFormat,
+                    conversionMode = ConversionMode.NONE,
+                    showTranslation = false,
+                    showRomanization = false,
+                    removeEmptyLines = false,
+                    onlyTranslationIfAvailable = false
+                )
+
+                // 4. 编码：Model → String
+                val converted = LyricEncoder.encode(lyricsResult, config)
+                updateTag { copy(lyrics = converted) }
+            } catch (e: Exception) {
+                Log.e(TAG, "歌词格式转换失败", e)
+            }
+        }
     }
 
     fun clearImportLyricsStatus() {

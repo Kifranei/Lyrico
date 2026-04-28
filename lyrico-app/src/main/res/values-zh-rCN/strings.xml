@@ -479,4 +479,11 @@
     <string name="batch_replay_gain_skipped">跳过: %d</string>
     <string name="batch_replay_gain_failure">失败: %d</string>
     <string name="action_start">开始</string>
+    
+    <!-- 歌词格式转换 -->
+    <string name="unknown_format">未知格式</string>
+    <string name="action_convert_lyrics_format">转换格式</string>
+    <string name="action_convert_lyrics_format_title">转换歌词格式</string>
+    <string name="current_detected_format">当前检测到的格式: %s</string>
+    <string name="convert_to_format">转换为 %s</string>
 </resources>

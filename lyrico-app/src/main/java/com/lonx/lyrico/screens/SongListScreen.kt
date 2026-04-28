@@ -1362,7 +1362,7 @@ fun SongMenuBottomSheetContent(
             text = text,
             style = MiuixTheme.textStyles.footnote1,
             color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+            modifier = Modifier.padding(12.dp)
         )
 
 

@@ -9,7 +9,7 @@ import com.lonx.lyrics.model.LyricsLine
 import com.lonx.lyrics.model.LyricsResult
 import kotlin.math.abs
 
-object LyricsUtils {
+object LyricEncoder {
     // 匹配 LRC/Enhanced LRC 格式: [01:23.456] 或 <01:23.45>
     private val LRC_TIME_PATTERN = Regex("([<\\[])(\\d{2,}):(\\d{2})\\.(\\d{2,3})([>\\]])")
 
@@ -159,7 +159,7 @@ object LyricsUtils {
         return result.toString()
     }
 
-    fun formatLrcResult(
+    fun encode(
         result: LyricsResult,
         config: LyricRenderConfig,
         offset: Long = 0L,

@@ -66,16 +66,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
-import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.request.SuccessResult
-import coil3.request.allowHardware
-import coil3.size.Size
 import com.lonx.audiotag.model.CustomTagField
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.ConversionMode
+import com.lonx.lyrico.data.model.LyricFormat
 import com.lonx.lyrico.data.model.LyricsSearchResult
+import com.lonx.lyrico.utils.LyricDecoder
 import com.lonx.lyrico.ui.components.ImageCropper
 import com.lonx.lyrico.ui.components.getBitmap
 import com.lonx.lyrico.ui.components.rememberImageCropperState
@@ -155,6 +152,7 @@ fun EditMetadataScreen(
     var showLyricsActionBottomSheet by remember { mutableStateOf(false) }
     var showCropSheet by remember { mutableStateOf(false) }
     var showAddCustomTagDialog by remember { mutableStateOf(false) }
+    var showLyricsFormatBottomSheet by remember { mutableStateOf(false) }
     var bitmapToCrop by remember { mutableStateOf<Bitmap?>(null) }
 
     val currentShiftOffset by viewModel.currentShiftOffset.collectAsState()
@@ -888,6 +886,28 @@ fun EditMetadataScreen(
                             showOffsetSheet = true
                         }
                     )
+                    
+                    // 格式转换选项
+                    val currentLyrics = editingTagData.lyrics ?: ""
+                    if (currentLyrics.isNotBlank()) {
+                        val detectedFormat = LyricDecoder.detectFormat(currentLyrics)
+                        val formatText = when (detectedFormat) {
+                            LyricFormat.PLAIN_LRC -> stringResource(R.string.lyric_format_plain)
+                            LyricFormat.VERBATIM_LRC -> stringResource(R.string.lyric_format_verbatim)
+                            LyricFormat.ENHANCED_LRC -> stringResource(R.string.lyric_format_enhanced)
+                            LyricFormat.TTML -> stringResource(R.string.lyric_format_ttml)
+                            null -> stringResource(R.string.unknown_format)
+                        }
+                        
+                        ArrowPreference(
+                            title = stringResource(R.string.action_convert_lyrics_format),
+                            summary = formatText,
+                            onClick = {
+                                showLyricsActionBottomSheet = false
+                                showLyricsFormatBottomSheet = true
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -1127,6 +1147,80 @@ fun EditMetadataScreen(
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.textButtonColorsPrimary(),
+                )
+            }
+        }
+    }
+    
+    // 歌词格式转换
+    WindowBottomSheet(
+        show = showLyricsFormatBottomSheet,
+        title = stringResource(R.string.action_convert_lyrics_format_title),
+        onDismissRequest = { showLyricsFormatBottomSheet = false }
+    ) {
+        val currentLyrics = editingTagData?.lyrics ?: ""
+        val detectedFormat = LyricDecoder.detectFormat(currentLyrics)
+        
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            // 显示当前检测到的格式
+            Text(
+                text = stringResource(
+                    R.string.current_detected_format,
+                    when (detectedFormat) {
+                        LyricFormat.PLAIN_LRC -> stringResource(R.string.lyric_format_plain)
+                        LyricFormat.VERBATIM_LRC -> stringResource(R.string.lyric_format_verbatim)
+                        LyricFormat.ENHANCED_LRC -> stringResource(R.string.lyric_format_enhanced)
+                        LyricFormat.TTML -> stringResource(R.string.lyric_format_ttml)
+                        null -> stringResource(R.string.unknown_format)
+                    }
+                ),
+                style = MiuixTheme.textStyles.footnote1,
+                color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
+                modifier = Modifier.padding(12.dp)
+            )
+            Card (
+                colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.secondaryContainer)
+            ) {
+                // 提供转换选项
+                val availableFormats = listOfNotNull(
+                    if (detectedFormat != LyricFormat.PLAIN_LRC) LyricFormat.PLAIN_LRC to stringResource(
+                        R.string.lyric_format_plain
+                    ) else null,
+                    if (detectedFormat != LyricFormat.VERBATIM_LRC) LyricFormat.VERBATIM_LRC to stringResource(
+                        R.string.lyric_format_verbatim
+                    ) else null,
+                    if (detectedFormat != LyricFormat.ENHANCED_LRC) LyricFormat.ENHANCED_LRC to stringResource(
+                        R.string.lyric_format_enhanced
+                    ) else null,
+                    if (detectedFormat != LyricFormat.TTML) LyricFormat.TTML to stringResource(R.string.lyric_format_ttml) else null
+                )
+
+                availableFormats.forEach { (targetFormat, formatName) ->
+                    ArrowPreference(
+                        title = stringResource(R.string.convert_to_format, formatName),
+                        onClick = {
+                            showLyricsFormatBottomSheet = false
+                            viewModel.convertLyricsFormat(targetFormat)
+                        }
+                    )
+                }
+
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(
+                    text = stringResource(R.string.cancel),
+                    onClick = {
+                        showLyricsFormatBottomSheet = false
+                    },
+                    modifier = Modifier.weight(1f),
                 )
             }
         }

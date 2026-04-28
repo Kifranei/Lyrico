@@ -471,4 +471,11 @@
     <string name="batch_replay_gain_skipped">Skipped: %d</string>
     <string name="batch_replay_gain_failure">Failure: %d</string>
     <string name="action_start">Start</string>
+    
+    <!-- Lyrics Format Conversion -->
+    <string name="unknown_format">Unknown format</string>
+    <string name="action_convert_lyrics_format">Convert format</string>
+    <string name="action_convert_lyrics_format_title">Convert Lyrics Format</string>
+    <string name="current_detected_format">Current detected format: %s</string>
+    <string name="convert_to_format">Convert to %s</string>
 </resources>
