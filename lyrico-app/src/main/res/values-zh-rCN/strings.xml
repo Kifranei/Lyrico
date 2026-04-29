@@ -488,4 +488,7 @@
     <string name="action_convert_lyrics_format_title">转换歌词格式</string>
     <string name="current_detected_format">当前检测到的格式: %s</string>
     <string name="convert_to_format">转换为 %s</string>
+    <string name="label_plain_lyrics">歌词文本</string>
+    <string name="action_view_plain_lyrics">查看歌词文本</string>
+    <string name="copied_to_clipboard">已复制到剪切板</string>
 </resources>

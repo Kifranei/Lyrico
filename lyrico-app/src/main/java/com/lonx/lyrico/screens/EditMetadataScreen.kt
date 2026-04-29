@@ -2,9 +2,13 @@ package com.lonx.lyrico.screens
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -58,9 +62,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -113,6 +121,7 @@ import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Image
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Ok
@@ -155,12 +164,15 @@ fun EditMetadataScreen(
     var showOffsetSheet by remember { mutableStateOf(false) }
     var showCoverOptionsSheet by remember { mutableStateOf(false) }
     var showLyricsActionBottomSheet by remember { mutableStateOf(false) }
+    var showPlainLyricsSheet by remember { mutableStateOf(false) }
     var showCropSheet by remember { mutableStateOf(false) }
     var showAddCustomTagDialog by remember { mutableStateOf(false) }
     var showLyricsFormatBottomSheet by remember { mutableStateOf(false) }
     var bitmapToCrop by remember { mutableStateOf<Bitmap?>(null) }
 
     val currentShiftOffset by viewModel.currentShiftOffset.collectAsState()
+
+    val clipboardManager = LocalClipboardManager.current
     // 各种 Launcher
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -390,7 +402,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_title),
                                 value = editingTagData?.title ?: "",
                                 onValueChange = { viewModel.updateTag { copy(title = it) } },
-                                isModified = !editingTagData?.title.isEqualIgnoringBlank(originalTagData?.title),
+                                isModified = !editingTagData?.title.isEqualIgnoringBlank(
+                                    originalTagData?.title
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -403,7 +417,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_artists),
                                 value = editingTagData?.artist ?: "",
                                 onValueChange = { viewModel.updateTag { copy(artist = it) } },
-                                isModified = !editingTagData?.artist.isEqualIgnoringBlank(originalTagData?.artist),
+                                isModified = !editingTagData?.artist.isEqualIgnoringBlank(
+                                    originalTagData?.artist
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -416,7 +432,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_album_artist),
                                 value = editingTagData?.albumArtist ?: "",
                                 onValueChange = { viewModel.updateTag { copy(albumArtist = it) } },
-                                isModified = !editingTagData?.albumArtist.isEqualIgnoringBlank(originalTagData?.albumArtist),
+                                isModified = !editingTagData?.albumArtist.isEqualIgnoringBlank(
+                                    originalTagData?.albumArtist
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -429,7 +447,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_album),
                                 value = editingTagData?.album ?: "",
                                 onValueChange = { viewModel.updateTag { copy(album = it) } },
-                                isModified = !editingTagData?.album.isEqualIgnoringBlank(originalTagData?.album),
+                                isModified = !editingTagData?.album.isEqualIgnoringBlank(
+                                    originalTagData?.album
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -442,7 +462,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_date),
                                 value = editingTagData?.date ?: "",
                                 onValueChange = { viewModel.updateTag { copy(date = it) } },
-                                isModified = !editingTagData?.date.isEqualIgnoringBlank(originalTagData?.date),
+                                isModified = !editingTagData?.date.isEqualIgnoringBlank(
+                                    originalTagData?.date
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -455,7 +477,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_genre),
                                 value = editingTagData?.genre ?: "",
                                 onValueChange = { viewModel.updateTag { copy(genre = it) } },
-                                isModified = !editingTagData?.genre.isEqualIgnoringBlank(originalTagData?.genre),
+                                isModified = !editingTagData?.genre.isEqualIgnoringBlank(
+                                    originalTagData?.genre
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -478,7 +502,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_track_number),
                                 value = editingTagData?.trackNumber ?: "",
                                 onValueChange = { viewModel.updateTag { copy(trackNumber = it) } },
-                                isModified = !editingTagData?.trackNumber.isEqualIgnoringBlank(originalTagData?.trackNumber),
+                                isModified = !editingTagData?.trackNumber.isEqualIgnoringBlank(
+                                    originalTagData?.trackNumber
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -508,7 +534,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_composer),
                                 value = editingTagData?.composer ?: "",
                                 onValueChange = { viewModel.updateTag { copy(composer = it) } },
-                                isModified = !editingTagData?.composer.isEqualIgnoringBlank(originalTagData?.composer),
+                                isModified = !editingTagData?.composer.isEqualIgnoringBlank(
+                                    originalTagData?.composer
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -521,7 +549,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_lyricist),
                                 value = editingTagData?.lyricist ?: "",
                                 onValueChange = { viewModel.updateTag { copy(lyricist = it) } },
-                                isModified = !editingTagData?.lyricist.isEqualIgnoringBlank(originalTagData?.lyricist),
+                                isModified = !editingTagData?.lyricist.isEqualIgnoringBlank(
+                                    originalTagData?.lyricist
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -534,14 +564,18 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_copyright),
                                 value = editingTagData?.copyright ?: "",
                                 onValueChange = { viewModel.updateTag { copy(copyright = it) } },
-                                isModified = !editingTagData?.copyright.isEqualIgnoringBlank(originalTagData?.copyright),
+                                isModified = !editingTagData?.copyright.isEqualIgnoringBlank(
+                                    originalTagData?.copyright
+                                ),
                                 onRevert = { viewModel.updateTag { copy(copyright = originalTagData?.copyright) } }
                             )
                             MetadataInputField(
                                 label = stringResource(R.string.label_comment),
                                 value = editingTagData?.comment ?: "",
                                 onValueChange = { viewModel.updateTag { copy(comment = it) } },
-                                isModified = !editingTagData?.comment.isEqualIgnoringBlank(originalTagData?.comment),
+                                isModified = !editingTagData?.comment.isEqualIgnoringBlank(
+                                    originalTagData?.comment
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -631,7 +665,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_replaygain_track_gain),
                                 value = editingTagData?.replayGainTrackGain ?: "",
                                 onValueChange = { viewModel.updateTag { copy(replayGainTrackGain = it) } },
-                                isModified = !editingTagData?.replayGainTrackGain.isEqualIgnoringBlank(originalTagData?.replayGainTrackGain),
+                                isModified = !editingTagData?.replayGainTrackGain.isEqualIgnoringBlank(
+                                    originalTagData?.replayGainTrackGain
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -645,7 +681,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_replaygain_track_peak),
                                 value = editingTagData?.replayGainTrackPeak ?: "",
                                 onValueChange = { viewModel.updateTag { copy(replayGainTrackPeak = it) } },
-                                isModified = !editingTagData?.replayGainTrackPeak.isEqualIgnoringBlank(originalTagData?.replayGainTrackPeak),
+                                isModified = !editingTagData?.replayGainTrackPeak.isEqualIgnoringBlank(
+                                    originalTagData?.replayGainTrackPeak
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -659,7 +697,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_replaygain_album_gain),
                                 value = editingTagData?.replayGainAlbumGain ?: "",
                                 onValueChange = { viewModel.updateTag { copy(replayGainAlbumGain = it) } },
-                                isModified = !editingTagData?.replayGainAlbumGain.isEqualIgnoringBlank(originalTagData?.replayGainAlbumGain),
+                                isModified = !editingTagData?.replayGainAlbumGain.isEqualIgnoringBlank(
+                                    originalTagData?.replayGainAlbumGain
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -673,7 +713,9 @@ fun EditMetadataScreen(
                                 label = stringResource(R.string.label_replaygain_album_peak),
                                 value = editingTagData?.replayGainAlbumPeak ?: "",
                                 onValueChange = { viewModel.updateTag { copy(replayGainAlbumPeak = it) } },
-                                isModified = !editingTagData?.replayGainAlbumPeak.isEqualIgnoringBlank(originalTagData?.replayGainAlbumPeak),
+                                isModified = !editingTagData?.replayGainAlbumPeak.isEqualIgnoringBlank(
+                                    originalTagData?.replayGainAlbumPeak
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -693,7 +735,9 @@ fun EditMetadataScreen(
                                         )
                                     }
                                 },
-                                isModified = !editingTagData?.replayGainReferenceLoudness.isEqualIgnoringBlank(originalTagData?.replayGainReferenceLoudness),
+                                isModified = !editingTagData?.replayGainReferenceLoudness.isEqualIgnoringBlank(
+                                    originalTagData?.replayGainReferenceLoudness
+                                ),
                                 onRevert = {
                                     viewModel.updateTag {
                                         copy(
@@ -784,7 +828,9 @@ fun EditMetadataScreen(
                             label = stringResource(R.string.label_lyrics),
                             value = editingTagData?.lyrics ?: "",
                             onValueChange = { viewModel.updateTag { copy(lyrics = it) } },
-                            isModified = !editingTagData?.lyrics.isEqualIgnoringBlank(originalTagData?.lyrics),
+                            isModified = !editingTagData?.lyrics.isEqualIgnoringBlank(
+                                originalTagData?.lyrics
+                            ),
                             onRevert = {
                                 viewModel.updateTag {
                                     copy(
@@ -858,7 +904,7 @@ fun EditMetadataScreen(
                         lyricsFileLauncher.launch(arrayOf("*/*"))
                     }
                 )
-                if (editingTagData?.lyrics != null) {
+                editingTagData?.lyrics?.let {
                     ArrowPreference(
                         title = stringResource(R.string.action_export_lyrics),
                         onClick = {
@@ -892,28 +938,32 @@ fun EditMetadataScreen(
                             showOffsetSheet = true
                         }
                     )
-                    
+
                     // 格式转换选项
-                    val currentLyrics = editingTagData.lyrics ?: ""
-                    if (currentLyrics.isNotBlank()) {
-                        val detectedFormat = LyricDecoder.detectFormat(currentLyrics)
-                        val formatText = when (detectedFormat) {
-                            LyricFormat.PLAIN_LRC -> stringResource(R.string.lyric_format_plain)
-                            LyricFormat.VERBATIM_LRC -> stringResource(R.string.lyric_format_verbatim)
-                            LyricFormat.ENHANCED_LRC -> stringResource(R.string.lyric_format_enhanced)
-                            LyricFormat.TTML -> stringResource(R.string.lyric_format_ttml)
-                            null -> stringResource(R.string.unknown_format)
-                        }
-                        
-                        ArrowPreference(
-                            title = stringResource(R.string.action_convert_lyrics_format),
-                            summary = formatText,
-                            onClick = {
-                                showLyricsActionBottomSheet = false
-                                showLyricsFormatBottomSheet = true
-                            }
-                        )
+                    val detectedFormat = LyricDecoder.detectFormat(it)
+                    val formatText = when (detectedFormat) {
+                        LyricFormat.PLAIN_LRC -> stringResource(R.string.lyric_format_plain)
+                        LyricFormat.VERBATIM_LRC -> stringResource(R.string.lyric_format_verbatim)
+                        LyricFormat.ENHANCED_LRC -> stringResource(R.string.lyric_format_enhanced)
+                        LyricFormat.TTML -> stringResource(R.string.lyric_format_ttml)
+                        null -> stringResource(R.string.unknown_format)
                     }
+
+                    ArrowPreference(
+                        title = stringResource(R.string.action_convert_lyrics_format),
+                        summary = formatText,
+                        onClick = {
+                            showLyricsActionBottomSheet = false
+                            showLyricsFormatBottomSheet = true
+                        }
+                    )
+                    ArrowPreference(
+                        title = stringResource(R.string.action_view_plain_lyrics),
+                        onClick = {
+                            showLyricsActionBottomSheet = false
+                            showPlainLyricsSheet = true
+                        }
+                    )
                 }
                 SwitchPreference(
                     title = stringResource(R.string.limit_lyrics_input_lines),
@@ -924,6 +974,43 @@ fun EditMetadataScreen(
                     }
                 )
             }
+        }
+    }
+    // 歌词文本预览
+    val plainLyrics = viewModel.getPlainLyrics()
+    WindowBottomSheet(
+        show = showPlainLyricsSheet,
+        enableNestedScroll = false,
+        endAction =  {
+            IconButton(
+                onClick = {
+                    showPlainLyricsSheet = false
+                    clipboardManager.setText(
+                        AnnotatedString(plainLyrics ?: "")
+                    )
+                }
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Copy,
+                    contentDescription = null
+                )
+            }
+        },
+        title = stringResource(R.string.label_plain_lyrics),
+        onDismissRequest = { showPlainLyricsSheet = false }
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(bottom = 32.dp)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ){
+
+            Text(
+                style = MiuixTheme.textStyles.body2,
+                text = plainLyrics?: stringResource(R.string.lyrics_empty),
+                modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
+            )
         }
     }
     // 封面操作
@@ -1165,7 +1252,7 @@ fun EditMetadataScreen(
             }
         }
     }
-    
+
     // 歌词格式转换
     WindowBottomSheet(
         show = showLyricsFormatBottomSheet,
@@ -1174,7 +1261,7 @@ fun EditMetadataScreen(
     ) {
         val currentLyrics = editingTagData?.lyrics ?: ""
         val detectedFormat = LyricDecoder.detectFormat(currentLyrics)
-        
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1197,7 +1284,7 @@ fun EditMetadataScreen(
                 color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
                 modifier = Modifier.padding(12.dp)
             )
-            Card (
+            Card(
                 colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.secondaryContainer)
             ) {
                 // 提供转换选项
@@ -1265,23 +1352,28 @@ private fun CoverSection(
                 try {
                     when (coverUri) {
                         is ByteArray -> {
-                            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            val options =
+                                BitmapFactory.Options().apply { inJustDecodeBounds = true }
                             BitmapFactory.decodeByteArray(coverUri, 0, coverUri.size, options)
                             if (options.outWidth > 0 && options.outHeight > 0) {
                                 options.outWidth to options.outHeight
                             } else null
                         }
+
                         is Uri -> {
                             context.contentResolver.openInputStream(coverUri)?.use { stream ->
-                                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                val options =
+                                    BitmapFactory.Options().apply { inJustDecodeBounds = true }
                                 BitmapFactory.decodeStream(stream, null, options)
                                 if (options.outWidth > 0 && options.outHeight > 0) {
                                     options.outWidth to options.outHeight
                                 } else null
                             }
                         }
+
                         is String -> {
-                            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            val options =
+                                BitmapFactory.Options().apply { inJustDecodeBounds = true }
 
                             when {
                                 // 网络 URL
@@ -1309,9 +1401,11 @@ private fun CoverSection(
                                 options.outWidth to options.outHeight
                             } else null
                         }
+
                         is Bitmap -> {
                             coverUri.width to coverUri.height
                         }
+
                         else -> null
                     }
                 } catch (e: Exception) {

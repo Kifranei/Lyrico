@@ -10,52 +10,14 @@ import com.lonx.lyrics.model.LyricsResult
 import kotlin.math.abs
 
 object LyricEncoder {
-    // 匹配 LRC/Enhanced LRC 格式: [01:23.456] 或 <01:23.45>
-    private val LRC_TIME_PATTERN = Regex("([<\\[])(\\d{2,}):(\\d{2})\\.(\\d{2,3})([>\\]])")
-
     // 匹配 TTML 格式: begin="00:01:23.456" 或 end="00:01:23.456"
     private val TTML_TIME_PATTERN = Regex("(begin=\"|end=\")(\\d{2,}):(\\d{2}):(\\d{2})\\.(\\d{2,3})(\")")
     
-    @SuppressLint("DefaultLocale")
-    private fun formatTimestamp(millis: Long): String {
-        val safeMillis = millis.coerceAtLeast(0L)
-        val totalSeconds = safeMillis / 1000
-        val minutes = totalSeconds / 60
-        val seconds = totalSeconds % 60
-        val ms = safeMillis % 1000
-        return String.format("%02d:%02d.%03d", minutes, seconds, ms)
-    }
-
-    /**
-     * TTML 专属时间戳 (格式: HH:mm:ss.SSS)
-     */
-    @SuppressLint("DefaultLocale")
-    private fun formatTtmlTimestamp(millis: Long): String {
-        val safeMillis = millis.coerceAtLeast(0L)
-        val totalSeconds = safeMillis / 1000
-        val hours = totalSeconds / 3600
-        val minutes = (totalSeconds % 3600) / 60
-        val seconds = totalSeconds % 60
-        val ms = safeMillis % 1000
-        return String.format("%02d:%02d:%02d.%03d", hours, minutes, seconds, ms)
-    }
-
-    /**
-     * XML 字符转义（防止歌词中的特殊字符破坏 TTML 结构）
-     */
-    private fun escapeXml(text: String): String {
-        return text.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-            .replace("'", "&apos;")
-    }
-
     /**
      * 计算应用偏移量，保证结果大于等于 0
      */
     private fun applyOffset(time: Long, offset: Long): Long {
-        return (time + offset).coerceAtLeast(0L)
+        return LyricFormatter.applyOffset(time, offset)
     }
 
     private fun isBlankOrPlaceholder(line: LyricsLine): Boolean {
@@ -129,17 +91,17 @@ object LyricEncoder {
      */
     fun convertLyricsText(lyricsText: String, conversionMode: ConversionMode): String {
         if (conversionMode == ConversionMode.NONE || lyricsText.isBlank()) return lyricsText
-
+    
         // 匹配所有时间戳 token（LRC 和 TTML），对非时间戳部分做转换
         val timeTokenPattern = Regex(
             """[\[<]\d{2,}:\d{2}\.\d{2,3}[>\]]""" +          // LRC: [01:23.456] 或 <01:23.456>
-            """|begin="\d{2,}:\d{2}:\d{2}\.\d{2,3}"""" +     // TTML begin
-            """|end="\d{2,}:\d{2}:\d{2}\.\d{2,3}""""         // TTML end
+            """|begin="\d{2,}:\d{2}:\d{2}\.\d{2,3}""" +     // TTML begin
+            """|end="\d{2,}:\d{2}:\d{2}\.\d{2,3}"""         // TTML end
         )
-
+    
         val result = StringBuilder()
         var lastEnd = 0
-
+    
         timeTokenPattern.findAll(lyricsText).forEach { match ->
             // 转换时间戳之前的文本部分
             if (match.range.first > lastEnd) {
@@ -150,13 +112,84 @@ object LyricEncoder {
             result.append(match.value)
             lastEnd = match.range.last + 1
         }
-
+    
         // 处理最后一段文本
         if (lastEnd < lyricsText.length) {
             result.append(convertText(lyricsText.substring(lastEnd), conversionMode))
         }
-
+    
         return result.toString()
+    }
+    
+    /**
+     * 从 LyricsResult 提取纯文本歌词（不包含时间轴和格式标记）
+     * @param result 歌词结果
+     * @param config 渲染配置（控制是否包含翻译、音译等）
+     * @param conversionMode 简繁转换模式
+     * @return 纯文本歌词，每行一句
+     */
+    fun encodePlainText(
+        result: LyricsResult,
+        config: LyricRenderConfig,
+        conversionMode: ConversionMode = ConversionMode.NONE
+    ): String {
+        val convertedResult = convertLyricsResult(result, conversionMode)
+        val builder = StringBuilder()
+    
+        val romanMap = if (config.showRomanization) {
+            convertedResult.romanization?.associateBy { it.start } ?: emptyMap()
+        } else emptyMap()
+    
+        val translatedMap = if (config.showTranslation) {
+            convertedResult.translated?.associateBy { it.start } ?: emptyMap()
+        } else emptyMap()
+    
+        convertedResult.original.forEach { line ->
+            if (config.removeEmptyLines && isBlankOrPlaceholder(line)) {
+                return@forEach
+            }
+    
+            val matchedTranslation = if (config.showTranslation) {
+                val match = matchingSubLine(line, translatedMap)
+                if (config.removeEmptyLines && match != null && isBlankOrPlaceholder(match)) null else match
+            } else null
+    
+            val matchedRoman = if (config.showRomanization) {
+                val match = matchingSubLine(line, romanMap)
+                if (config.removeEmptyLines && match != null && isBlankOrPlaceholder(match)) null else match
+            } else null
+    
+            val skipOriginal = config.onlyTranslationIfAvailable && matchedTranslation != null
+    
+            // 添加原文
+            if (!skipOriginal) {
+                val originalText = line.words.joinToString("") { it.text }
+                if (originalText.isNotBlank()) {
+                    builder.append(originalText)
+                    builder.append("\n")
+                }
+            }
+    
+            // 添加音译
+            if (matchedRoman != null && !skipOriginal) {
+                val romanText = matchedRoman.words.joinToString(" ") { it.text }
+                if (romanText.isNotBlank()) {
+                    builder.append(romanText)
+                    builder.append("\n")
+                }
+            }
+    
+            // 添加翻译
+            if (matchedTranslation != null) {
+                val transText = matchedTranslation.words.joinToString("") { it.text }
+                if (transText.isNotBlank()) {
+                    builder.append(transText)
+                    builder.append("\n")
+                }
+            }
+        }
+    
+        return builder.toString().trim()
     }
 
     fun encode(
@@ -265,8 +298,8 @@ object LyricEncoder {
             else -> line.start + 2000
         }
 
-        val startStr = formatTtmlTimestamp(start)
-        val endStr = formatTtmlTimestamp(applyOffset(end, offset))
+        val startStr = LyricFormatter.formatTtmlTimestamp(start)
+        val endStr = LyricFormatter.formatTtmlTimestamp(LyricFormatter.applyOffset(end, offset))
 
         builder.append("      <p begin=\"").append(startStr).append("\" end=\"").append(endStr).append("\">")
 
@@ -275,17 +308,17 @@ object LyricEncoder {
             if (isWordLevel) {
                 // 如果支持逐字，输出详细的 <span>
                 line.words.forEach { word ->
-                    val wordStart = formatTtmlTimestamp(applyOffset(word.start, offset))
+                    val wordStart = LyricFormatter.formatTtmlTimestamp(LyricFormatter.applyOffset(word.start, offset))
                     val wordEnd = if (word.end > 0) word.end else word.start + 300
-                    val wordEndStr = formatTtmlTimestamp(applyOffset(wordEnd, offset))
+                    val wordEndStr = LyricFormatter.formatTtmlTimestamp(LyricFormatter.applyOffset(wordEnd, offset))
 
                     builder.append("<span begin=\"").append(wordStart).append("\" end=\"").append(wordEndStr).append("\">")
-                    builder.append(escapeXml(word.text))
+                    builder.append(LyricFormatter.escapeXml(word.text))
                     builder.append("</span>")
                 }
             } else {
                 val fullText = line.words.joinToString("") { it.text }
-                builder.append(escapeXml(fullText))
+                builder.append(LyricFormatter.escapeXml(fullText))
             }
         }
 
@@ -293,7 +326,7 @@ object LyricEncoder {
             val romanText = romanLine.words.joinToString(" ") { it.text }
             if (romanText.isNotEmpty()) {
                 builder.append("<span ttm:role=\"x-romanization\">")
-                builder.append(escapeXml(romanText))
+                builder.append(LyricFormatter.escapeXml(romanText))
                 builder.append("</span>")
             }
         }
@@ -302,7 +335,7 @@ object LyricEncoder {
             val transText = transLine.words.joinToString("") { it.text }
             if (transText.isNotEmpty()) {
                 builder.append(" <span ttm:role=\"x-translation\">")
-                builder.append(escapeXml(transText))
+                builder.append(LyricFormatter.escapeXml(transText))
                 builder.append("</span>")
             }
         }
@@ -313,12 +346,12 @@ object LyricEncoder {
     private fun appendEnhancedLine(builder: StringBuilder, line: LyricsLine, offset: Long) {
         if (line.words.isEmpty()) return
 
-        val start = applyOffset(line.start, offset)
-        builder.append("[${formatTimestamp(start)}] ")
+        val start = LyricFormatter.applyOffset(line.start, offset)
+        builder.append("[${LyricFormatter.formatTimestamp(start)}] ")
 
         line.words.forEach { word ->
-            val wordStart = applyOffset(word.start, offset)
-            builder.append("<${formatTimestamp(wordStart)}>")
+            val wordStart = LyricFormatter.applyOffset(word.start, offset)
+            builder.append("<${LyricFormatter.formatTimestamp(wordStart)}>")
             builder.append(word.text)
         }
 
@@ -330,7 +363,7 @@ object LyricEncoder {
             else -> line.start + 2000
         }
 
-        builder.append(" <${formatTimestamp(applyOffset(end, offset))}>")
+        builder.append(" <${LyricFormatter.formatTimestamp(LyricFormatter.applyOffset(end, offset))}>")
     }
 
     private fun appendLineByLine(builder: StringBuilder, line: LyricsLine, offset: Long) {
@@ -338,7 +371,7 @@ object LyricEncoder {
 //        val endTime = line.words.lastOrNull()?.end
 
         // 应用 offset
-        val startTimeFormatted = formatTimestamp(applyOffset(line.start, offset))
+        val startTimeFormatted = LyricFormatter.formatTimestamp(LyricFormatter.applyOffset(line.start, offset))
 
         builder.append("[$startTimeFormatted]$lineText")
     }
@@ -346,12 +379,12 @@ object LyricEncoder {
     private fun appendWordByWord(builder: StringBuilder, line: LyricsLine, offset: Long) {
         line.words.forEachIndexed { index, word ->
 
-            val startFormatted = formatTimestamp(applyOffset(word.start, offset))
+            val startFormatted = LyricFormatter.formatTimestamp(LyricFormatter.applyOffset(word.start, offset))
 
             if (index == line.words.lastIndex) {
 
                 val end = if (word.end > 0) word.end else word.start + 100
-                val endFormatted = formatTimestamp(applyOffset(end, offset))
+                val endFormatted = LyricFormatter.formatTimestamp(LyricFormatter.applyOffset(end, offset))
 
                 builder.append("[$startFormatted]${word.text}[$endFormatted]")
 
@@ -382,7 +415,7 @@ object LyricEncoder {
         var resultText = lyricsText
 
         // 处理 LRC 格式的时间戳 ([mm:ss.xxx] 或 <mm:ss.xxx>)
-        resultText = LRC_TIME_PATTERN.replace(resultText) { match ->
+        resultText = LyricFormatter.LRC_TIME_PATTERN.replace(resultText) { match ->
             val prefix = match.groupValues[1] // '[' 或 '<'
             val min = match.groupValues[2].toLong()
             val sec = match.groupValues[3].toLong()

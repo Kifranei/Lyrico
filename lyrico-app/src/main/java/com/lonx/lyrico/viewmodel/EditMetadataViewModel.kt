@@ -31,6 +31,7 @@ import com.lonx.lyrico.utils.ReplayGainCalculateState
 import com.lonx.lyrico.utils.ReplayGainError
 import com.lonx.lyrico.utils.ReplayGainScanner
 import com.lonx.lyrico.utils.UiMessage
+import com.lonx.lyrics.model.LyricsResult
 import com.lonx.lyrics.model.isWordByWord
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -765,5 +766,30 @@ class EditMetadataViewModel(
 
     fun clearSameAlbumCoverMessage() {
         _uiState.update { it.copy(sameAlbumCoverMessage = null) }
+    }
+
+    fun getPlainLyrics(): String? {
+        val lyrics = LyricDecoder.decode(_uiState.value.editingTagData?.lyrics ?: "")
+        val lyricsSearchResult = LyricsResult(
+            tags = emptyMap(),
+            original = lyrics,
+            translated = null,
+            romanization = null,
+            isWordByWord = lyrics.isWordByWord()
+        )
+        val config = LyricRenderConfig(
+            format = LyricFormat.PLAIN_LRC,
+            conversionMode = ConversionMode.NONE,
+            showTranslation = false,
+            showRomanization = false,
+            removeEmptyLines = false,
+            onlyTranslationIfAvailable = false
+        )
+        return if (lyrics.isNotEmpty()) {
+            val plainLyrics = LyricEncoder.encodePlainText(lyricsSearchResult, config)
+            plainLyrics
+        } else {
+            null
+        }
     }
 }
