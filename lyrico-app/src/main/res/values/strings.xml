@@ -476,7 +476,10 @@
     <string name="unknown_format">Unknown format</string>
     <string name="action_convert_lyrics_format">Convert format</string>
     <string name="action_convert_lyrics_format_title">Convert Lyrics Format</string>
+    <string name="action_batch_convert_lyrics_format">Batch Convert Lyrics Format</string>
     <string name="current_detected_format">Current detected format: %s</string>
+    <string name="current_target_format">Target format: %s</string>
+    <string name="current_selected">Selected</string>
     <string name="convert_to_format">Convert to %s</string>
     <string name="label_plain_lyrics">Plain lyrics</string>
     <string name="action_view_plain_lyrics">View plain lyrics</string>

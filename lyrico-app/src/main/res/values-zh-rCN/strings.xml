@@ -491,4 +491,7 @@
     <string name="label_plain_lyrics">歌词文本</string>
     <string name="action_view_plain_lyrics">查看歌词文本</string>
     <string name="copied_to_clipboard">已复制到剪切板</string>
+    <string name="action_batch_convert_lyrics_format">批量转换歌词格式</string>
+    <string name="current_target_format">目标格式: %s</string>
+    <string name="current_selected">当前选择</string>
 </resources>

@@ -101,6 +101,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.lonx.lyrico.BuildConfig
 import com.lonx.lyrico.R
+import com.lonx.lyrico.data.model.LyricFormat
 import com.lonx.lyrico.data.model.LocalSearchType
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.model.entity.getUri
@@ -108,9 +109,11 @@ import com.lonx.lyrico.ui.components.DropdownItem
 import com.lonx.lyrico.ui.components.FabMenuItem
 import com.lonx.lyrico.ui.components.SongListItem
 import com.lonx.lyrico.ui.components.bar.SearchBar
+import com.lonx.lyrico.ui.dialog.BatchLyricsFormatConfigBottomSheet
 import com.lonx.lyrico.ui.dialog.BatchMatchConfigBottomSheet
 import com.lonx.lyrico.ui.dialog.ReplayGainConfigBottomSheet
 import com.lonx.lyrico.utils.coil.CoverRequest
+import com.lonx.lyrico.viewmodel.BatchLyricsFormatViewModel
 import com.lonx.lyrico.viewmodel.BatchMatchViewModel
 import com.lonx.lyrico.viewmodel.BatchReplayGainViewModel
 import com.lonx.lyrico.viewmodel.SongListViewModel
@@ -193,9 +196,11 @@ fun SongListScreen(
     val songListViewModel: SongListViewModel = koinViewModel()
     val batchMatchViewModel: BatchMatchViewModel = koinViewModel()
     val batchReplayGainViewModel: BatchReplayGainViewModel = koinViewModel()
+    val batchLyricsFormatViewModel: BatchLyricsFormatViewModel = koinViewModel()
     val songListUiState by songListViewModel.uiState.collectAsState()
     val batchMatchUiState by batchMatchViewModel.uiState.collectAsState()
     val batchReplayGainUiState by batchReplayGainViewModel.uiState.collectAsStateWithLifecycle()
+    val batchLyricsFormatUiState by batchLyricsFormatViewModel.uiState.collectAsStateWithLifecycle()
     val sortInfo by songListViewModel.sortInfo.collectAsState()
     val songs by songListViewModel.songs.collectAsState()
     val searchType by songListViewModel.searchType.collectAsState()
@@ -911,6 +916,24 @@ fun SongListScreen(
                 }
             )
 
+            BatchLyricsFormatConfigBottomSheet(
+                show = batchLyricsFormatUiState.showConfigDialog,
+                initialConcurrency = batchLyricsFormatUiState.concurrency,
+                initialTargetFormat = batchLyricsFormatUiState.targetFormat,
+                onDismissRequest = { concurrency, targetFormat ->
+                    batchReplayGainViewModel.setConcurrency(concurrency)
+                    batchLyricsFormatViewModel.setConcurrency(concurrency)
+                    batchLyricsFormatViewModel.setTargetFormat(targetFormat)
+                    batchLyricsFormatViewModel.closeConfig()
+                },
+                onConfirm = { concurrency, targetFormat ->
+                    batchReplayGainViewModel.setConcurrency(concurrency)
+                    batchLyricsFormatViewModel.setConcurrency(concurrency)
+                    batchLyricsFormatViewModel.setTargetFormat(targetFormat)
+                    batchLyricsFormatViewModel.startBatchConvert()
+                }
+            )
+
             WindowBottomSheet(
                 show = batchReplayGainUiState.showProgressDialog,
                 onDismissRequest = {
@@ -1062,6 +1085,167 @@ fun SongListScreen(
                     }
                 }
             }
+
+            WindowBottomSheet(
+                show = batchLyricsFormatUiState.showProgressDialog,
+                onDismissRequest = {
+                    if (!batchLyricsFormatUiState.isRunning) {
+                        batchLyricsFormatViewModel.closeProgressDialog()
+                    }
+                },
+                onDismissFinished = {
+                    if (batchLyricsFormatUiState.isSuccess) {
+                        batchLyricsFormatViewModel.closeProgressDialog()
+                    }
+                },
+                allowDismiss = !batchLyricsFormatUiState.isRunning,
+                title = stringResource(R.string.action_batch_convert_lyrics_format),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(bottom = 32.dp)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Column(
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.current_target_format,
+                                stringResource(batchLyricsFormatUiState.targetFormat.labelRes)
+                            ),
+                            style = MiuixTheme.textStyles.footnote1,
+                            color = MiuixTheme.colorScheme.onSurfaceContainerVariant
+                        )
+
+                        batchLyricsFormatUiState.progress?.let { (current, total) ->
+                            val progress = if (total > 0) current.toFloat() / total.toFloat() else 0f
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (batchLyricsFormatUiState.isRunning) {
+                                        stringResource(R.string.batch_edit_processing)
+                                    } else {
+                                        stringResource(
+                                            R.string.batch_replay_gain_total_time,
+                                            batchLyricsFormatUiState.totalTimeMillis / 1000.0
+                                        )
+                                    },
+                                    style = MiuixTheme.textStyles.subtitle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Text(
+                                    text = "$current / $total",
+                                    style = MiuixTheme.textStyles.main,
+                                    textAlign = TextAlign.End
+                                )
+                            }
+
+                            LinearProgressIndicator(
+                                progress = progress,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        if (batchLyricsFormatUiState.isRunning && batchLyricsFormatUiState.activeFiles.isNotEmpty()) {
+                            Column(
+                                modifier = Modifier.padding(top = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                batchLyricsFormatUiState.activeFiles.forEach { fileName ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = fileName,
+                                            style = MiuixTheme.textStyles.footnote1,
+                                            color = MiuixTheme.colorScheme.onSurfaceContainer,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = stringResource(R.string.batch_edit_processing),
+                                            style = MiuixTheme.textStyles.footnote1,
+                                            color = MiuixTheme.colorScheme.onSurfaceContainer
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.batch_replay_gain_success,
+                                batchLyricsFormatUiState.successCount
+                            ),
+                            style = MiuixTheme.textStyles.main
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.batch_replay_gain_skipped,
+                                batchLyricsFormatUiState.skippedCount
+                            ),
+                            style = MiuixTheme.textStyles.main
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.batch_replay_gain_failure,
+                                batchLyricsFormatUiState.failureCount
+                            ),
+                            style = MiuixTheme.textStyles.main
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.SpaceBetween) {
+                        top.yukonga.miuix.kmp.basic.TextButton(
+                            text = if (batchLyricsFormatUiState.isRunning) {
+                                stringResource(R.string.action_abort)
+                            } else {
+                                stringResource(R.string.action_close)
+                            },
+                            onClick = {
+                                if (batchLyricsFormatUiState.isRunning) {
+                                    batchLyricsFormatViewModel.abortBatchConvert()
+                                } else {
+                                    batchLyricsFormatViewModel.closeProgressDialog()
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (!batchLyricsFormatUiState.isRunning) {
+                            Spacer(Modifier.width(20.dp))
+                            top.yukonga.miuix.kmp.basic.TextButton(
+                                text = stringResource(R.string.confirm),
+                                onClick = { batchLyricsFormatViewModel.closeProgressDialog() },
+                                modifier = Modifier.weight(1f),
+                                colors = MiuixButtonDefaults.textButtonColorsPrimary(),
+                            )
+                        }
+                    }
+                }
+            }
         }
         AnimatedVisibility(
             visible = showFab,
@@ -1153,6 +1337,19 @@ fun SongListScreen(
                                     songs.find { it.mediaId == mediaId }?.uri ?: ""
                                 }.filter { it.isNotEmpty() })
                                 batchReplayGainViewModel.openReplayGainConfig()
+                            }
+                        )
+                        FabMenuItem(
+                            label = stringResource(R.string.action_batch_convert_lyrics_format),
+                            icon = MiuixIcons.Edit,
+                            onClick = {
+                                isFabMenuExpanded = false
+                                batchLyricsFormatViewModel.setSelectionUris(
+                                    songListViewModel.selectedSongIds.value.map { mediaId ->
+                                        songs.find { it.mediaId == mediaId }?.uri ?: ""
+                                    }.filter { it.isNotEmpty() }
+                                )
+                                batchLyricsFormatViewModel.openConfig(batchReplayGainUiState.concurrency)
                             }
                         )
                         FabMenuItem(

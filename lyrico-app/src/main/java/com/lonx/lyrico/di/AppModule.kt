@@ -22,6 +22,7 @@ import com.lonx.lyrico.utils.UpdateManager
 import com.lonx.lyrico.utils.UpdateManagerImpl
 import com.lonx.lyrico.viewmodel.AboutViewModel
 import com.lonx.lyrico.viewmodel.BatchEditViewModel
+import com.lonx.lyrico.viewmodel.BatchLyricsFormatViewModel
 import com.lonx.lyrico.viewmodel.BatchMatchHistoryViewModel
 import com.lonx.lyrico.viewmodel.BatchMatchViewModel
 import com.lonx.lyrico.viewmodel.BatchRenameViewModel
@@ -218,5 +219,6 @@ val appModule = module {
     viewModel { BatchRenameViewModel(get(), get(), get()) }
     viewModel { BatchEditViewModel(get(), get(), get())}
     viewModel { BatchReplayGainViewModel(get(), get()) }
+    viewModel { BatchLyricsFormatViewModel(get()) }
 }
 
