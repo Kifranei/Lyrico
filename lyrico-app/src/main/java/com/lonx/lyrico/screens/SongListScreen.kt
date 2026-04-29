@@ -35,9 +35,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -83,6 +87,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.state.ToggleableState
@@ -212,6 +217,7 @@ fun SongListScreen(
     val hasSelection = selectedSongIds.isNotEmpty()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val layoutDirection = LocalLayoutDirection.current
     val sectionIndexMap = remember(songs, sortInfo) {
         val map = mutableMapOf<String, Int>()
         if (sortInfo.sortBy.supportsIndex) {
@@ -475,10 +481,16 @@ fun SongListScreen(
                 }
             }
         ) { paddingValues ->
+            val navigationBarBottomInset =
+                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             PullToRefresh(
                 isRefreshing = songListUiState.isLoading,
                 onRefresh = { songListViewModel.refreshSongs() },
-                modifier = Modifier.padding(paddingValues),
+                modifier = Modifier.padding(
+                    start = paddingValues.calculateStartPadding(layoutDirection),
+                    top = paddingValues.calculateTopPadding(),
+                    end = paddingValues.calculateEndPadding(layoutDirection)
+                ),
                 topAppBarScrollBehavior = topAppBarScrollBehavior,
                 refreshTexts = refreshTexts
             ) {
@@ -525,7 +537,8 @@ fun SongListScreen(
                             .fillMaxHeight()
                             .then(dragSelectionModifier),
                         state = listState,
-                        overscrollEffect = null
+                        overscrollEffect = null,
+                        contentPadding = PaddingValues(bottom = navigationBarBottomInset)
                     ) {
                         if (songs.isNotEmpty()) {
                             items(
@@ -590,7 +603,11 @@ fun SongListScreen(
                         )
                         scope.launch { listState.scrollToItem(index) }
                     },
-                    modifier = Modifier.align(Alignment.CenterEnd)
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(end = 4.dp)
                 )
             }
             val song = sheetUiState.menuSong
