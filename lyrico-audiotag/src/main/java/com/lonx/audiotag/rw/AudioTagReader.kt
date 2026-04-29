@@ -58,6 +58,19 @@ object AudioTagReader {
                     return null
                 }
 
+                fun allJoined(separator: String = ", ", vararg keys: String): String? {
+                    for (key in keys) {
+                        val arr = props[key]
+                        if (!arr.isNullOrEmpty()) {
+                            val filtered = arr.map { it.trim() }.filter { it.isNotEmpty() }
+                            if (filtered.isNotEmpty()) {
+                                return filtered.joinToString(separator)
+                            }
+                        }
+                    }
+                    return null
+                }
+
                 fun firstIntOf(vararg keys: String): Int? {
                     val raw = firstOf(*keys) ?: return null
                     return raw.substringBefore('/').toIntOrNull()
@@ -168,7 +181,7 @@ object AudioTagReader {
                     title = firstOf("TITLE"),
                     artist = firstOf("ARTIST"),
                     album = firstOf("ALBUM"),
-                    genre = firstOf("GENRE") ?: style, // fallback 到 style
+                    genre = allJoined(", ", "GENRE", "TCON") ?: allJoined(", ", "STYLE", "SUBGENRE", "MOOD"),
                     date = firstOf("DATE", "YEAR"),
                     trackNumber = firstIntOf("TRACKNUMBER", "TRACK", "TRCK")?.toString(),
 
