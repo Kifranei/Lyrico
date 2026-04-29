@@ -667,26 +667,17 @@ class EditMetadataViewModel(
 
         viewModelScope.launch {
             try {
-                // 1. 解码：String → Model
-                val lines = LyricDecoder.decode(currentLyrics)
-                if (lines.isEmpty()) return@launch
-
-                // 2. 组合：List<LyricsLine> → LyricsResult
-                val lyricsResult = com.lonx.lyrics.model.LyricsResult(
-                    tags = emptyMap(),
-                    original = lines,
-                    translated = null,
-                    romanization = null,
-                    isWordByWord = lines.isWordByWord()
-                )
+                val lyricsResult = LyricDecoder.decode(currentLyrics)
+                    ?: return@launch
+                if (lyricsResult.original.isEmpty()) return@launch
 
                 // 3. 配置渲染参数
                 val config = LyricRenderConfig(
                     format = targetFormat,
                     conversionMode = ConversionMode.NONE,
-                    showTranslation = false,
-                    showRomanization = false,
-                    removeEmptyLines = false,
+                    showTranslation = lyricsResult.translated != null,
+                    showRomanization = lyricsResult.romanization != null,
+                    removeEmptyLines = true,
                     onlyTranslationIfAvailable = false
                 )
 
@@ -769,27 +760,17 @@ class EditMetadataViewModel(
     }
 
     fun getPlainLyrics(): String? {
-        val lyrics = LyricDecoder.decode(_uiState.value.editingTagData?.lyrics ?: "")
-        val lyricsSearchResult = LyricsResult(
-            tags = emptyMap(),
-            original = lyrics,
-            translated = null,
-            romanization = null,
-            isWordByWord = lyrics.isWordByWord()
-        )
+        val lyricsResult = LyricDecoder.decode(_uiState.value.editingTagData?.lyrics ?: "")
+            ?: return null
+        if (lyricsResult.original.isEmpty()) return null
         val config = LyricRenderConfig(
             format = LyricFormat.PLAIN_LRC,
             conversionMode = ConversionMode.NONE,
-            showTranslation = false,
-            showRomanization = false,
-            removeEmptyLines = false,
+            showTranslation = lyricsResult.translated != null,
+            showRomanization = lyricsResult.romanization != null,
+            removeEmptyLines = true,
             onlyTranslationIfAvailable = false
         )
-        return if (lyrics.isNotEmpty()) {
-            val plainLyrics = LyricEncoder.encodePlainText(lyricsSearchResult, config)
-            plainLyrics
-        } else {
-            null
-        }
+        return LyricEncoder.encodePlainText(lyricsResult, config)
     }
 }

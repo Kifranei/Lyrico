@@ -15,14 +15,12 @@ import com.lonx.audiotag.model.AudioTagData
 import com.lonx.lyrico.data.SharedSelectionManager
 import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.data.repository.SongRepository
-import com.lonx.lyrico.data.model.BatchMatchConfigDefaults
 import com.lonx.lyrico.data.model.LocalSearchType
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.model.entity.getUri
 import com.lonx.lyrico.data.repository.PlaybackRepository
 import com.lonx.lyrico.utils.MusicContentObserver
 import com.lonx.lyrico.utils.UpdateManager
-import com.lonx.lyrics.model.Source
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
@@ -95,30 +93,8 @@ class SongListViewModel(
     val sortInfo: StateFlow<SortInfo> = settingsRepository.sortInfo
         .stateIn(viewModelScope, SharingStarted.Eagerly, SortInfo())
 
-    private val searchSourceOrder: StateFlow<List<Source>> = settingsRepository.searchSourceOrder
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    private val enabledSearchSources: StateFlow<Set<Source>> = settingsRepository.enabledSearchSources
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
-
-    /**
-     * 已启用的搜索源，按优先级排序
-     */
-    val enabledSourceOrder: StateFlow<List<Source>> = combine(
-        searchSourceOrder,
-        enabledSearchSources
-    ) { order, enabled ->
-        order.filter { it in enabled }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    private val separator = settingsRepository.separator
-        .stateIn(viewModelScope, SharingStarted.Eagerly, "/")
-
     val showScrollTopButton = settingsRepository.showScrollTopButton
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
-    val batchMatchConfig = settingsRepository.batchMatchConfig
-        .stateIn(viewModelScope, SharingStarted.Eagerly, BatchMatchConfigDefaults.DEFAULT_CONFIG)
 
     // UI 交互状态
     private val _uiState = MutableStateFlow(SongListUiState())
@@ -362,25 +338,7 @@ class SongListViewModel(
             Intent.createChooser(intent, context.getString(com.lonx.lyrico.R.string.share_chooser_title))
         )
     }
-    /**
-     * 准备跳转到“批量重命名”页面
-     * @return Boolean 返回 true 表示有数据可以跳转，false 表示没有选中数据
-     */
-    fun setSelectionPaths(): Boolean {
-        val selectedIds = _selectedSongIds.value
-        if (selectedIds.isEmpty()) return false
 
-        // 从当前列表中过滤出选中的歌曲
-        val paths = songs.value
-            .filter { it.mediaId in selectedIds }
-            .map { it.filePath }
-            .toSet()
-
-
-        // 存入全局 Manager
-        selectionManager.setUris(paths)
-        return true
-    }
     fun setSelectionUris(): Boolean {
         val selectedIds = _selectedSongIds.value
         if (selectedIds.isEmpty()) return false

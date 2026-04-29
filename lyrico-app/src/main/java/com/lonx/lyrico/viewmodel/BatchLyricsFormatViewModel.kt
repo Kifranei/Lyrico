@@ -215,22 +215,15 @@ class BatchLyricsFormatViewModel(
 
     private fun convertLyricsFormat(lyrics: String, targetFormat: LyricFormat): String? {
         return try {
-            val lines = LyricDecoder.decode(lyrics)
-            if (lines.isEmpty()) return null
-
-            val lyricsResult = com.lonx.lyrics.model.LyricsResult(
-                tags = emptyMap(),
-                original = lines,
-                translated = null,
-                romanization = null,
-                isWordByWord = lines.isWordByWord()
-            )
+            val lyricsResult = LyricDecoder.decode(lyrics)
+                ?: return null
+            if (lyricsResult.original.isEmpty()) return null
             val config = LyricRenderConfig(
                 format = targetFormat,
                 conversionMode = ConversionMode.NONE,
-                showTranslation = false,
-                showRomanization = false,
-                removeEmptyLines = false,
+                showTranslation = lyricsResult.translated != null,
+                showRomanization = lyricsResult.romanization != null,
+                removeEmptyLines = true,
                 onlyTranslationIfAvailable = false
             )
             LyricEncoder.encode(lyricsResult, config)
