@@ -54,6 +54,7 @@ object SettingsDefaults {
     const val IGNORE_SHORT_AUDIO = true
     const val ONLY_TRANSLATION_IF_AVAILABLE = false
     const val REMOVE_EMPTY_LINES = true
+    const val LIMIT_LYRICS_INPUT_LINES = false
 
     // 搜索源顺序默认值
     val SEARCH_SOURCE_ORDER = Source.entries.toList()
@@ -74,6 +75,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
     private object PreferencesKeys {
         val RENAME_FORMAT = stringPreferencesKey("rename_format")
         val REMOVE_EMPTY_LINES = booleanPreferencesKey("remove_empty_lines")
+        val LIMIT_LYRICS_INPUT_LINES = booleanPreferencesKey("limit_lyrics_input_lines")
         val SHOW_SCROLL_TOP_BUTTON = booleanPreferencesKey("show_scroll_top_button")
         val LYRIC_FORMAT = stringPreferencesKey("lyric_display_mode")
         val LAST_SCAN_TIME = longPreferencesKey("last_scan_time")
@@ -227,6 +229,11 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
     override val removeEmptyLines: Flow<Boolean>
         get() = context.settingsDataStore.data.map { preferences ->
             preferences[PreferencesKeys.REMOVE_EMPTY_LINES] ?: SettingsDefaults.REMOVE_EMPTY_LINES
+        }
+    override val limitLyricsInputLines: Flow<Boolean>
+        get() = context.settingsDataStore.data.map { preferences ->
+            preferences[PreferencesKeys.LIMIT_LYRICS_INPUT_LINES]
+                ?: SettingsDefaults.LIMIT_LYRICS_INPUT_LINES
         }
     override val showScrollTopButton: Flow<Boolean>
         get() = context.settingsDataStore.data.map { preferences ->
@@ -402,6 +409,12 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         }
     }
 
+    override suspend fun saveLimitLyricsInputLines(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PreferencesKeys.LIMIT_LYRICS_INPUT_LINES] = enabled
+        }
+    }
+
     override suspend fun saveShowScrollTopButton(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[PreferencesKeys.SHOW_SCROLL_TOP_BUTTON] = enabled
@@ -486,6 +499,8 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
 
             showScrollTopButton = prefs[PreferencesKeys.SHOW_SCROLL_TOP_BUTTON]
                 ?: SettingsDefaults.SHOW_SCROLL_TOP_BUTTON,
+            limitLyricsInputLines = prefs[PreferencesKeys.LIMIT_LYRICS_INPUT_LINES]
+                ?: SettingsDefaults.LIMIT_LYRICS_INPUT_LINES,
             characterMappingConfig = charMapping,
             renameFormat = prefs[PreferencesKeys.RENAME_FORMAT]
                 ?: SettingsDefaults.RENAME_FORMAT,
@@ -537,6 +552,9 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                 }
                 backup.showScrollTopButton?.let {
                     prefs[PreferencesKeys.SHOW_SCROLL_TOP_BUTTON] = it
+                }
+                backup.limitLyricsInputLines?.let {
+                    prefs[PreferencesKeys.LIMIT_LYRICS_INPUT_LINES] = it
                 }
                 backup.characterMappingConfig?.let { config ->
                     prefs[PreferencesKeys.CHARACTER_MAPPING_CONFIG] = jsonFormatter.encodeToString(config)

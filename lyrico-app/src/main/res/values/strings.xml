@@ -443,6 +443,8 @@
     <string name="action_scroll_to_top">Scroll to top</string>
     <string name="label_search_cover">Search cover</string>
     <string name="action_lyrics_options">Lyrics options</string>
+    <string name="limit_lyrics_input_lines">Limit editor lines</string>
+    <string name="limit_lyrics_input_lines_hint">Keep the lyrics editor at a fixed height to make very long lyrics easier to select and edit</string>
     <string name="label_cover_options">Cover options</string>
     <string name="label_crop_cover">Crop cover</string>
     <string name="msg_read_cover_failed">Read cover failed</string>

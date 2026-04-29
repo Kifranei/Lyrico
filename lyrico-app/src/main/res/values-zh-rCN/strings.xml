@@ -453,6 +453,8 @@
     <string name="action_scroll_to_top">返回顶部</string>
     <string name="label_search_cover">从网络搜索封面</string>
     <string name="action_lyrics_options">歌词选项</string>
+    <string name="limit_lyrics_input_lines">限制编辑框行数</string>
+    <string name="limit_lyrics_input_lines_hint">将歌词编辑框保持在固定高度，便于选择和编辑歌词</string>
     <string name="label_cover_options">封面选项</string>
     <string name="label_crop_cover">裁剪图片</string>
     <string name="msg_read_cover_failed">无法读取封面图片</string>

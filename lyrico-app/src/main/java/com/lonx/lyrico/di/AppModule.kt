@@ -204,7 +204,7 @@ val appModule = module {
     viewModel { SettingsViewModel(get(), get()) }
     viewModel { SearchViewModel(get(), get()) }
     viewModel { CoverSearchViewModel(get(), get()) }
-    viewModel { EditMetadataViewModel(get(), get(), get()) }
+    viewModel { EditMetadataViewModel(get(), get(), get(),get()) }
     viewModel { BatchMatchViewModel(get(), get(), get(), get(), get()) }
 
     viewModel { BatchMatchHistoryViewModel(get()) }

@@ -22,6 +22,8 @@ import com.lonx.lyrico.data.model.LyricRenderConfig
 import com.lonx.lyrico.data.model.LyricsSearchResult
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.repository.PlaybackRepository
+import com.lonx.lyrico.data.repository.SettingsDefaults
+import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.utils.LyricDecoder
 import com.lonx.lyrico.utils.LyricEncoder
@@ -34,9 +36,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -76,12 +80,18 @@ data class EditMetadataUiState(
 
 class EditMetadataViewModel(
     private val songRepository: SongRepository,
+    private val settingsRepository: SettingsRepository,
     private val playbackRepository: PlaybackRepository,
     private val replayGainScanner: ReplayGainScanner
 ) : ViewModel() {
 
     private val TAG = "EditMetadataVM"
 
+    val limitLyricsInputLines = settingsRepository.limitLyricsInputLines.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        SettingsDefaults.LIMIT_LYRICS_INPUT_LINES
+    )
     private var currentSong: SongEntity? = null
 
     // 存储当前正在操作的 URI 字符串
@@ -148,6 +158,11 @@ class EditMetadataViewModel(
         _currentShiftOffset.value = 0L
     }
 
+    fun setLimitLyricsInputLines( limit: Boolean ) {
+        viewModelScope.launch {
+            settingsRepository.saveLimitLyricsInputLines(limit)
+        }
+    }
     /**
      * 应用绝对偏移量（相对于快照）
      */

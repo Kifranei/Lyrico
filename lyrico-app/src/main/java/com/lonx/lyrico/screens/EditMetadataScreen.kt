@@ -72,6 +72,7 @@ import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.ConversionMode
 import com.lonx.lyrico.data.model.LyricFormat
 import com.lonx.lyrico.data.model.LyricsSearchResult
+import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.utils.LyricDecoder
 import com.lonx.lyrico.ui.components.ImageCropper
 import com.lonx.lyrico.ui.components.getBitmap
@@ -91,6 +92,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -118,12 +120,14 @@ import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.window.WindowDialog
 
+private const val LIMITED_LYRICS_INPUT_MAX_LINES = 30
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @OptIn(
@@ -139,6 +143,7 @@ fun EditMetadataScreen(
 ) {
     val viewModel: EditMetadataViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsState()
+    val limitLyricsInputLines by viewModel.limitLyricsInputLines.collectAsState()
     val replayGainCalculateProgress = uiState.replayGainCalculateProgress
     val originalTagData = uiState.originalTagData
     val editingTagData = uiState.editingTagData
@@ -818,7 +823,8 @@ fun EditMetadataScreen(
                                     }
                                 }
                             },
-                            isMultiline = true
+                            isMultiline = true,
+                            limitMultilineLines = limitLyricsInputLines
                         )
                     }
                 }
@@ -909,6 +915,14 @@ fun EditMetadataScreen(
                         )
                     }
                 }
+                SwitchPreference(
+                    title = stringResource(R.string.limit_lyrics_input_lines),
+                    summary = stringResource(R.string.limit_lyrics_input_lines_hint),
+                    checked = limitLyricsInputLines,
+                    onCheckedChange = { enabled ->
+                        viewModel.setLimitLyricsInputLines(enabled)
+                    }
+                )
             }
         }
     }
@@ -1508,6 +1522,7 @@ private fun MetadataInputField(
     isModified: Boolean = false,
     onRevert: () -> Unit,
     isMultiline: Boolean = false,
+    limitMultilineLines: Boolean = false,
     actionButtons: @Composable RowScope.() -> Unit = {}
 ) {
     if (isMultiline) {
@@ -1555,6 +1570,7 @@ private fun MetadataInputField(
                 borderColor = if (isModified) LyricoColors.modifiedBorder else MiuixTheme.colorScheme.primary,
                 singleLine = false,
                 minLines = 10,
+                maxLines = if (limitMultilineLines) LIMITED_LYRICS_INPUT_MAX_LINES else Int.MAX_VALUE,
             )
         }
     } else {
