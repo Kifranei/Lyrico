@@ -1,10 +1,14 @@
 package com.lonx.lyrico.utils
 
+import android.util.Log
 import com.lonx.lyrico.data.model.LyricFormat
 import com.lonx.lyrics.model.LyricsLine
 import com.lonx.lyrics.model.LyricsResult
 import com.lonx.lyrics.model.LyricsWord
 import com.lonx.lyrics.model.isWordByWord
+import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserFactory
+import java.io.StringReader
 
 object LyricDecoder {
     private val TTML_P_PATTERN = Regex("""<p\s+begin="([^"]+)"\s+end="([^"]+)".*?>(.*?)</p>""", RegexOption.DOT_MATCHES_ALL)
@@ -92,18 +96,33 @@ object LyricDecoder {
                 val time = parseLrcTimeMs(match)
                 val nextMatchIdx = if (i + 1 < matches.size) matches[i + 1].range.first else lineStr.length
 
-                var text = lineStr.substring(match.range.last + 1, nextMatchIdx)
+                val text = lineStr.substring(match.range.last + 1, nextMatchIdx)
 
-                if (isFirstEnhancedTag && text.trim().isEmpty() && match.value.startsWith("[")) {
-                    isFirstEnhancedTag = false
+                val isLeadingEnhancedLineTimestamp =
+                    i == 0 &&
+                            match.value.startsWith("[") &&
+                            i + 1 < matches.size &&
+                            matches[i + 1].value.startsWith("<") &&
+                            text.isBlank()
+
+                if (isLeadingEnhancedLineTimestamp) {
                     continue
                 }
 
-                if (text.isNotEmpty() || (i == matches.size - 2 && text.isEmpty())) {
-                    val nextTime = if (i + 1 < matches.size) parseLrcTimeMs(matches[i + 1]) else time + 500
-                    if (text.isNotEmpty()) {
-                        words.add(LyricsWord(start = time, end = nextTime, text = text))
-                    }
+                val nextTime = if (i + 1 < matches.size) {
+                    parseLrcTimeMs(matches[i + 1])
+                } else {
+                    time + 500
+                }
+
+                if (text.isNotEmpty()) {
+                    words.add(
+                        LyricsWord(
+                            start = time,
+                            end = nextTime,
+                            text = text
+                        )
+                    )
                 }
             }
 
@@ -177,76 +196,264 @@ object LyricDecoder {
         val translatedLines = mutableListOf<LyricsLine>()
         val romanizationLines = mutableListOf<LyricsLine>()
 
-        TTML_P_PATTERN.findAll(ttmlText).forEach { pMatch ->
-            val pBegin = parseTtmlTimeMs(pMatch.groupValues[1])
-            val pEnd = parseTtmlTimeMs(pMatch.groupValues[2])
-            val innerHtml = pMatch.groupValues[3]
+        val factory = XmlPullParserFactory.newInstance().apply {
+            isNamespaceAware = true
+        }
 
-            val roleMatch = TTML_ROLE_PATTERN.find(pMatch.groupValues[0])
-            val lineRole = roleMatch?.groupValues?.get(1)
+        val parser = factory.newPullParser()
+        parser.setInput(StringReader(ttmlText))
 
-            if (lineRole == "x-translation") {
-                val text = LyricFormatter.unescapeXml(innerHtml.replace(Regex("<.*?>"), ""))
-                if (text.isNotBlank()) {
-                    val words = listOf(LyricsWord(start = pBegin, end = pEnd, text = text))
-                    translatedLines.add(LyricsLine(start = pBegin, end = pEnd, words = words))
+        var currentPStart = 0L
+        var currentPEnd = 0L
+        var currentPRole: String? = null
+        var insideP = false
+
+        var originalWords = mutableListOf<LyricsWord>()
+        var plainTextBuilder = StringBuilder()
+        var romanTextBuilder = StringBuilder()
+        var transTextBuilder = StringBuilder()
+
+        var currentSpanStart: Long? = null
+        var currentSpanEnd: Long? = null
+        var currentSpanRole: String? = null
+        var currentSpanTextBuilder: StringBuilder? = null
+
+        fun attr(name: String): String? {
+            for (i in 0 until parser.attributeCount) {
+                if (parser.getAttributeName(i) == name) {
+                    return parser.getAttributeValue(i)
                 }
-                return@forEach
             }
+            return null
+        }
 
-            if (lineRole == "x-romanization") {
-                val text = LyricFormatter.unescapeXml(innerHtml.replace(Regex("<.*?>"), ""))
-                if (text.isNotBlank()) {
-                    val words = listOf(LyricsWord(start = pBegin, end = pEnd, text = text))
-                    romanizationLines.add(LyricsLine(start = pBegin, end = pEnd, words = words))
+        fun roleAttr(): String? {
+            for (i in 0 until parser.attributeCount) {
+                val attrName = parser.getAttributeName(i)
+                val attrNamespace = parser.getAttributeNamespace(i)
+
+                if (
+                    attrName == "role" ||
+                    attrName == "ttm:role" ||
+                    attrNamespace == "http://www.w3.org/ns/ttml#metadata"
+                ) {
+                    return parser.getAttributeValue(i)
                 }
-                return@forEach
             }
+            return null
+        }
 
-            val words = mutableListOf<LyricsWord>()
-            var innerRomanText: String? = null
-            var innerTransText: String? = null
-
-            TTML_SPAN_PATTERN.findAll(innerHtml).forEach { spanMatch ->
-                val spanRoleMatch = TTML_ROLE_PATTERN.find(spanMatch.groupValues[0])
-                val spanRole = spanRoleMatch?.groupValues?.get(1)
-
-                when (spanRole) {
-                    "x-translation" -> {
-                        innerTransText = LyricFormatter.unescapeXml(spanMatch.groupValues[3])
+        fun finishP() {
+            when (currentPRole) {
+                "x-translation" -> {
+                    val text = plainTextBuilder.toString()
+                    if (text.isNotBlank()) {
+                        translatedLines.add(
+                            LyricsLine(
+                                start = currentPStart,
+                                end = currentPEnd,
+                                words = listOf(
+                                    LyricsWord(
+                                        start = currentPStart,
+                                        end = currentPEnd,
+                                        text = text
+                                    )
+                                )
+                            )
+                        )
                     }
-                    "x-romanization" -> {
-                        innerRomanText = LyricFormatter.unescapeXml(spanMatch.groupValues[3])
+                }
+
+                "x-romanization" -> {
+                    val text = plainTextBuilder.toString()
+                    if (text.isNotBlank()) {
+                        romanizationLines.add(
+                            LyricsLine(
+                                start = currentPStart,
+                                end = currentPEnd,
+                                words = listOf(
+                                    LyricsWord(
+                                        start = currentPStart,
+                                        end = currentPEnd,
+                                        text = text
+                                    )
+                                )
+                            )
+                        )
                     }
-                    else -> {
-                        val sBegin = parseTtmlTimeMs(spanMatch.groupValues[1])
-                        val sEnd = parseTtmlTimeMs(spanMatch.groupValues[2])
-                        val text = LyricFormatter.unescapeXml(spanMatch.groupValues[3])
-                        words.add(LyricsWord(start = sBegin, end = sEnd, text = text))
+                }
+
+                else -> {
+                    if (originalWords.isNotEmpty()) {
+                        originalLines.add(
+                            LyricsLine(
+                                start = currentPStart,
+                                end = currentPEnd,
+                                words = originalWords.toList()
+                            )
+                        )
+                    } else {
+                        val text = plainTextBuilder.toString()
+                        if (text.isNotBlank()) {
+                            originalLines.add(
+                                LyricsLine(
+                                    start = currentPStart,
+                                    end = currentPEnd,
+                                    words = listOf(
+                                        LyricsWord(
+                                            start = currentPStart,
+                                            end = currentPEnd,
+                                            text = text
+                                        )
+                                    )
+                                )
+                            )
+                        }
+                    }
+
+                    val romanText = romanTextBuilder.toString()
+                    if (romanText.isNotBlank()) {
+                        romanizationLines.add(
+                            LyricsLine(
+                                start = currentPStart,
+                                end = currentPEnd,
+                                words = listOf(
+                                    LyricsWord(
+                                        start = currentPStart,
+                                        end = currentPEnd,
+                                        text = romanText
+                                    )
+                                )
+                            )
+                        )
+                    }
+
+                    val transText = transTextBuilder.toString()
+                    if (transText.isNotBlank()) {
+                        translatedLines.add(
+                            LyricsLine(
+                                start = currentPStart,
+                                end = currentPEnd,
+                                words = listOf(
+                                    LyricsWord(
+                                        start = currentPStart,
+                                        end = currentPEnd,
+                                        text = transText
+                                    )
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        var eventType = parser.eventType
+
+        while (eventType != XmlPullParser.END_DOCUMENT) {
+            when (eventType) {
+                XmlPullParser.START_TAG -> {
+                    when (parser.name) {
+                        "p" -> {
+                            val begin = attr("begin")
+                            val end = attr("end")
+
+                            if (begin != null && end != null) {
+                                insideP = true
+                                currentPStart = parseTtmlTimeMs(begin)
+                                currentPEnd = parseTtmlTimeMs(end)
+                                currentPRole = roleAttr()
+
+                                originalWords = mutableListOf()
+                                plainTextBuilder = StringBuilder()
+                                romanTextBuilder = StringBuilder()
+                                transTextBuilder = StringBuilder()
+
+                                currentSpanStart = null
+                                currentSpanEnd = null
+                                currentSpanRole = null
+                                currentSpanTextBuilder = null
+                            }
+                        }
+
+                        "span" -> {
+                            if (insideP) {
+                                currentSpanStart = attr("begin")?.let { parseTtmlTimeMs(it) }
+                                currentSpanEnd = attr("end")?.let { parseTtmlTimeMs(it) }
+                                currentSpanRole = roleAttr()
+                                currentSpanTextBuilder = StringBuilder()
+                            }
+                        }
+                    }
+                }
+
+                XmlPullParser.TEXT -> {
+                    if (insideP) {
+                        val text = parser.text ?: ""
+
+                        if (currentSpanTextBuilder != null) {
+                            currentSpanTextBuilder.append(text)
+                        } else if (text.isNotBlank()) {
+                            plainTextBuilder.append(text)
+                        }
+                    }
+                }
+
+                XmlPullParser.END_TAG -> {
+                    when (parser.name) {
+                        "span" -> {
+                            if (insideP && currentSpanTextBuilder != null) {
+                                val text = currentSpanTextBuilder.toString()
+
+                                when (currentSpanRole) {
+                                    "x-translation" -> {
+                                        transTextBuilder.append(text)
+                                    }
+
+                                    "x-romanization" -> {
+                                        romanTextBuilder.append(text)
+                                    }
+
+                                    else -> {
+                                        val spanStart = currentSpanStart
+                                        val spanEnd = currentSpanEnd
+
+                                        if (
+                                            spanStart != null &&
+                                            spanEnd != null &&
+                                            text.isNotEmpty()
+                                        ) {
+                                            originalWords.add(
+                                                LyricsWord(
+                                                    start = spanStart,
+                                                    end = spanEnd,
+                                                    text = text
+                                                )
+                                            )
+                                        } else {
+                                            plainTextBuilder.append(text)
+                                        }
+                                    }
+                                }
+
+                                currentSpanStart = null
+                                currentSpanEnd = null
+                                currentSpanRole = null
+                                currentSpanTextBuilder = null
+                            }
+                        }
+
+                        "p" -> {
+                            if (insideP) {
+                                finishP()
+                                insideP = false
+                            }
+                        }
                     }
                 }
             }
 
-            if (words.isNotEmpty()) {
-                originalLines.add(LyricsLine(start = pBegin, end = pEnd, words = words))
-            } else {
-                val remainingHtml = innerHtml.replace(Regex("""<span\s+ttm:role="x-(translation|romanization)".*?>.*?</span>"""), "")
-                val text = LyricFormatter.unescapeXml(remainingHtml.replace(Regex("<.*?>"), ""))
-                if (text.isNotBlank()) {
-                    words.add(LyricsWord(start = pBegin, end = pEnd, text = text))
-                    originalLines.add(LyricsLine(start = pBegin, end = pEnd, words = words))
-                }
-            }
-
-            if (!innerRomanText.isNullOrBlank()) {
-                val romanWords = listOf(LyricsWord(start = pBegin, end = pEnd, text = innerRomanText))
-                romanizationLines.add(LyricsLine(start = pBegin, end = pEnd, words = romanWords))
-            }
-
-            if (!innerTransText.isNullOrBlank()) {
-                val transWords = listOf(LyricsWord(start = pBegin, end = pEnd, text = innerTransText))
-                translatedLines.add(LyricsLine(start = pBegin, end = pEnd, words = transWords))
-            }
+            eventType = parser.next()
         }
 
         return LyricsResult(

@@ -323,7 +323,7 @@ object LyricEncoder {
         }
 
         if (romanLine != null && showOriginal) {
-            val romanText = romanLine.words.joinToString(" ") { it.text }
+            val romanText = romanLine.words.joinToString("") { it.text }
             if (romanText.isNotEmpty()) {
                 builder.append("<span ttm:role=\"x-romanization\">")
                 builder.append(LyricFormatter.escapeXml(romanText))
@@ -334,7 +334,7 @@ object LyricEncoder {
         if (transLine != null) {
             val transText = transLine.words.joinToString("") { it.text }
             if (transText.isNotEmpty()) {
-                builder.append(" <span ttm:role=\"x-translation\">")
+                builder.append("<span ttm:role=\"x-translation\">")
                 builder.append(LyricFormatter.escapeXml(transText))
                 builder.append("</span>")
             }
@@ -363,7 +363,7 @@ object LyricEncoder {
             else -> line.start + 2000
         }
 
-        builder.append(" <${LyricFormatter.formatTimestamp(LyricFormatter.applyOffset(end, offset))}>")
+        builder.append("<${LyricFormatter.formatTimestamp(LyricFormatter.applyOffset(end, offset))}>")
     }
 
     private fun appendLineByLine(builder: StringBuilder, line: LyricsLine, offset: Long) {
