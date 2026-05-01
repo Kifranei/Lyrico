@@ -1157,36 +1157,6 @@ fun SongListScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-
-                        if (batchLyricsFormatUiState.isRunning && batchLyricsFormatUiState.activeFiles.isNotEmpty()) {
-                            Column(
-                                modifier = Modifier.padding(top = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                batchLyricsFormatUiState.activeFiles.forEach { fileName ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = fileName,
-                                            style = MiuixTheme.textStyles.footnote1,
-                                            color = MiuixTheme.colorScheme.onSurfaceContainer,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = stringResource(R.string.batch_edit_processing),
-                                            style = MiuixTheme.textStyles.footnote1,
-                                            color = MiuixTheme.colorScheme.onSurfaceContainer
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
 
                     Row(

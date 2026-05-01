@@ -39,7 +39,6 @@ data class BatchLyricsFormatUiState(
     val showConfigDialog: Boolean = false,
     val showProgressDialog: Boolean = false,
     val isSuccess: Boolean = false,
-    val activeFiles: List<String> = emptyList(),
 )
 
 class BatchLyricsFormatViewModel(
@@ -105,8 +104,7 @@ class BatchLyricsFormatViewModel(
                     failureCount = 0,
                     skippedCount = 0,
                     totalTimeMillis = 0L,
-                    isSuccess = false,
-                    activeFiles = emptyList()
+                    isSuccess = false
                 )
             }
 
@@ -114,12 +112,6 @@ class BatchLyricsFormatViewModel(
                 val jobs = uris.map { uri ->
                     launch(Dispatchers.IO) {
                         semaphore.withPermit {
-                            val fileName = songRepository.getDisplayName(uri)
-
-                            _uiState.update {
-                                it.copy(activeFiles = (it.activeFiles + fileName).distinct())
-                            }
-
                             try {
                                 val song = songRepository.getSongByUri(uri)
                                 val lyrics = song?.lyrics
@@ -153,7 +145,7 @@ class BatchLyricsFormatViewModel(
                                     ProcessResult.Skipped -> skippedCounter.incrementAndGet()
                                 }
                             } catch (e: CancellationException) {
-                                Log.d(tag, "Lyrics format conversion cancelled: $fileName")
+                                Log.d(tag, "Lyrics format conversion cancelled")
                                 throw e
                             } catch (e: Exception) {
                                 Log.e(tag, "Lyrics format conversion failed: $uri", e)
@@ -165,8 +157,7 @@ class BatchLyricsFormatViewModel(
                                         progress = current to total,
                                         successCount = successCounter.get(),
                                         failureCount = failureCounter.get(),
-                                        skippedCount = skippedCounter.get(),
-                                        activeFiles = it.activeFiles - fileName
+                                        skippedCount = skippedCounter.get()
                                     )
                                 }
                             }
@@ -183,8 +174,7 @@ class BatchLyricsFormatViewModel(
                             successCount = successCounter.get(),
                             failureCount = failureCounter.get(),
                             skippedCount = skippedCounter.get(),
-                            isSuccess = failureCounter.get() == 0,
-                            activeFiles = emptyList()
+                            isSuccess = failureCounter.get() == 0
                         )
                     }
                 }
@@ -202,8 +192,7 @@ class BatchLyricsFormatViewModel(
             it.copy(
                 showProgressDialog = false,
                 progress = null,
-                isRunning = false,
-                activeFiles = emptyList()
+                isRunning = false
             )
         }
     }
