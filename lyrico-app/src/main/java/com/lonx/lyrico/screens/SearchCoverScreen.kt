@@ -46,6 +46,7 @@ import com.lonx.lyrico.ui.components.bar.SearchBar
 import com.lonx.lyrico.ui.components.rememberTintedPainter
 import com.lonx.lyrico.ui.theme.LyricoColors
 import com.lonx.lyrico.ui.theme.isDarkTheme
+import com.lonx.lyrico.utils.MusicMatchUtils
 import com.lonx.lyrico.viewmodel.CoverSearchResult
 import com.lonx.lyrico.viewmodel.CoverSearchViewModel
 import com.ramcosta.composedestinations.annotation.Destination
@@ -74,6 +75,9 @@ fun SearchCoverScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState { uiState.availableSources.size + 1 }
+    
+    // 用于缓存图片尺寸的Map
+    val imageSizeCache = remember { mutableStateOf<Map<String, Pair<Int, Int>>>(emptyMap()) }
 
     LaunchedEffect(keyword) {
         keyword?.let { viewModel.performCoverSearch(it) }
@@ -155,8 +159,19 @@ fun SearchCoverScreen(
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 val results = if (page == 0) {
-                    // 全部tab显示所有结果
-                    uiState.coverResults
+                    // 全部tab显示所有结果，按相似度排序
+                    val keyword = uiState.searchKeyword
+                    uiState.coverResults.sortedWith(
+                        compareByDescending<CoverSearchResult> { cover ->
+                            // 计算标题和艺人的综合相似度
+                            val titleScore = MusicMatchUtils.stringSimilarity(keyword, cover.title)
+                            val artistScore = MusicMatchUtils.stringSimilarity(keyword, cover.artist)
+                            titleScore * 0.6 + artistScore * 0.4
+                        }.thenByDescending { cover ->
+                            // 相似度相同时，优先展示图片更大的
+                            imageSizeCache.value[cover.url]?.let { it.first * it.second } ?: 0
+                        }
+                    )
                 } else {
                     // 其他tab显示对应来源的结果
                     val source = uiState.availableSources.getOrNull(page - 1)
@@ -196,6 +211,9 @@ fun SearchCoverScreen(
                                     cover = cover,
                                     onClick = {
                                         resultNavigator.navigateBack(cover.url)
+                                    },
+                                    onImageSizeLoaded = { url, size ->
+                                        imageSizeCache.value = imageSizeCache.value + (url to size)
                                     }
                                 )
                             }
@@ -210,7 +228,8 @@ fun SearchCoverScreen(
 @Composable
 fun CoverGridItem(
     cover: CoverSearchResult,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onImageSizeLoaded: (String, Pair<Int, Int>) -> Unit = { _, _ -> }
 ) {
     var imageSize by remember(cover.url) { mutableStateOf<Pair<Int, Int>?>(null) }
 
@@ -231,6 +250,9 @@ fun CoverGridItem(
                     e.printStackTrace()
                     null
                 }
+            }
+            imageSize?.let { size ->
+                onImageSizeLoaded(cover.url, size)
             }
         }
     }
