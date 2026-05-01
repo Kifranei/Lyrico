@@ -34,6 +34,7 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -319,50 +320,57 @@ fun SongListScreen(
                 ) { state ->
                     when (state) {
                         TopBarState.Selection -> {
-                            SmallTopAppBar(
-                                title = "",
-                                scrollBehavior = topAppBarScrollBehavior,
-                                navigationIcon = {
-                                    Text(
-                                        text = stringResource(
-                                            R.string.selection_mode_selected_count,
-                                            selectedSongIds.size
-                                        )
-                                    )
-                                },
-                                actions = {
-                                    TextButton(
-                                        onClick = {
-                                            if (allSelected) {
-                                                songListViewModel.deselectAll()
-                                            } else {
-                                                songListViewModel.selectAll(songs)
+                            BoxWithConstraints {
+                                val compactTopBar = maxWidth < 360.dp
+
+                                SmallTopAppBar(
+                                    title = stringResource(
+                                        R.string.selection_mode_selected_count,
+                                        selectedSongIds.size
+                                    ),
+                                    scrollBehavior = topAppBarScrollBehavior,
+                                    navigationIcon = {},
+                                    actions = {
+                                        if (!compactTopBar) {
+                                            TextButton(
+                                                onClick = {
+                                                    if (allSelected) {
+                                                        songListViewModel.deselectAll()
+                                                    } else {
+                                                        songListViewModel.selectAll(songs)
+                                                    }
+                                                }
+                                            ) {
+                                                Text(
+                                                    text = stringResource(
+                                                        if (allSelected) {
+                                                            R.string.action_deselect_all
+                                                        } else {
+                                                            R.string.action_select_all
+                                                        }
+                                                    ),
+                                                    color = MiuixTheme.colorScheme.primary,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
                                             }
                                         }
-                                    ) {
-                                        Text(
-                                            text = stringResource(
-                                                if (allSelected) {
-                                                    R.string.action_deselect_all
-                                                } else {
-                                                    R.string.action_select_all
-                                                }
-                                            ),
-                                            color = MiuixTheme.colorScheme.primary
-                                        )
-                                    }
-                                    TextButton(
-                                        onClick = {
-                                            songListViewModel.exitSelectionMode()
+
+                                        TextButton(
+                                            onClick = {
+                                                songListViewModel.exitSelectionMode()
+                                            }
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.action_close),
+                                                color = MiuixTheme.colorScheme.primary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.action_close),
-                                            color = MiuixTheme.colorScheme.primary
-                                        )
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
 
                         TopBarState.Search -> {

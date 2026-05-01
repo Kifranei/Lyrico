@@ -123,7 +123,7 @@ fun InputField(
 
                     Box(
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(1f, fill = true)
                             .heightIn(min = 45.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
@@ -133,7 +133,8 @@ fun InputField(
                                 style = MiuixTheme.textStyles.main.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = MiuixTheme.colorScheme.onSurfaceContainerHigh
-                                )
+                                ),
+                                maxLines = 1
                             )
                         }
                         innerTextField()
@@ -156,18 +157,20 @@ fun SearchBar(
     onSearch: ((String) -> Unit)? = null,
 ) {
     Row(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-
         InputField(
             value = value,
             onValueChange = onValueChange,
             placeholder = placeholder,
             onSearch = onSearch,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f, fill = true)
+                .fillMaxWidth(),
             trailingIcon = trailingIcon
         )
+
         actions?.invoke()
     }
 }
