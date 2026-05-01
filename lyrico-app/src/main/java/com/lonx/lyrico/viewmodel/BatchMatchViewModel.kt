@@ -296,6 +296,7 @@ class BatchMatchViewModel(
                 BatchMatchField.TRACK_NUMBER -> song.trackerNumber.isNullOrBlank()
                 BatchMatchField.LYRICS -> song.lyrics.isNullOrBlank()
                 BatchMatchField.COVER -> true
+                BatchMatchField.NETEASE_163_KEY -> song.comment.isNullOrBlank()
                 BatchMatchField.REPLAY_GAIN -> song.rawProperties?.contains("REPLAYGAIN_TRACK_GAIN") != true
             }
         }
@@ -341,6 +342,8 @@ class BatchMatchViewModel(
         }
 
         var bestMatch: ScoredSearchResult? = null
+        var bestNeteaseMatch: ScoredSearchResult? = null
+        val needsNetease163Key = matchConfig.fields.containsKey(BatchMatchField.NETEASE_163_KEY)
 
         for (query in queries) {
             val searchTasks = orderedSources.map { source ->
@@ -357,13 +360,24 @@ class BatchMatchViewModel(
 
             val allResults = searchTasks.awaitAll().flatten()
             val currentBest = allResults.maxByOrNull { it.score }
+            val currentBestNetease = allResults
+                .filter { it.result.source == Source.NE }
+                .maxByOrNull { it.score }
 
             if (currentBest != null) {
                 if (bestMatch == null || currentBest.score > bestMatch.score) {
                     bestMatch = currentBest
                 }
-                if (currentBest.score > 0.9) break
             }
+            if (currentBestNetease != null &&
+                (bestNeteaseMatch == null || currentBestNetease.score > bestNeteaseMatch.score)
+            ) {
+                bestNeteaseMatch = currentBestNetease
+            }
+            if (currentBest != null &&
+                currentBest.score > 0.9 &&
+                (!needsNetease163Key || bestNeteaseMatch != null)
+            ) break
         }
 
         val finalMatch = bestMatch ?: return@coroutineScope MatchResult(null, BatchMatchResult.FAILURE)
@@ -384,6 +398,18 @@ class BatchMatchViewModel(
             val newTrack = resolveValue(matchConfig, BatchMatchField.TRACK_NUMBER, song.trackerNumber, finalMatch.result.trackerNumber)
             val newGenre = resolveValue(matchConfig, BatchMatchField.GENRE, song.genre, null)
             val newLyricsResolved = resolveValue(matchConfig, BatchMatchField.LYRICS, song.lyrics, newLyrics)
+            val netease163Key = finalMatch.result.extras["netease_163_key"]
+                ?: bestNeteaseMatch
+                    ?.takeIf { it.score >= 0.35 }
+                    ?.result
+                    ?.extras
+                    ?.get("netease_163_key")
+            val newComment = resolveValue(
+                matchConfig,
+                BatchMatchField.NETEASE_163_KEY,
+                song.comment,
+                netease163Key
+            )
 
             val shouldUpdateCover = shouldUpdate(matchConfig, BatchMatchField.COVER, null)
             val picUrl = if (shouldUpdateCover) finalMatch.result.picUrl else null
@@ -415,6 +441,7 @@ class BatchMatchViewModel(
                 date = newDate,
                 trackNumber = newTrack,
                 lyrics = newLyricsResolved,
+                comment = newComment,
                 picUrl = picUrl,
                 replayGainTrackGain = replayGainData?.trackGain,
                 replayGainTrackPeak = replayGainData?.trackPeak,
@@ -426,7 +453,7 @@ class BatchMatchViewModel(
             // Check if tagDataToWrite is effectively empty (no fields to update)
             val isEffectivelyEmpty = newTitle == null && newArtist == null && newAlbum == null &&
                     newGenre == null && newDate == null && newTrack == null &&
-                    newLyricsResolved == null && picUrl == null &&
+                    newLyricsResolved == null && newComment == null && picUrl == null &&
                     replayGainData == null
 
             if (isEffectivelyEmpty) return@coroutineScope MatchResult(null, BatchMatchResult.SKIPPED)

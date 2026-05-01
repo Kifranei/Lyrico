@@ -53,3 +53,4 @@
 - [EBU R128](https://github.com/jiixyj/libebur128) - EBU R128 音频等级标准实现库，用于计算 ReplayGain
 - [Foobar2000](https://www.foobar2000.org/SDK) - Foobar2000 SDK，提供了丰富的音频处理和元数据编辑功能
 - ~[Auxio - musikr](https://github.com/OxygenCobalt/Auxio/tree/dev/musikr) - Musikr 是一个高度主观设计（highly opinionated）且支持多线程的音乐加载器，用于支持 Auxio 的高级音乐功能~
+- [163KeyDecrypter](https://github.com/lycode404/163KeyDecrypter) - 163KeyDecrypter，解密网易云音乐下载歌曲文件的 163key 标签信息

@@ -278,6 +278,8 @@
     <string name="label_lyricist">Lyricist</string>
     <string name="label_comment">Comment</string>
     <string name="label_lyrics">Lyrics</string>
+    <string name="label_netease_163_key">NetEase 163 key</string>
+    <string name="label_netease_163_key_summary">Writes the NetEase 163 key into the comment tag. Only NetEase Cloud Music source supports matching this field.</string>
     <string name="label_replay_gain">ReplayGain</string>
     <string name="label_replay_gain_summary">Only QQ Music source supports matching this field</string>
     <string name="group_replay_gain">ReplayGain</string>

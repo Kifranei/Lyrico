@@ -222,6 +222,7 @@ class EditMetadataViewModel(
             val albumGain = pick("replaygain_album_gain", "rg_album_gain")
             val albumPeak = pick("replaygain_album_peak", "rg_album_peak")
             var refLoudness = pick("replaygain_reference_loudness", "r128_reference_loudness")
+            val netease163Key = pick("netease_163_key")
 
             if (refLoudness == null && trackGain != null) {
                 refLoudness = "-18 LUFS"
@@ -236,6 +237,7 @@ class EditMetadataViewModel(
                     date = result.date?.takeIf { it.isNotBlank() } ?: current.date,
                     trackNumber = result.trackerNumber?.takeIf { it.isNotBlank() }
                         ?: current.trackNumber,
+                    comment = netease163Key ?: current.comment,
                     picUrl = result.picUrl?.takeIf { it.isNotBlank() } ?: current.picUrl,
                     replayGainTrackGain = trackGain ?: current.replayGainTrackGain,
                     replayGainTrackPeak = trackPeak ?: current.replayGainTrackPeak,

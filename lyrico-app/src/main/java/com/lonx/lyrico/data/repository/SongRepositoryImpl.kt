@@ -207,6 +207,7 @@ class SongRepositoryImpl(
                     trackerNumber = tag.trackNumber ?: song.trackerNumber,
                     album = tag.album ?: song.album,
                     genre = tag.genre ?: song.genre,
+                    comment = tag.comment ?: song.comment,
                     fileLastModified = newModifiedTime // 更新为当前时间
                 ).withSortKeysUpdated()
             }

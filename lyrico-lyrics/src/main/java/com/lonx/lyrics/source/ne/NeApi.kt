@@ -40,14 +40,33 @@ data class NeSongData(
     @SerialName("al") val album: NeAlbum,
     @SerialName("dt") val duration: Long,
     @SerialName("publishTime") val publishTime: Long? = null,
-    @SerialName("no") val trackerNumber: String = ""
+    @SerialName("no") val trackerNumber: String = "",
+    @SerialName("h") val highQuality: NeSongQuality? = null,
+    @SerialName("m") val mediumQuality: NeSongQuality? = null,
+    @SerialName("l") val lowQuality: NeSongQuality? = null,
+    @SerialName("sq") val losslessQuality: NeSongQuality? = null,
+    @SerialName("mv") val mvId: Long = 0
 )
 
 @Serializable
-data class NeArtist(val name: String)
+data class NeArtist(
+    @SerialName("id") val id: Long = 0,
+    @SerialName("name") val name: String
+)
 
 @Serializable
-data class NeAlbum(val name: String, val picUrl: String = "")
+data class NeSongQuality(
+    @SerialName("br") val bitrate: Int = 0
+)
+
+@Serializable
+data class NeAlbum(
+    @SerialName("id") val id: Long = 0,
+    @SerialName("name") val name: String,
+    @SerialName("picUrl") val picUrl: String = "",
+    @SerialName("pic") val pic: Long? = null,
+    @SerialName("pic_str") val picStr: String? = null
+)
 
 @Serializable
 data class NeLyricResponse(

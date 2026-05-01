@@ -283,6 +283,8 @@
     <string name="label_lyricist">作词</string>
     <string name="label_comment">注释</string>
     <string name="label_lyrics">歌词</string>
+    <string name="label_netease_163_key">网易云 163 key</string>
+    <string name="label_netease_163_key_summary">写入网易云 163 key 到注释标签。仅网易云音乐源支持匹配该字段。</string>
     <string name="label_replay_gain">回放增益</string>
     <string name="label_replay_gain_summary">仅QQ源支持匹配该字段</string>
     <string name="group_replay_gain">ReplayGain</string>

@@ -34,6 +34,7 @@ enum class BatchMatchField(
     TRACK_NUMBER(R.string.label_track_number),
     LYRICS(R.string.label_lyrics),
     COVER(R.string.label_cover),
+    NETEASE_163_KEY(R.string.label_netease_163_key, R.string.label_netease_163_key_summary),
     REPLAY_GAIN(R.string.label_replay_gain, R.string.label_replay_gain_summary)
 }
 object BatchMatchConfigDefaults {
@@ -47,6 +48,7 @@ object BatchMatchConfigDefaults {
             BatchMatchField.TRACK_NUMBER to BatchMatchMode.SUPPLEMENT,
             BatchMatchField.LYRICS to BatchMatchMode.SUPPLEMENT,
             BatchMatchField.COVER to BatchMatchMode.SUPPLEMENT,
+            BatchMatchField.NETEASE_163_KEY to BatchMatchMode.SUPPLEMENT,
             BatchMatchField.REPLAY_GAIN to BatchMatchMode.SUPPLEMENT
         ),
         concurrency = 3,
