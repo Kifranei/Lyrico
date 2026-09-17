@@ -3,11 +3,14 @@ package com.lonx.lyrico.data.repository
 import com.lonx.lyrico.data.model.BatchMatchConfig
 import com.lonx.lyrico.data.model.CharacterMappingConfig
 import com.lonx.lyrico.data.model.ConversionMode
-import com.lonx.lyrico.data.model.LyricFormat
-import com.lonx.lyrico.data.model.LyricRenderConfig
-import com.lonx.lyrico.data.model.LogRetentionOption
-import com.lonx.lyrico.data.model.MetadataFieldWriteRule
+import com.lonx.lyrico.data.model.FloatingBarEffect
+import com.lonx.lyrico.data.model.lyrics.LyricFormat
+import com.lonx.lyrico.data.model.lyrics.LyricLineTrack
+import com.lonx.lyrico.data.model.lyrics.LyricRenderConfig
+import com.lonx.lyrico.data.model.log.LogRetentionOption
+import com.lonx.lyrico.data.model.plugin.PluginMetadataFieldWriteRule
 import com.lonx.lyrico.data.model.SearchConfig
+import com.lonx.lyrico.data.model.SearchSourceTabStyle
 import com.lonx.lyrico.data.model.ThemeConfig
 import com.lonx.lyrico.data.model.ThemeMode
 import com.lonx.lyrico.data.model.AlbumSortInfo
@@ -20,8 +23,13 @@ import kotlinx.coroutines.flow.Flow
 
 
 interface SettingsRepository {
+    val artistPosterFolders: Flow<List<String>>
+    val artistPosterRevision: Flow<Long>
+    suspend fun refreshArtistPosters()
+    suspend fun addArtistPosterFolder(uri: String)
+    suspend fun removeArtistPosterFolder(uri: String)
     val batchMatchConfig: Flow<BatchMatchConfig>
-    val metadataFieldWriteRules: Flow<List<MetadataFieldWriteRule>>
+    val metadataFieldWriteRules: Flow<List<PluginMetadataFieldWriteRule>>
     val sourceSettingsByIdFlow: Flow<Map<String, SourceRuntimeConfig>>
 
     val renameFormat: Flow<String>
@@ -34,27 +42,35 @@ interface SettingsRepository {
     val albumGridColumns: Flow<Int>
     val separator: Flow<String>
     val romaEnabled: Flow<Boolean>
+    val lyricLineOrder: Flow<List<LyricLineTrack>>
 
     val conversionMode: Flow<ConversionMode>
 
     val translationEnabled: Flow<Boolean>
     val checkUpdateEnabled: Flow<Boolean>
+    val lyricIndexEnabled: Flow<Boolean>
     val ignoreShortAudio: Flow<Boolean>
+    val replayGainTargetLoudness: Flow<Double>
     val searchSourceOrder: Flow<List<String>>
     val enabledSearchSources: Flow<Set<String>>
     val searchPageSize: Flow<Int>
+    val searchSourceTabStyle: Flow<SearchSourceTabStyle>
+    val showAllSearchResultFields: Flow<Boolean>
     val themeMode: Flow<ThemeMode>
     val keyColor: Flow<KeyColor>
     val monetEnable: Flow<Boolean>
+    val floatingBottomBarEnabled: Flow<Boolean>
+    val barBlurEnabled: Flow<Boolean>
+    val floatingBarEffect: Flow<FloatingBarEffect>
     val onlyTranslationIfAvailable: Flow<Boolean>
     val removeEmptyLines: Flow<Boolean>
+    val lyricsTagLineKeywords: Flow<List<String>>
     val limitLyricsInputLines: Flow<Boolean>
     val logRetentionOption: Flow<LogRetentionOption>
 
     val lyricRenderConfigFlow: Flow<LyricRenderConfig>
     val searchConfigFlow: Flow<SearchConfig>
     val themeConfigFlow: Flow<ThemeConfig>
-    val showScrollTopButton : Flow<Boolean>
 
     val characterMappingConfig: Flow<CharacterMappingConfig>
     val artistSplitConfigFlow: Flow<ArtistSplitConfig>
@@ -69,27 +85,35 @@ interface SettingsRepository {
     suspend fun saveAlbumGridColumns(columns: Int)
     suspend fun saveSeparator(separator: String)
     suspend fun saveRomaEnabled(enabled: Boolean)
+    suspend fun saveLyricLineOrder(order: List<LyricLineTrack>)
     suspend fun saveConversionMode(mode: ConversionMode)
     suspend fun saveCheckUpdateEnabled(enabled: Boolean)
     suspend fun saveTranslationEnabled(enabled: Boolean)
+    suspend fun saveLyricIndexEnabled(enabled: Boolean)
     suspend fun saveIgnoreShortAudio(enabled: Boolean)
+    suspend fun saveReplayGainTargetLoudness(loudness: Double)
     suspend fun saveLastScanTime(time: Long)
     suspend fun saveSearchSourceOrder(sources: List<String>)
     suspend fun saveEnabledSearchSources(sources: Set<String>)
     suspend fun saveSearchPageSize(size: Int)
+    suspend fun saveSearchSourceTabStyle(style: SearchSourceTabStyle)
+    suspend fun saveShowAllSearchResultFields(enabled: Boolean)
     suspend fun saveThemeMode(mode: ThemeMode)
     suspend fun saveKeyColor(selectedKeyColor: KeyColor)
     suspend fun saveMonetEnable(enabled: Boolean)
+    suspend fun saveFloatingBottomBarEnabled(enabled: Boolean)
+    suspend fun saveBarBlurEnabled(enabled: Boolean)
+    suspend fun saveFloatingBarEffect(effect: FloatingBarEffect)
     suspend fun saveOnlyTranslationIfAvailable(enabled: Boolean)
     suspend fun saveRemoveEmptyLines(enabled: Boolean)
+    suspend fun saveLyricsTagLineKeywords(keywords: List<String>)
     suspend fun saveLimitLyricsInputLines(enabled: Boolean)
     suspend fun saveLogRetentionOption(option: LogRetentionOption)
-    suspend fun saveShowScrollTopButton(enabled: Boolean)
     suspend fun getLyricRenderConfig(): LyricRenderConfig
     suspend fun exportSettings(): String
     suspend fun importSettings(jsonString: String): Boolean
     suspend fun saveBatchMatchConfig(config: BatchMatchConfig)
-    suspend fun saveMetadataFieldWriteRules(rules: List<MetadataFieldWriteRule>)
+    suspend fun saveMetadataFieldWriteRules(rules: List<PluginMetadataFieldWriteRule>)
     suspend fun saveSourceSettings(sourceId: String, values: Map<String, String>)
     suspend fun getSourceSettings(sourceId: String): SourceRuntimeConfig
     suspend fun removePluginSettings(pluginId: String)
@@ -99,7 +123,7 @@ interface SettingsRepository {
     suspend fun updateCharacterMappingInRule(ruleId: String, charMappings: Map<String, String?>)
     suspend fun getCharacterMappingConfig(): CharacterMappingConfig
     suspend fun getBatchMatchConfig(): BatchMatchConfig
-    suspend fun getMetadataFieldWriteRules(): List<MetadataFieldWriteRule>
+    suspend fun getMetadataFieldWriteRules(): List<PluginMetadataFieldWriteRule>
     suspend fun saveArtistSplitConfig(config: ArtistSplitConfig)
     suspend fun getArtistSplitConfig(): ArtistSplitConfig
     suspend fun getLibraryIndexVersion(): Int

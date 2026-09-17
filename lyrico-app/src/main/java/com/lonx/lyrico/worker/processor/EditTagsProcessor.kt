@@ -5,12 +5,16 @@ import com.lonx.audiotag.model.AudioTagData
 import com.lonx.audiotag.model.CustomTagField
 import com.lonx.lyrico.data.model.entity.BatchTaskEntity
 import com.lonx.lyrico.data.model.entity.BatchTaskItemEntity
-import com.lonx.lyrico.data.repository.SongRepository
+import com.lonx.lyrico.data.song.library.SongLibraryRepository
+import com.lonx.lyrico.domain.song.usecase.BatchEditSongsUseCase
+import com.lonx.lyrico.domain.song.usecase.BatchTagEditItemRequest
+import com.lonx.lyrico.domain.song.usecase.SaveAudioTagsResult
+import com.lonx.lyrico.utils.LyricEncoder
 import com.lonx.lyrico.utils.TagFindReplace
 import com.lonx.lyrico.utils.TagFindReplaceConfig
-import com.lonx.lyrico.utils.LyricEncoder
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.util.Locale
 
 @Serializable
 data class EditTagsTaskConfig(
@@ -50,11 +54,12 @@ data class EditTagsTaskConfig(
 @Serializable
 data class EditTagsCustomField(
     val key: String = "",
-    val value: String = ""
+    val value: String = "",
 )
 
 class EditTagsProcessor(
-    private val songRepository: SongRepository
+    private val songLibraryRepository: SongLibraryRepository,
+    private val batchEditSongsUseCase: BatchEditSongsUseCase
 ) : BatchTaskProcessor {
 
     override suspend fun process(
@@ -66,30 +71,28 @@ class EditTagsProcessor(
             Json.decodeFromString<EditTagsTaskConfig>(it)
         } ?: throw BatchTaskSkippedException("No config")
 
-        val currentTag = try {
-            songRepository.readAudioTagData(item.songUri)
+        val song = songLibraryRepository.getSongByUri(item.songUri)
+            ?: throw BatchTaskSkippedException("Song not found")
+
+        val result = try {
+            batchEditSongsUseCase.editOne(
+                BatchTagEditItemRequest(
+                    song = song,
+                    tagDataFactory = { _, currentTag -> buildMergedTag(currentTag, config) }
+                )
+            )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to read tags: ${item.songUri}", e)
-            throw BatchTaskSkippedException("Read failed")
+            Log.e(TAG, "Failed to edit tags: ${item.songUri}", e)
+            throw Exception("Write failed", e)
         }
 
-        val mergedTag = buildMergedTag(currentTag, config)
-        if (mergedTag == currentTag) {
-            throw BatchTaskSkippedException("No changes")
+        if (result.skippedReason != null) {
+            throw BatchTaskSkippedException(result.skippedReason)
         }
-
-        val success = try {
-            songRepository.overwriteAudioTags(item.songUri, mergedTag)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to write tags: ${item.songUri}", e)
-            false
-        }
-
-        if (!success) {
+        if (result.result !is SaveAudioTagsResult.Success) {
             throw Exception("Write failed")
         }
 
-        songRepository.updateSongMetadata(mergedTag, item.songUri, System.currentTimeMillis())
         return BatchTaskProcessResult()
     }
 
@@ -155,13 +158,9 @@ class EditTagsProcessor(
         if (config.customFields.isNotEmpty()) {
             tag = tag.copy(customFields = tag.customFields.toMutableList().apply {
                 config.customFields.forEach { newField ->
-                    val field = CustomTagField(newField.key, newField.value)
-                    val existingIndex = indexOfFirst { it.key == field.key }
-                    if (existingIndex >= 0) {
-                        this[existingIndex] = field
-                    } else {
-                        add(field)
-                    }
+                    val key = normalizeCustomTagKey(newField.key) ?: return@forEach
+                    removeAll { it.key.equals(key, ignoreCase = true) }
+                    add(CustomTagField(key, newField.value))
                 }
             })
         }
@@ -171,6 +170,16 @@ class EditTagsProcessor(
 
     private fun parseLyricsOffset(input: String): Int {
         return input.trim().toIntOrNull() ?: 0
+    }
+
+    private fun normalizeCustomTagKey(input: String): String? {
+        val key = input.trim()
+        return when {
+            key.isBlank() -> null
+            key.length > 64 -> null
+            key.any { it == '\n' || it == '\r' } -> null
+            else -> key.uppercase(Locale.ROOT)
+        }
     }
 
     private companion object {

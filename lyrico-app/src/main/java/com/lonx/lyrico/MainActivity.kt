@@ -9,7 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,6 +22,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,17 +44,47 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
 
-open class MainActivity : ComponentActivity() {
+internal fun requiredStartupPermissions(
+    sdkInt: Int,
+    isPermissionGranted: (String) -> Boolean,
+): List<String> = buildList {
+    if (sdkInt >= Build.VERSION_CODES.TIRAMISU &&
+        !isPermissionGranted(Manifest.permission.POST_NOTIFICATIONS)
+    ) {
+        add(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    val audioPermission = if (sdkInt >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+    if (!isPermissionGranted(audioPermission)) {
+        add(audioPermission)
+    }
+}
+
+open class MainActivity : AppCompatActivity() {
     private var externalUri by mutableStateOf<Uri?>(null)
     private var pendingExternalUri: Uri? = null
-    private val notificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            if (!isGranted) {
+    private val startupPermissionsLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+            if (results[Manifest.permission.POST_NOTIFICATIONS] == false) {
                 Toast.makeText(
                     this,
                     "通知权限未授予，可能无法接收通知",
                     Toast.LENGTH_SHORT
                 ).show()
+            }
+
+            externalAudioReadPermission()?.let { audioPermission ->
+                if (results[audioPermission] == false) {
+                    Toast.makeText(
+                        this,
+                        "音频访问权限未授予，将无法扫描和管理本地音频文件",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
 
@@ -88,12 +119,16 @@ open class MainActivity : ComponentActivity() {
         if (externalUri == null) {
             songListViewModel.checkForUpdate()
         }
-        requestNotificationPermissionIfNeeded()
+        requestStartupPermissionsIfNeeded()
         lifecycleScope.launch {
             libraryIndexRepository.ensureIndexesCurrent()
         }
 
         setContent {
+            val configuration = LocalConfiguration.current
+            LaunchedEffect(configuration) {
+                com.lonx.lyrico.plugin.i18n.PluginLocales.update(configuration)
+            }
             val themeMode by settingsRepository.themeMode.collectAsStateWithLifecycle(
                 initialValue = ThemeMode.AUTO
             )
@@ -243,21 +278,15 @@ open class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-
-        if (
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_DENIED
-        ) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    private fun requestStartupPermissionsIfNeeded() {
+        val permissions = requiredStartupPermissions(Build.VERSION.SDK_INT) { permission ->
+            ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+        }
+        if (permissions.isNotEmpty()) {
+            startupPermissionsLauncher.launch(permissions.toTypedArray())
         }
     }
+
     private fun openBrowser(context: Context, url: String) {
         val intent = Intent(Intent.ACTION_VIEW, url.toUri())
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

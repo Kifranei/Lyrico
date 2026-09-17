@@ -1,10 +1,8 @@
 package com.lonx.lyrico.ui.components.base
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -21,7 +19,8 @@ fun ActionBottomSheet(
     onDismissRequest: () -> Unit,
     onDismissFinished: () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
-    actions: @Composable RowScope.() -> Unit,
+    startAction: @Composable (() -> Unit)? = null,
+    endAction: @Composable (() -> Unit)? = null,
 ) {
     WindowBottomSheet(
         show = show,
@@ -29,21 +28,19 @@ fun ActionBottomSheet(
         onDismissRequest = onDismissRequest,
         onDismissFinished = onDismissFinished,
         allowDismiss = allowDismiss,
-        title = title
+        title = title,
+        startAction = {
+            startAction?.invoke()
+        },
+        endAction = {
+            endAction?.invoke()
+        },
     ) {
         Column(
             modifier = Modifier
-                .padding(bottom = 32.dp)
                 .fillMaxWidth()
         ) {
             content()
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                actions()
-            }
         }
     }
 }

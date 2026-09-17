@@ -3,15 +3,20 @@ package com.lonx.lyrico.screens
 import android.annotation.SuppressLint
 import android.text.format.Formatter
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -22,26 +27,37 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lonx.lyrico.BuildConfig
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.ArtistSeparator
+import com.lonx.lyrico.data.model.AppLanguage
 import com.lonx.lyrico.data.model.ConversionMode
-import com.lonx.lyrico.data.model.LyricFormat
+import com.lonx.lyrico.data.model.FloatingBarEffect
+import com.lonx.lyrico.data.model.SearchSourceTabStyle
+import com.lonx.lyrico.data.model.lyrics.LyricFormat
+import com.lonx.lyrico.data.model.lyrics.visibleLyricLineTracks
 import com.lonx.lyrico.data.model.ThemeMode
+import com.lonx.lyrico.ui.components.base.YesNoBottomSheet
+import com.lonx.lyrico.ui.components.lyrics.LyricLineOrderBottomSheetContent
 import com.lonx.lyrico.ui.components.RoundedRectanglePainter
 import com.lonx.lyrico.ui.components.getSystemWallpaperColor
+import com.lonx.lyrico.ui.components.scaffoldContentPadding
 import com.lonx.lyrico.ui.theme.KeyColors
 import com.lonx.lyrico.viewmodel.FolderManagerViewModel
 import com.lonx.lyrico.viewmodel.SettingsEvent
@@ -52,22 +68,33 @@ import com.ramcosta.composedestinations.generated.destinations.AboutDestination
 import com.ramcosta.composedestinations.generated.destinations.AppLogsDestination
 import com.ramcosta.composedestinations.generated.destinations.ArtistSplitSettingsDestination
 import com.ramcosta.composedestinations.generated.destinations.BatchTaskListDestination
-import com.ramcosta.composedestinations.generated.destinations.EditFieldVisibilityDestination
+import com.ramcosta.composedestinations.generated.destinations.EditFieldSettingsDestination
 import com.ramcosta.composedestinations.generated.destinations.FolderManagerDestination
+import com.ramcosta.composedestinations.generated.destinations.ArtistPosterFoldersDestination
+import com.lonx.lyrico.data.repository.SettingsRepository
+import org.koin.compose.koinInject
+import com.ramcosta.composedestinations.generated.destinations.LyricsCleanupRulesDestination
 import com.ramcosta.composedestinations.generated.destinations.PluginManagerDestination
 import com.ramcosta.composedestinations.generated.destinations.QuickjsTestDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import com.lonx.lyrico.ui.components.library.LibraryBlurredBar
+import com.lonx.lyrico.ui.components.library.rememberBlurBackdrop
+import com.lonx.lyrico.ui.components.scaffoldTopAppBarInsetsPadding
+import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Slider
+import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
@@ -76,6 +103,8 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.RadioButtonPreference
+import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
@@ -83,6 +112,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowDialog
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import kotlin.math.roundToInt
 
 @SuppressLint("LocalContextGetResourceValueCall")
@@ -92,25 +122,33 @@ fun SettingsScreen(
     navigator: DestinationsNavigator
 ) {
     val settingsViewModel: SettingsViewModel = koinViewModel()
-    val settingsUiState by settingsViewModel.uiState.collectAsState()
+    val settingsUiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
     val folderViewModel: FolderManagerViewModel = koinViewModel()
-    val folderUiState by folderViewModel.uiState.collectAsState()
+    val folderUiState by folderViewModel.uiState.collectAsStateWithLifecycle()
+    val settingsRepository: SettingsRepository = koinInject()
+    val artistPosterFolders by settingsRepository.artistPosterFolders.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val lyricFormat = settingsUiState.lyricFormat
     val artistSeparator = settingsUiState.separator
     val romaEnabled = settingsUiState.romaEnabled
+    val lyricLineOrder = settingsUiState.lyricLineOrder
     val themeMode = settingsUiState.themeMode
     val monetEnable = settingsUiState.monetEnable
+    val floatingBottomBarEnabled = settingsUiState.floatingBottomBarEnabled
+    val barBlurEnabled = settingsUiState.barBlurEnabled
+    val floatingBarEffect = settingsUiState.floatingBarEffect
     val currentKeyColor = settingsUiState.keyColor
     val translationEnabled = settingsUiState.translationEnabled
     val onlyTranslationIfAvailable = settingsUiState.onlyTranslationIfAvailable
     val removeEmptyLines = settingsUiState.removeEmptyLines
     val ignoreShortAudio = settingsUiState.ignoreShortAudio
     val folders = folderUiState.folders
-    val totalFolders = folders.size
+    val totalFolders = folders.filter { it.addedBySaf }.size
     val conversionMode = settingsUiState.conversionMode
+    val searchSourceTabStyle = settingsUiState.searchSourceTabStyle
+    val showAllSearchResultFields = settingsUiState.showAllSearchResultFields
 
-    val ignoredFolders = folders.count { it.isIgnored }
+    val ignoredFolders = folders.count { it.isIgnored && it.addedBySaf }
     val searchPageSize = settingsUiState.searchPageSize
     val scope = rememberCoroutineScope()
 
@@ -119,8 +157,16 @@ fun SettingsScreen(
     val tempSearchPageSize = remember(searchPageSize) {
         mutableIntStateOf(searchPageSize)
     }
-    val showSearchLimitConfigDialog = remember { mutableStateOf(false) }
     val showClearCacheDialog = remember { mutableStateOf(false) }
+    val showLyricLineOrderSheet = remember { mutableStateOf(false) }
+    val showRgTargetDialog = remember { mutableStateOf(false) }
+    val monetVisibilityState = remember(settingsUiState.isInitialized) {
+        MutableTransitionState(monetEnable)
+    }
+
+    LaunchedEffect(monetEnable) {
+        monetVisibilityState.targetState = monetEnable
+    }
 
     val themeModeItems = ThemeMode.entries.map { stringResource(it.labelRes) }
     val selectedThemeModeIndex =
@@ -132,6 +178,13 @@ fun SettingsScreen(
     val conversionModeItems = ConversionMode.entries.map { stringResource(it.labelRes) }
     val selectedConversionModeIndex =
         ConversionMode.entries.indexOf(conversionMode).coerceAtLeast(0)
+    val searchSourceTabStyleItems = SearchSourceTabStyle.entries.map { stringResource(it.labelRes) }
+    val selectedSearchSourceTabStyleIndex =
+        SearchSourceTabStyle.entries.indexOf(searchSourceTabStyle).coerceAtLeast(0)
+
+    val floatingBarEffectItems = FloatingBarEffect.entries.map { stringResource(it.labelRes) }
+
+    val context = LocalContext.current
 
     val artistSeparators = remember {
         listOf(
@@ -143,9 +196,16 @@ fun SettingsScreen(
     }
     val artistSeparatorItems = artistSeparators.map { it.toText() }
     val selectedArtistSeparatorIndex = artistSeparators.indexOf(artistSeparator).coerceAtLeast(0)
+    val visibleLyricLineTracks = visibleLyricLineTracks(
+        showRomanization = romaEnabled,
+        showTranslation = translationEnabled,
+        onlyTranslationIfAvailable = onlyTranslationIfAvailable
+    )
+    val lyricLineOrderSummary = lyricLineOrder
+        .filter { it in visibleLyricLineTracks }
+        .joinToString(separator = " / ") { context.getString(it.labelRes) }
 
 
-    val context = LocalContext.current
     LaunchedEffect(Unit) {
         settingsViewModel.refreshCache(context)
     }
@@ -208,24 +268,44 @@ fun SettingsScreen(
         }
     }
     val topAppBarScrollBehavior = MiuixScrollBehavior()
+    val topBarBackdrop = rememberBlurBackdrop(enableBlur = barBlurEnabled)
     Scaffold(
         topBar = {
-            SmallTopAppBar(
-                title = stringResource(R.string.settings_title),
-                navigationIcon = {
-                    IconButton(
-                        onClick = { navigator.popBackStack() }
-                    ) {
-                        Icon(
-                            MiuixIcons.Back,
-                            contentDescription = stringResource(R.string.action_back)
-                        )
-                    }
-                },
-                scrollBehavior = topAppBarScrollBehavior
-            )
+            LibraryBlurredBar(
+                backdrop = topBarBackdrop,
+                modifier = Modifier.scaffoldTopAppBarInsetsPadding(),
+            ) {
+                SmallTopAppBar(
+                    title = stringResource(R.string.settings_title),
+                    color = if (topBarBackdrop != null) Color.Transparent else MiuixTheme.colorScheme.surface,
+                    defaultWindowInsetsPadding = false,
+                    navigationIcon = {
+                        IconButton(
+                            onClick = { navigator.popBackStack() }
+                        ) {
+                            Icon(
+                                MiuixIcons.Back,
+                                contentDescription = stringResource(R.string.action_back)
+                            )
+                        }
+                    },
+                    scrollBehavior = topAppBarScrollBehavior,
+                )
+            }
         }
     ) { paddingValues ->
+        if (!settingsUiState.isInitialized) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(size = 32.dp)
+            }
+            return@Scaffold
+        }
+
         WindowDialog(
             title = stringResource(R.string.clear_cache),
             show = showClearCacheDialog.value,
@@ -264,76 +344,70 @@ fun SettingsScreen(
                 }
             }
         }
-        WindowDialog(
-            show = showSearchLimitConfigDialog.value,
-            title = stringResource(R.string.search_limit),
+        ReplayGainTargetLoudnessSheet(
+            show = showRgTargetDialog.value,
+            currentLoudness = settingsUiState.replayGainTargetLoudness,
+            onDismiss = { showRgTargetDialog.value = false },
+            onSave = { settingsViewModel.setReplayGainTargetLoudness(it) }
+        )
+        WindowBottomSheet(
+            show = showLyricLineOrderSheet.value,
+            title = stringResource(R.string.lyric_line_order),
             onDismissRequest = {
-                showSearchLimitConfigDialog.value = false
+                showLyricLineOrderSheet.value = false
             }
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = stringResource(R.string.search_limit_tip),
-                    fontSize = MiuixTheme.textStyles.footnote1.fontSize,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantActions
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                var text by remember { mutableStateOf(searchPageSize.toString()) }
-                TextField(
-                    value = text,
-                    maxLines = 1,
-                    onValueChange = { newValue ->
-                        val digits = newValue.filter { it.isDigit() }
-                        if (digits.isEmpty()) {
-                            text = ""
-                        } else {
-                            val limited = digits.take(3)
-                            val num = limited.toIntOrNull()
-                            val clamped = num?.coerceIn(minSearchSize, maxSearchSize)
-                            text = clamped.toString()
-                        }
-                    }
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    TextButton(
-                        text = stringResource(R.string.cancel),
-                        onClick = {
-                            showSearchLimitConfigDialog.value = false
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(20.dp))
-                    TextButton(
-                        text = stringResource(R.string.confirm),
-                        onClick = {
-                            tempSearchPageSize.intValue = text.toIntOrNull() ?: 1
-                            settingsViewModel.setSearchPageSize(tempSearchPageSize.intValue)
-                            showSearchLimitConfigDialog.value = false
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.textButtonColorsPrimary(),
-                    )
-                }
-            }
+            LyricLineOrderBottomSheetContent(
+                lineOrder = lyricLineOrder,
+                visibleTracks = visibleLyricLineTracks,
+                onLineOrderChange = settingsViewModel::setLyricLineOrder
+            )
         }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (topBarBackdrop != null) {
+                        Modifier.layerBackdrop(topBarBackdrop)
+                    } else {
+                        Modifier
+                    }
+                ),
+        ) {
         LazyColumn(
             modifier = Modifier
                 .scrollEndHaptic()
                 .overScrollVertical()
                 .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
                 .fillMaxHeight(),
-            contentPadding = PaddingValues(
-                top = paddingValues.calculateTopPadding(),
-                bottom = paddingValues.calculateBottomPadding() + 12.dp,
+            contentPadding = scaffoldContentPadding(
+                paddingValues = paddingValues,
+                bottomExtra = 12.dp
             ),
             overscrollEffect = null,
         ) {
             item(key = "appearance"){
                 SmallTitle(text = stringResource(R.string.section_appearance))
                 Card(modifier = Modifier.padding(horizontal = 12.dp)) {
+                    val configuration = LocalConfiguration.current
+                    var selectedLanguageTag by remember(configuration) {
+                        mutableStateOf(
+                            AppCompatDelegate.getApplicationLocales()[0]?.toLanguageTag().orEmpty()
+                        )
+                    }
+                    WindowDropdownPreference(
+                        title = stringResource(R.string.app_language),
+                        items = AppLanguage.entries.map { stringResource(it.labelRes) },
+                        selectedIndex = AppLanguage.entries.indexOfFirst {
+                            it.languageTag == selectedLanguageTag
+                        }.coerceAtLeast(0),
+                        onSelectedIndexChange = { index ->
+                            selectedLanguageTag = AppLanguage.entries[index].languageTag
+                            AppCompatDelegate.setApplicationLocales(
+                                LocaleListCompat.forLanguageTags(selectedLanguageTag)
+                            )
+                        }
+                    )
                     WindowDropdownPreference(
                         title = stringResource(R.string.theme_mode),
                         items = themeModeItems,
@@ -343,13 +417,37 @@ fun SettingsScreen(
                         }
                     )
                     SwitchPreference(
+                        title = stringResource(R.string.bar_blur),
+                        summary = stringResource(R.string.bar_blur_summary),
+                        checked = barBlurEnabled,
+                        onCheckedChange = settingsViewModel::setBarBlurEnabled,
+                    )
+                    SwitchPreference(
+                        title = stringResource(R.string.floating_bottom_bar),
+                        summary = stringResource(R.string.floating_bottom_bar_summary),
+                        checked = floatingBottomBarEnabled,
+                        onCheckedChange = { settingsViewModel.setFloatingBottomBarEnabled(it) }
+                    )
+                    AnimatedVisibility(visible = floatingBottomBarEnabled) {
+                        WindowDropdownPreference(
+                            title = stringResource(R.string.floating_bar_effect),
+                            items = floatingBarEffectItems,
+                            selectedIndex = floatingBarEffect.ordinal,
+                            onSelectedIndexChange = { index ->
+                                settingsViewModel.setFloatingBarEffect(
+                                    FloatingBarEffect.entries[index]
+                                )
+                            },
+                        )
+                    }
+                    SwitchPreference(
                         title = stringResource(R.string.monet),
                         checked = monetEnable,
                         onCheckedChange = {
                             settingsViewModel.setMonetEnable(!monetEnable)
                         }
                     )
-                    AnimatedVisibility(visible = (monetEnable)) {
+                    AnimatedVisibility(visibleState = monetVisibilityState) {
                         val currentSelectedIndex = KeyColors.indexOf(currentKeyColor).let {
                             if (it == -1) 0 else it
                         }
@@ -401,10 +499,34 @@ fun SettingsScreen(
                         summary = folderSummary,
                         onClick = { navigator.navigate(FolderManagerDestination()) }
                     )
+                    ArrowPreference(
+                        title = stringResource(R.string.artist_poster_folders),
+                        summary = stringResource(R.string.artist_poster_folders_count, artistPosterFolders.size),
+                        onClick = { navigator.navigate(ArtistPosterFoldersDestination()) }
+                    )
                     SwitchPreference(
                         title = stringResource(R.string.ignore_short_audio),
                         checked = ignoreShortAudio,
                         onCheckedChange = { settingsViewModel.setIgnoreShortAudio(it) }
+                    )
+                    SwitchPreference(
+                        title = stringResource(R.string.lyric_index_title),
+                        summary = stringResource(R.string.lyric_index_summary),
+                        checked = settingsUiState.lyricIndexEnabled,
+                        onCheckedChange = { settingsViewModel.setLyricIndexEnabled(it) }
+                    )
+                    ArrowPreference(
+                        title = stringResource(R.string.settings_replay_gain_target_loudness),
+                        summary = stringResource(R.string.settings_replay_gain_target_loudness_summary),
+                        endActions = {
+                            Text(
+                                text = formatLoudnessValue(settingsUiState.replayGainTargetLoudness),
+                                fontSize = MiuixTheme.textStyles.body2.fontSize,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantActions
+                            )
+                        },
+                        onClick = { showRgTargetDialog.value = true },
+                        holdDownState = showRgTargetDialog.value
                     )
                 }
             }
@@ -416,38 +538,46 @@ fun SettingsScreen(
                         title = stringResource(R.string.plugin_manager_title),
                         onClick = { navigator.navigate(PluginManagerDestination()) }
                     )
-                    ArrowPreference(
-                        title = stringResource(R.string.search_limit),
-                        endActions = {
-                            Text(
-                                text = "${tempSearchPageSize.intValue}",
-                                fontSize = MiuixTheme.textStyles.body2.fontSize,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                            )
-                        },
-                        onClick = {
-                            showSearchLimitConfigDialog.value = true
-                        },
-                        bottomAction = {
-                            Slider(
-                                showKeyPoints = true,
-                                valueRange = minSearchSize.toFloat()..maxSearchSize.toFloat(),
-                                steps = maxSearchSize - minSearchSize - 1,
-                                value = tempSearchPageSize.intValue.toFloat(),
-                                onValueChange = {
-                                    tempSearchPageSize.intValue = it.roundToInt()
-                                },
-                                onValueChangeFinished = {
-                                    settingsViewModel.setSearchPageSize(tempSearchPageSize.intValue)
-                                }
-                            )
-                            Spacer(modifier = Modifier.height(BasicComponentDefaults.InsideMargin.calculateBottomPadding()))
-                            Text(
-                                text = stringResource(R.string.search_limit_tip),
-                                fontSize = MiuixTheme.textStyles.footnote1.fontSize,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantActions
+                    WindowDropdownPreference(
+                        title = stringResource(R.string.search_source_tab_style),
+                        items = searchSourceTabStyleItems,
+                        selectedIndex = selectedSearchSourceTabStyleIndex,
+                        onSelectedIndexChange = { index ->
+                            settingsViewModel.setSearchSourceTabStyle(
+                                SearchSourceTabStyle.entries[index]
                             )
                         }
+                    )
+                    SliderPreference(
+                        title = stringResource(R.string.search_limit),
+                        showKeyPoints = true,
+                        valueText = tempSearchPageSize.intValue.toString(),
+                        summary = stringResource(R.string.search_limit_tip),
+                        valueRange = minSearchSize.toFloat()..maxSearchSize.toFloat(),
+                        steps = maxSearchSize - minSearchSize - 1,
+                        value = tempSearchPageSize.intValue.toFloat(),
+                        hapticEffect = SliderDefaults.SliderHapticEffect.Step,
+                        onValueChange = {
+                            tempSearchPageSize.intValue = it.roundToInt()
+                        },
+                        onValueChangeFinished = {
+                            settingsViewModel.setSearchPageSize(tempSearchPageSize.intValue)
+                        }
+                    )
+                    WindowDropdownPreference(
+                        title = stringResource(R.string.artist_separator),
+                        summary = stringResource(R.string.artist_separator_hint),
+                        items = artistSeparatorItems,
+                        selectedIndex = selectedArtistSeparatorIndex,
+                        onSelectedIndexChange = { index ->
+                            settingsViewModel.setSeparator(artistSeparators[index])
+                        }
+                    )
+                    SwitchPreference(
+                        title = stringResource(R.string.show_all_search_result_fields),
+                        summary = stringResource(R.string.show_all_search_result_fields_summary),
+                        checked = showAllSearchResultFields,
+                        onCheckedChange = settingsViewModel::setShowAllSearchResultFields
                     )
                 }
             }
@@ -484,34 +614,36 @@ fun SettingsScreen(
                             onCheckedChange = { settingsViewModel.setOnlyTranslationIfAvailable(it) }
                         )
                     }
-                    SwitchPreference(
-                        title = stringResource(R.string.remove_empty_lines),
-                        summary = stringResource(R.string.remove_empty_lines_hint),
-                        checked = removeEmptyLines,
-                        onCheckedChange = { settingsViewModel.setRemoveEmptyLines(it) }
+                    ArrowPreference(
+                        title = stringResource(R.string.lyric_line_order),
+                        summary = lyricLineOrderSummary,
+                        onClick = { showLyricLineOrderSheet.value = true }
                     )
+                }
+            }
+
+            item(key = "text_processing"){
+                SmallTitle(text = stringResource(R.string.section_text_processing))
+                Card(modifier = Modifier.padding(horizontal = 12.dp)) {
                     WindowDropdownPreference(
                         title = stringResource(R.string.conversion_mode),
+                        summary = stringResource(R.string.conversion_mode_hint),
                         items = conversionModeItems,
                         selectedIndex = selectedConversionModeIndex,
                         onSelectedIndexChange = {
                             settingsViewModel.setConversionMode(ConversionMode.entries[it])
                         },
                     )
-                }
-            }
-
-            item(key = "metadata"){
-                SmallTitle(text = stringResource(R.string.section_metadata))
-                Card(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    WindowDropdownPreference(
-                        title = stringResource(R.string.artist_separator),
-                        summary = stringResource(R.string.artist_separator_hint),
-                        items = artistSeparatorItems,
-                        selectedIndex = selectedArtistSeparatorIndex,
-                        onSelectedIndexChange = { index ->
-                            settingsViewModel.setSeparator(artistSeparators[index])
-                        }
+                    SwitchPreference(
+                        title = stringResource(R.string.remove_empty_lines),
+                        summary = stringResource(R.string.remove_empty_lines_hint),
+                        checked = removeEmptyLines,
+                        onCheckedChange = { settingsViewModel.setRemoveEmptyLines(it) }
+                    )
+                    ArrowPreference(
+                        title = stringResource(R.string.non_lyrics_cleanup_rules_title),
+                        summary = stringResource(R.string.non_lyrics_cleanup_rules_summary),
+                        onClick = { navigator.navigate(LyricsCleanupRulesDestination()) }
                     )
                     ArrowPreference(
                         title = stringResource(R.string.artist_split_settings_title),
@@ -519,8 +651,9 @@ fun SettingsScreen(
                         onClick = { navigator.navigate(ArtistSplitSettingsDestination()) }
                     )
                     ArrowPreference(
-                        title = stringResource(R.string.edit_field_visibility_settings),
-                        onClick = { navigator.navigate(EditFieldVisibilityDestination()) }
+                        title = stringResource(R.string.edit_field_settings_title),
+                        summary = stringResource(R.string.edit_field_settings_summary),
+                        onClick = { navigator.navigate(EditFieldSettingsDestination()) }
                     )
                 }
             }
@@ -604,5 +737,117 @@ fun SettingsScreen(
                 }
             }
         }
+        }
     }
+}
+
+private fun formatLoudnessNumber(value: Double): String {
+    return if (value % 1.0 == 0.0) {
+        "%.0f".format(java.util.Locale.US, value)
+    } else {
+        "%.2f".format(java.util.Locale.US, value)
+    }
+}
+
+private fun formatLoudnessValue(value: Double): String = "${formatLoudnessNumber(value)} LUFS"
+
+@Composable
+private fun ReplayGainTargetLoudnessSheet(
+    show: Boolean,
+    currentLoudness: Double,
+    onDismiss: () -> Unit,
+    onSave: (Double) -> Unit
+) {
+    val presets = remember { listOf(-23.0, -18.0, -14.0) }
+    val presetLabels = listOf(
+        R.string.replay_gain_target_preset_ebu,
+        R.string.replay_gain_target_preset_default,
+        R.string.replay_gain_target_preset_streaming
+    )
+    var selectedPreset by remember(show, currentLoudness) {
+        mutableDoubleStateOf(if (currentLoudness in presets) currentLoudness else presets.first())
+    }
+    var customSelected by remember(show, currentLoudness) {
+        mutableStateOf(currentLoudness !in presets)
+    }
+    var customText by remember(show, currentLoudness) {
+        mutableStateOf(if (currentLoudness in presets) "" else formatLoudnessNumber(currentLoudness))
+    }
+    var invalid by remember(show) { mutableStateOf(false) }
+
+    YesNoBottomSheet(
+        show = show,
+        onDismissRequest = onDismiss,
+        onConfirm = {
+            if (customSelected) {
+                val customValue = customText.trim().toDoubleOrNull()
+                if (customValue != null && customValue in -60.0..0.0) {
+                    onSave(customValue)
+                    onDismiss()
+                } else {
+                    invalid = true
+                }
+            } else {
+                onSave(selectedPreset)
+                onDismiss()
+            }
+        },
+        content = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())){
+                Card(
+                    colors = CardDefaults.defaultColors(
+                        color = MiuixTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    presets.forEachIndexed { index, preset ->
+                        RadioButtonPreference(
+                            title = stringResource(presetLabels[index]),
+                            selected = !customSelected && selectedPreset == preset,
+                            onClick = {
+                                selectedPreset = preset
+                                customSelected = false
+                                invalid = false
+                            }
+                        )
+                    }
+                    RadioButtonPreference(
+                        title = stringResource(R.string.replay_gain_target_preset_custom),
+                        selected = customSelected,
+                        onClick = {
+                            customSelected = true
+                            invalid = false
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                AnimatedVisibility(visible = customSelected) {
+                    Card(
+                        colors = CardDefaults.defaultColors(
+                            color = MiuixTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        TextField(
+                            value = customText,
+                            onValueChange = {
+                                customText = it
+                                invalid = false
+                            },
+                            label = stringResource(R.string.replay_gain_target_custom_hint),
+                            maxLines = 1,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        if (invalid) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = stringResource(R.string.replay_gain_target_invalid),
+                                style = MiuixTheme.textStyles.footnote1,
+                                color = MiuixTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+    )
 }

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="artist_poster_folders_empty">Choose a folder containing artist posters</string>
+    <string name="artist_poster_folder_unavailable">Folder unavailable. Grant access again.</string>
+    <string name="artist_poster_file_count">%1$d posters</string>
+    <string name="artist_poster_folder_status">%1$d posters · %2$d matched to library artists</string>
+    <string name="artist_poster_folder_remove_tip">Stop using posters in this folder. Files will not be deleted.</string>
+    <string name="artist_poster_folders">Artist poster folders</string>
+    <string name="artist_poster_folders_count">%1$d folders</string>
+    <string name="artist_poster_folders_help">**File naming**\n\n- `Artist.jpg` — exact artist name\n- `Artist_live.jpg` — artist name followed by `_` and a suffix\n- `AC_DC.jpg`, `AC-DC.jpg`, `AC／DC.jpg` or `ACDC.jpg` — artist name containing characters a file name cannot hold (`\\ / : * ? \" &lt; &gt; |`)\n\nSupports JPG, JPEG, PNG, WebP and MP4.\n\nOnly files directly inside the folder are used. Folders are searched in the order added, with exact names first in each folder.</string>
+    <string name="artist_poster_folder_add">Add folder</string>
+    <string name="artist_poster_folder_remove">Remove folder</string>
+    <string name="artist_poster_folder_error">Operation failed. Please try again.</string>
+    <string name="artist_poster_folders_summary">Use these posters when embedded artist artwork is unavailable</string>
+    <string name="artist_poster_naming">File naming</string>
+    <string name="artist_poster_back">Back</string>
+    <string name="artist_poster_no_files">No posters found</string>
+    <string name="artist_poster_preview_error">Preview unavailable</string>
+</resources>

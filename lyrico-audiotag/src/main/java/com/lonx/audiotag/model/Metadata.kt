@@ -9,11 +9,12 @@ import androidx.annotation.Keep
 public data class Metadata(
     val propertyMap: PropertyMap,
     val pictures: Array<Picture>,
+    val supportsTypedPictures: Boolean
 ) {
 
     override fun toString(): String {
         return "Metadata(propertyMap=${propertyMap.mapValues { it.value.contentToString() }}, " +
-                "pictures=${pictures.contentToString()})"
+                "pictures=${pictures.contentToString()})" + "supportsTypedPictures=$supportsTypedPictures)"
     }
 
     override fun equals(other: Any?): Boolean {

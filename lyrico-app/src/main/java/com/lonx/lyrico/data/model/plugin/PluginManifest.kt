@@ -11,7 +11,6 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 
 @Serializable
@@ -23,13 +22,19 @@ data class PluginManifest(
     val author: String = "",
     val description: String = "",
     val apiVersion: Int,
+    val minHostApiVersion: Int = 1,
     val entry: String = "source.js",
     val includeDirs: List<String> = emptyList(),
     val icon: String? = null,
     val capabilities: Set<PluginCapability> = emptySet(),
-    val requiredHostApis: Set<String> = emptySet(),
     val configFields: List<PluginConfigField> = emptyList(),
-    val metadataFields: List<PluginMetadataField> = emptyList()
+    val i18n: PluginI18n? = null
+)
+
+@Serializable
+data class PluginI18n(
+    val defaultLocale: String,
+    val resources: Map<String, String>
 )
 
 @Serializable
@@ -42,17 +47,47 @@ enum class PluginCapability {
     SEARCH_COVERS
 }
 
+enum class PluginSourceType {
+    METADATA,
+    LYRICS,
+    COVER
+}
+
+fun Set<PluginCapability>.normalizedPluginCapabilities(): Set<PluginCapability> =
+    ifEmpty { setOf(PluginCapability.SEARCH_SONGS) }
+
+fun Set<PluginCapability>.displaySourceTypes(): Set<PluginSourceType> {
+    val normalized = normalizedPluginCapabilities()
+    return buildSet {
+        if (PluginCapability.SEARCH_SONGS in normalized) add(PluginSourceType.METADATA)
+        if (PluginCapability.GET_LYRICS in normalized) add(PluginSourceType.LYRICS)
+        if (PluginCapability.SEARCH_COVERS in normalized) add(PluginSourceType.COVER)
+    }
+}
+
+fun Set<PluginCapability>.supportsSourceType(sourceType: PluginSourceType): Boolean {
+    val normalized = normalizedPluginCapabilities()
+    return when (sourceType) {
+        PluginSourceType.METADATA -> PluginCapability.SEARCH_SONGS in normalized
+        PluginSourceType.LYRICS -> PluginCapability.GET_LYRICS in normalized
+        PluginSourceType.COVER -> PluginCapability.SEARCH_COVERS in normalized
+    }
+}
+
 @Serializable
 data class PluginConfigField(
     val key: String,
     val title: String,
-    val summary: String = "",
+    val summary: String? = null,
     val group: String = "",
     val type: PluginConfigFieldType,
     val required: Boolean = false,
     val defaultValue: String = "",
     val options: List<PluginConfigOption> = emptyList(),
-    val dependency: PluginConfigDependency? = null
+    val dependency: PluginConfigDependency? = null,
+    // Resolved presentation only; group remains the stable grouping identity.
+    @kotlinx.serialization.Transient
+    val groupTitle: String? = null
 )
 
 @Serializable
@@ -66,7 +101,11 @@ enum class PluginConfigFieldType {
     @SerialName("switch")
     SWITCH,
     @SerialName("dropdown")
-    DROPDOWN
+    DROPDOWN,
+    @SerialName("textarea")
+    TEXTAREA,
+    @SerialName("markdown")
+    MARKDOWN
 }
 
 @Serializable
@@ -151,70 +190,4 @@ object PluginConfigDependencySerializer : KSerializer<PluginConfigDependency> {
             )
         }
     }
-}
-
-@Serializable
-data class PluginMetadataField(
-    val key: String,
-    val title: String,
-    val summary: String = "",
-    val group: String = "extended",
-    val type: PluginMetadataFieldType = PluginMetadataFieldType.TEXT,
-    val writeable: Boolean = true,
-    val internal: Boolean = false,
-    val defaultTarget: PluginMetadataFieldTarget = PluginMetadataFieldTarget.COMMENT,
-    val defaultMode: PluginMetadataWriteMode = PluginMetadataWriteMode.DISABLED,
-    val defaultCustomTagKey: String = "",
-    val targetOptions: List<PluginMetadataFieldTarget> = emptyList()
-)
-
-@Serializable
-enum class PluginMetadataFieldType {
-    @SerialName("text")
-    TEXT,
-    @SerialName("number")
-    NUMBER,
-    @SerialName("date")
-    DATE,
-    @SerialName("lyrics")
-    LYRICS,
-    @SerialName("cover")
-    COVER,
-    @SerialName("binary")
-    BINARY,
-    @SerialName("url")
-    URL
-}
-
-@Serializable
-enum class PluginMetadataWriteMode {
-    DISABLED,
-    SUPPLEMENT,
-    OVERWRITE
-}
-
-@Serializable
-enum class PluginMetadataFieldTarget {
-    TITLE,
-    ARTIST,
-    ALBUM,
-    ALBUM_ARTIST,
-    GENRE,
-    DATE,
-    TRACK_NUMBER,
-    DISC_NUMBER,
-    COMPOSER,
-    LYRICIST,
-    COMMENT,
-    LYRICS,
-    COVER,
-    LANGUAGE,
-    COPYRIGHT,
-    RATING,
-    REPLAY_GAIN_TRACK_GAIN,
-    REPLAY_GAIN_TRACK_PEAK,
-    REPLAY_GAIN_ALBUM_GAIN,
-    REPLAY_GAIN_ALBUM_PEAK,
-    REPLAY_GAIN_REFERENCE_LOUDNESS,
-    CUSTOM
 }

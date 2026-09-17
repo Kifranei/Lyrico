@@ -11,8 +11,8 @@ import coil3.disk.directory
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import com.lonx.lyrico.data.repository.BatchTaskRepository
-import com.lonx.lyrico.data.model.AppLogLevel
-import com.lonx.lyrico.data.model.AppLogType
+import com.lonx.lyrico.data.model.log.AppLogLevel
+import com.lonx.lyrico.data.model.log.AppLogType
 import com.lonx.lyrico.data.repository.AppLogRepository
 import com.lonx.lyrico.di.appModule
 import com.lonx.lyrico.utils.coil.AudioCoverFetcher
@@ -85,6 +85,7 @@ class App : Application(), SingletonImageLoader.Factory {
         return ImageLoader.Builder(context)
             .components {
                 add(AudioCoverKeyer())
+                add(com.lonx.lyrico.utils.coil.PosterFileFetcherFactory())
                 add(AudioCoverFetcher.Factory(context.contentResolver))
             }
             .diskCache {

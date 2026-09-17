@@ -40,6 +40,7 @@ import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.artist.ArtistSplitDefaults
 import com.lonx.lyrico.data.model.artist.CustomArtistSeparator
 import com.lonx.lyrico.data.model.artist.CustomNoSplitArtist
+import com.lonx.lyrico.ui.components.scaffoldContentPadding
 import com.lonx.lyrico.viewmodel.ArtistSplitSettingsViewModel
 import com.lonx.lyrico.viewmodel.ArtistSplitValidationError
 import com.ramcosta.composedestinations.annotation.Destination
@@ -126,9 +127,9 @@ fun ArtistSplitSettingsScreen(
                 .overScrollVertical()
                 .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
                 .fillMaxHeight(),
-            contentPadding = PaddingValues(
-                top = paddingValues.calculateTopPadding(),
-                bottom = paddingValues.calculateBottomPadding() + 12.dp
+            contentPadding = scaffoldContentPadding(
+                paddingValues = paddingValues,
+                bottomExtra = 12.dp
             ),
             overscrollEffect = null
         ) {

@@ -1,0 +1,90 @@
+name: 🏗️ 构建 Release APK
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'lyrico-app/**'
+      - 'lyrico-audiotag/**'
+      - 'lyrico-lyrics/**'
+      - 'gradle/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - '.github/workflows/build-release.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: release-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 🏗️ 构建 Release APK
+    runs-on: ubuntu-latest
+    environment: release
+    env:
+      LYRICO_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      LYRICO_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      LYRICO_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: 🌏 设置时区
+        uses: szenius/set-timezone@v2.0
+        with:
+          timezoneLinux: "Asia/Shanghai"
+
+      - name: ☕ 设置 JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: 🔐 赋予 gradlew 执行权限
+        run: chmod +x gradlew
+
+      - name: 🐘 配置 Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: 🔑 还原签名文件
+        env:
+          LYRICO_KEYSTORE_PATH: ${{ runner.temp }}/lyrico-release.jks
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 LYRICO_KEYSTORE_PASSWORD LYRICO_KEY_ALIAS LYRICO_KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing signing secret: $name"
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$LYRICO_KEYSTORE_PATH"
+
+      - name: 🛠️ 构建 Release APK
+        env:
+          LYRICO_KEYSTORE_PATH: ${{ runner.temp }}/lyrico-release.jks
+        run: ./gradlew :lyrico-app:assembleRelease --stacktrace
+
+      - name: 🧹 清理签名文件
+        if: always()
+        env:
+          LYRICO_KEYSTORE_PATH: ${{ runner.temp }}/lyrico-release.jks
+        run: rm -f -- "$LYRICO_KEYSTORE_PATH"
+
+      - name: 📤 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lyrico-release
+          path: lyrico-app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30

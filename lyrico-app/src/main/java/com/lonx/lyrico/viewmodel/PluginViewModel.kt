@@ -5,12 +5,11 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lonx.lyrico.data.model.AppLogLevel
-import com.lonx.lyrico.data.model.AppLogType
-import com.lonx.lyrico.data.model.MetadataFieldWriteRuleFactory
+import com.lonx.lyrico.data.model.log.AppLogLevel
+import com.lonx.lyrico.data.model.log.AppLogType
 import com.lonx.lyrico.data.model.entity.SourcePluginEntity
+import com.lonx.lyrico.data.model.plugin.PluginSourceType
 import com.lonx.lyrico.data.repository.AppLogRepository
-import com.lonx.lyrico.data.repository.PluginLyricsConfigRepository
 import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.data.repository.SourcePluginRepository
 import com.lonx.lyrico.plugin.source.PluginSearchSourceManager
@@ -31,6 +30,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.File
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
+import com.lonx.lyrico.plugin.i18n.PluginLocales
+import com.lonx.lyrico.plugin.i18n.PluginStrings
+import com.lonx.lyrico.data.model.plugin.PluginManifest
+import kotlinx.serialization.json.Json
 
 data class PluginUiState(
     val isBusy: Boolean = false,
@@ -44,19 +49,35 @@ data class PluginUiState(
 class PluginViewModel(
     private val repository: SourcePluginRepository,
     private val settingsRepository: SettingsRepository,
-    private val pluginLyricsConfigRepository: PluginLyricsConfigRepository,
     private val installer: SourcePluginInstaller,
     private val pluginManager: PluginSearchSourceManager,
     private val appLogRepository: AppLogRepository
 ) : ViewModel() {
+    private val manifestJson = Json { ignoreUnknownKeys = true }
     val plugins: StateFlow<List<SourcePluginEntity>> =
         repository.observePlugins()
+            .combine(PluginLocales.preferences) { plugins, locales ->
+                plugins.map { plugin ->
+                    runCatching {
+                        val root = File(plugin.pluginDir)
+                        val manifest = manifestJson.decodeFromString<PluginManifest>(File(root, "manifest.json").readText())
+                        val localized = PluginStrings.load(root, manifest).snapshot(locales).localize(manifest)
+                        plugin.copy(name = localized.name, description = localized.description)
+                    }.getOrElse { plugin }
+                }
+            }
+            .flowOn(Dispatchers.IO)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _uiState = MutableStateFlow(PluginUiState())
     val uiState: StateFlow<PluginUiState> = _uiState.asStateFlow()
     private val actionMutex = Mutex()
 
+    init {
+        viewModelScope.launch {
+            installer.synchronizeInstalledPluginManifestMetadata()
+        }
+    }
 
     fun importPlugin(context: Context, uri: Uri) {
         runBusy("Plugin package scanned") {
@@ -104,16 +125,18 @@ class PluginViewModel(
             publishMessage("No pending plugin import")
             return
         }
+
         val selectedRoots = _uiState.value.selectedImportRoots
         if (selectedRoots.isEmpty()) {
             publishMessage("No plugin selected")
             return
         }
+
         val allowDowngrade = session.candidates.any { candidate ->
             candidate.relativeRootInArchive in selectedRoots &&
-                candidate.versionConflict == PluginVersionConflict.DOWNGRADE
+                    candidate.versionConflict == PluginVersionConflict.DOWNGRADE
         }
-        _uiState.update { it.copy(pendingImport = null, selectedImportRoots = emptySet()) }
+
         runBusy("Plugin imported") {
             val result = installer.installPrepared(
                 session = session,
@@ -121,36 +144,57 @@ class PluginViewModel(
                 selectedRoots = selectedRoots,
                 allowDowngrade = allowDowngrade
             )
-            result.installed.forEach { plugin ->
-                pluginManager.invalidate(plugin.id)
-            }
-            syncMetadataRules()
+
             if (result.installed.isEmpty()) {
                 val failureReason = result.failed.firstOrNull()?.reason ?: "No installable plugin found"
-                logPluginError("Install failed", failureReason, result.failed.joinToString("\n") { "${it.rootPath}: ${it.reason}" })
+                logPluginError(
+                    message = "Install failed",
+                    detail = failureReason,
+                    fullDetail = result.failed.joinToString("\n") { "${it.rootPath}: ${it.reason}" }
+                )
                 error(failureReason)
             }
         }
     }
-
-    fun dismissPendingImport() {
+    fun discardPendingImportFiles() {
         _uiState.value.pendingImport?.let { installer.discardImport(it) }
-        _uiState.update { it.copy(pendingImport = null, selectedImportRoots = emptySet()) }
     }
-
-    fun setEnabled(id: String, enabled: Boolean) {
-        viewModelScope.launch {
-            repository.setEnabled(id, enabled)
-            pluginManager.invalidate(id)
+    fun clearPendingImport() {
+        _uiState.update {
+            it.copy(
+                pendingImport = null,
+                selectedImportRoots = emptySet()
+            )
         }
     }
 
-    fun setPluginOrder(plugins: List<SourcePluginEntity>) {
+    fun dismissPendingImport() {
+        discardPendingImportFiles()
+        clearPendingImport()
+    }
+
+    fun setEnabled(id: String, sourceType: PluginSourceType, enabled: Boolean) {
         viewModelScope.launch {
-            plugins.forEachIndexed { index, plugin ->
-                repository.updateSortOrder(plugin.id, index)
-                pluginManager.invalidate(plugin.id)
-            }
+            repository.setEnabled(id, sourceType, enabled)
+        }
+    }
+
+    fun setPluginOrder(
+        plugins: List<SourcePluginEntity>,
+        sourceType: PluginSourceType
+    ) {
+        viewModelScope.launch {
+            repository.updateSortOrders(
+                ids = plugins.map { it.id },
+                sourceType = sourceType
+            )
+        }
+    }
+
+    fun setCustomName(id: String, name: String) {
+        viewModelScope.launch {
+            repository.updateCustomName(id, name)
+            publishMessage("Plugin name saved")
         }
     }
 
@@ -184,6 +228,11 @@ class PluginViewModel(
                     )
                 }
             } catch (e: TimeoutCancellationException) {
+                logPluginError(
+                    message = "Plugin action timed out",
+                    detail = "Timed out after ${ACTION_TIMEOUT_MS / 1000}s",
+                    fullDetail = e.stackTraceToString()
+                )
                 _uiState.update {
                     it.copy(
                         isBusy = false,
@@ -194,6 +243,11 @@ class PluginViewModel(
                 }
             } catch (e: Exception) {
                 val message = e.message ?: e.javaClass.simpleName
+                logPluginError(
+                    message = "Plugin action failed",
+                    detail = message,
+                    fullDetail = e.stackTraceToString()
+                )
                 _uiState.update {
                     it.copy(
                         isBusy = false,
@@ -219,29 +273,24 @@ class PluginViewModel(
         runBusy("Plugin deleted") {
             val plugin = repository.getPlugin(id)
             if (plugin != null) {
-                repository.uninstallPlugin(id)
                 pluginManager.invalidate(plugin.id)
                 settingsRepository.removePluginSettings(plugin.id)
-                pluginLyricsConfigRepository.removeConfig(plugin.id)
-                File(plugin.pluginDir).deleteRecursively()
+                val pluginDir = File(plugin.pluginDir)
+                if (pluginDir.exists()) {
+                    require(pluginDir.deleteRecursively()) {
+                        "Failed to remove plugin files: ${pluginDir.absolutePath}"
+                    }
+                }
+                repository.uninstallPlugin(id)
             }
         }
-    }
-
-    private suspend fun syncMetadataRules() {
-        val sources = pluginManager.getEnabledSources()
-        val mergedRules = MetadataFieldWriteRuleFactory.mergeWithDeclaredFields(
-            savedRules = settingsRepository.getMetadataFieldWriteRules(),
-            searchSources = sources
-        )
-        settingsRepository.saveMetadataFieldWriteRules(mergedRules)
     }
 
     private suspend fun logPluginError(message: String, detail: String, fullDetail: String? = null) {
         try {
             appLogRepository.log(
                 level = AppLogLevel.ERROR,
-                type = AppLogType.APP,
+                type = AppLogType.PLUGIN,
                 tag = TAG,
                 message = message,
                 detail = fullDetail ?: detail

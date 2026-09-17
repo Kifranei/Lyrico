@@ -25,12 +25,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonColors
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,12 +56,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.entity.SourcePluginEntity
-import com.lonx.lyrico.plugin.source.PluginImportSession
+import com.lonx.lyrico.data.model.entity.capabilities
+import com.lonx.lyrico.data.model.entity.displaySourceTypes
+import com.lonx.lyrico.data.model.entity.displayName
+import com.lonx.lyrico.data.model.entity.isEnabledFor
+import com.lonx.lyrico.data.model.entity.sortOrderFor
+import com.lonx.lyrico.data.model.plugin.PluginSourceType
+import com.lonx.lyrico.data.model.plugin.supportsSourceType
+import com.lonx.lyrico.data.model.plugin.displaySourceTypes
 import com.lonx.lyrico.plugin.source.PluginInstallCandidate
 import com.lonx.lyrico.plugin.source.PluginInstallFailed
 import com.lonx.lyrico.plugin.source.PluginVersionConflict
+import com.lonx.lyrico.ui.components.base.YesNoBottomSheet
 import com.lonx.lyrico.ui.components.base.YesNoDialog
 import com.lonx.lyrico.ui.components.library.LibraryEmptyState
+import com.lonx.lyrico.ui.components.plugin.PluginIcon
+import com.lonx.lyrico.ui.components.scaffoldTopHorizontalPadding
 import com.lonx.lyrico.ui.theme.isDarkTheme
 import com.lonx.lyrico.viewmodel.PluginViewModel
 import com.ramcosta.composedestinations.annotation.Destination
@@ -84,18 +94,33 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Switch
+import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.ListView
+import top.yukonga.miuix.kmp.icon.extended.Rename
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import top.yukonga.miuix.kmp.window.WindowDialog
+import java.io.File
+
+private enum class PluginTypeTab(
+    val sourceType: PluginSourceType,
+    val labelRes: Int
+) {
+    METADATA(PluginSourceType.METADATA, R.string.plugin_type_metadata),
+    LYRICS(PluginSourceType.LYRICS, R.string.plugin_type_lyrics),
+    COVER(PluginSourceType.COVER, R.string.plugin_type_cover)
+}
 
 @Composable
 @Destination<RootGraph>(route = "plugin_manager")
@@ -104,10 +129,35 @@ fun PluginManagerScreen(
 ) {
     val viewModel: PluginViewModel = koinViewModel()
     val plugins by viewModel.plugins.collectAsState()
+    val localeConfiguration = androidx.compose.ui.platform.LocalConfiguration.current
+    LaunchedEffect(localeConfiguration) {
+        com.lonx.lyrico.plugin.i18n.PluginLocales.update(localeConfiguration)
+    }
     val uiState by viewModel.uiState.collectAsState()
     val pendingImport = uiState.pendingImport
     val context: Context = LocalContext.current
-    var currentList by remember(plugins) { mutableStateOf(plugins) }
+    var selectedTypeTab by rememberSaveable { mutableStateOf(PluginTypeTab.METADATA) }
+    var compactMode by rememberSaveable {
+        mutableStateOf(
+            context.getSharedPreferences(
+                PLUGIN_MANAGER_PREFERENCES,
+                Context.MODE_PRIVATE
+            ).getBoolean(KEY_COMPACT_MODE, false)
+        )
+    }
+    var currentList by remember(plugins, selectedTypeTab) {
+        mutableStateOf(
+            plugins
+                .filter {
+                    it.capabilities.supportsSourceType(selectedTypeTab.sourceType)
+                }
+                .sortedWith(
+                    compareBy<SourcePluginEntity> {
+                        it.sortOrderFor(selectedTypeTab.sourceType)
+                    }.thenBy { it.displayName }
+                )
+        )
+    }
     val lazyListState = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
     val reorderableLazyColumnState = rememberReorderableLazyListState(lazyListState) { from, to ->
@@ -129,6 +179,17 @@ fun PluginManagerScreen(
     }
     var showUninstallDialog by rememberSaveable { mutableStateOf(false) }
     var pendingUninstallPluginId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showRenameDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingRenamePluginId by rememberSaveable { mutableStateOf<String?>(null) }
+    var customNameInput by rememberSaveable { mutableStateOf("") }
+    var showImportPreviewSheet by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(pendingImport) {
+        if (pendingImport != null) {
+            showImportPreviewSheet = true
+        }
+    }
+
     Scaffold(
         topBar = {
             SmallTopAppBar(
@@ -142,6 +203,31 @@ fun PluginManagerScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            compactMode = !compactMode
+                            context.getSharedPreferences(
+                                PLUGIN_MANAGER_PREFERENCES,
+                                Context.MODE_PRIVATE
+                            ).edit().putBoolean(KEY_COMPACT_MODE, compactMode).apply()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (compactMode) {
+                                MiuixIcons.GridView
+                            } else {
+                                MiuixIcons.ListView
+                            },
+                            contentDescription = stringResource(
+                                if (compactMode) {
+                                    R.string.plugin_switch_to_detailed
+                                } else {
+                                    R.string.plugin_switch_to_compact
+                                }
+                            )
+                        )
+                    }
+
                     IconButton(
                         onClick = {
                             if (!uiState.isBusy) importLauncher.launch(arrayOf("*/*"))
@@ -160,8 +246,23 @@ fun PluginManagerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(scaffoldTopHorizontalPadding(paddingValues))
         ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(top = 8.dp)
+            ) {
+                TabRowWithContour(
+                    tabs = PluginTypeTab.entries.map { stringResource(it.labelRes) },
+                    selectedTabIndex = selectedTypeTab.ordinal,
+                    onTabSelected = { index ->
+                        selectedTypeTab = PluginTypeTab.entries[index]
+                    }
+                )
+            }
+
             Text(
                 text = stringResource(R.string.search_source_priority_tip),
                 fontSize = MiuixTheme.textStyles.footnote1.fontSize,
@@ -182,7 +283,14 @@ fun PluginManagerScreen(
                 if (currentList.isEmpty()) {
                     item("empty") {
                         LibraryEmptyState(
-                            title = stringResource(R.string.plugin_empty),
+                            title = if (plugins.isEmpty()) {
+                                stringResource(R.string.plugin_empty)
+                            } else {
+                                stringResource(
+                                    R.string.plugin_type_empty,
+                                    stringResource(selectedTypeTab.labelRes)
+                                )
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(12.dp),
@@ -212,25 +320,39 @@ fun PluginManagerScreen(
                         PluginItem(
                             modifier = Modifier
                                 .padding(horizontal = 12.dp)
-                                .padding(bottom = 12.dp)
+                                .padding(bottom = if (compactMode) 6.dp else 12.dp)
                                 .clip(RoundedCornerShape(CardDefaults.CornerRadius))
                                 .longPressDraggableHandle(
                                     onDragStarted = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     },
                                     onDragStopped = {
-                                        viewModel.setPluginOrder(currentList)
+                                        viewModel.setPluginOrder(
+                                            currentList,
+                                            selectedTypeTab.sourceType
+                                        )
                                     },
                                     interactionSource = interactionSource
                                 ),
                             plugin = plugin,
+                            compact = compactMode,
+                            enabled = plugin.isEnabledFor(selectedTypeTab.sourceType),
                             updateUrl = "",
                             onUninstall = {
                                 pendingUninstallPluginId = plugin.id
                                 showUninstallDialog = true
                             },
+                            onRename = {
+                                pendingRenamePluginId = plugin.id
+                                customNameInput = plugin.customName ?: plugin.name
+                                showRenameDialog = true
+                            },
                             onCheckChanged = { enabled ->
-                                viewModel.setEnabled(plugin.id, enabled)
+                                viewModel.setEnabled(
+                                    plugin.id,
+                                    selectedTypeTab.sourceType,
+                                    enabled
+                                )
                             },
                             onConfig = {
                                 navigator.navigate(PluginConfigDestination(plugin.id))
@@ -246,7 +368,7 @@ fun PluginManagerScreen(
         show = showUninstallDialog,
         title = stringResource(R.string.plugin_uninstall),
         summary = pendingUninstallPluginId?.let { id ->
-            plugins.find { it.id == id }?.name?.let { name ->
+            plugins.find { it.id == id }?.displayName?.let { name ->
                 stringResource(R.string.plugin_uninstall_confirm_message, name)
             }
         },
@@ -264,113 +386,142 @@ fun PluginManagerScreen(
         }
     )
 
-    WindowBottomSheet(
-        show = pendingImport != null,
+    val pendingRenamePlugin = pendingRenamePluginId?.let { id ->
+        plugins.find { it.id == id }
+    }
+
+    WindowDialog(
+        title = stringResource(R.string.plugin_custom_name),
+        show = showRenameDialog,
+        onDismissRequest = {
+            showRenameDialog = false
+        },
+        onDismissFinished = {
+            pendingRenamePluginId = null
+        }
+    ) {
+        Column {
+            TextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = customNameInput,
+                label = stringResource(R.string.plugin_custom_name),
+                singleLine = true,
+                onValueChange = { customNameInput = it }
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = stringResource(
+                    R.string.plugin_custom_name_hint,
+                    pendingRenamePlugin?.name.orEmpty()
+                ),
+                fontSize = 12.sp,
+                color = colorScheme.onSurfaceVariantSummary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(
+                    text = stringResource(R.string.cancel),
+                    onClick = {
+                        showRenameDialog = false
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(20.dp))
+                TextButton(
+                    text = stringResource(R.string.confirm),
+                    onClick = {
+                        showRenameDialog = false
+                        pendingRenamePluginId?.let { id ->
+                            viewModel.setCustomName(id, customNameInput)
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary()
+                )
+            }
+        }
+    }
+
+    YesNoBottomSheet(
+        show = showImportPreviewSheet,
         title = stringResource(R.string.plugin_import_found_title),
         onDismissRequest = {
-            viewModel.dismissPendingImport()
+            viewModel.discardPendingImportFiles()
+            showImportPreviewSheet = false
         },
         enableNestedScroll = false,
-        onDismissFinished = {},
-        startAction = {
-            androidx.compose.material3.TextButton(
-                onClick = {
-                    viewModel.dismissPendingImport()
-                }
-            ) {
-                Text(
-                    text = stringResource(R.string.cancel),
-                    color = colorScheme.onSurfaceVariantActions
-                )
+        onDismissFinished = {
+            if (!showImportPreviewSheet) {
+                viewModel.clearPendingImport()
             }
         },
-        endAction = {
-            androidx.compose.material3.TextButton(
-                onClick = {
-                    viewModel.installPendingImport()
-                },
-
-                ) {
-                Text(
-                    text = stringResource(R.string.plugin_import_install),
-                    color = colorScheme.primary
-                )
-            }
+        onCancel = {
+            viewModel.discardPendingImportFiles()
+            showImportPreviewSheet = false
+        },
+        confirmText = stringResource(R.string.plugin_import_install),
+        onConfirm = {
+            viewModel.installPendingImport()
+            showImportPreviewSheet = false
         },
         content = {
             pendingImport?.let { session ->
-                PluginImportPreviewContent(
-                    session = session,
-                    selectedRoots = uiState.selectedImportRoots,
-                    onCandidateCheckedChange = { root, checked ->
-                        viewModel.setImportCandidateSelected(root, checked)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    if (session.candidates.isNotEmpty()) {
+                        SmallTitle(
+                            text = stringResource(
+                                R.string.plugin_import_installable_title,
+                                session.candidates.size
+                            ),
+                            insideMargin = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                        )
                     }
-                )
+
+                    session.candidates.forEach { candidate ->
+                        val selected =
+                            candidate.relativeRootInArchive in uiState.selectedImportRoots
+
+                        PluginImportCandidateItem(
+                            candidate = candidate,
+                            selected = selected,
+                            onCheckedChange = { checked ->
+                                viewModel.setImportCandidateSelected(
+                                    candidate.relativeRootInArchive,
+                                    checked
+                                )
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+
+                if (session.failed.isNotEmpty()) {
+                    SmallTitle(
+                        text = stringResource(
+                            R.string.plugin_import_failed_title,
+                            session.failed.size
+                        ),
+                        textColor = colorScheme.error
+                    )
+
+                    session.failed.forEach { failed ->
+                        PluginImportFailedItem(failed = failed)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.padding(vertical = 12.dp))
             }
         }
     )
 }
 
-@Composable
-private fun PluginImportPreviewContent(
-    session: PluginImportSession,
-    selectedRoots: Set<String>,
-    onCandidateCheckedChange: (String, Boolean) -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 460.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(vertical = 4.dp)
-    ) {
-        if (session.candidates.isNotEmpty()) {
-            item("installable-title") {
-                SmallTitle(
-                    text = stringResource(
-                        R.string.plugin_import_installable_title,
-                        session.candidates.size
-                    ),
-                    insideMargin = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
-                )
-            }
-
-            items(
-                items = session.candidates,
-                key = { candidate -> candidate.relativeRootInArchive }
-            ) { candidate ->
-                val selected = candidate.relativeRootInArchive in selectedRoots
-
-                PluginImportCandidateItem(
-                    candidate = candidate,
-                    selected = selected,
-                    onCheckedChange = { checked ->
-                        onCandidateCheckedChange(candidate.relativeRootInArchive, checked)
-                    }
-                )
-            }
-        }
-
-        if (session.failed.isNotEmpty()) {
-            item("failed-title") {
-                SmallTitle(
-                    text = stringResource(
-                        R.string.plugin_import_failed_title,
-                        session.failed.size
-                    ),
-                    textColor = colorScheme.error
-                )
-            }
-
-            items(
-                items = session.failed,
-                key = { failed -> "${failed.rootPath}:${failed.reason}" }
-            ) { failed ->
-                PluginImportFailedItem(failed = failed)
-            }
-        }
-    }
-}
 
 @Composable
 private fun PluginImportCandidateItem(
@@ -378,9 +529,28 @@ private fun PluginImportCandidateItem(
     selected: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    val manifest = candidate.manifest
+    val localeTags = androidx.compose.ui.platform.LocalConfiguration.current.locales.toLanguageTags()
+    val manifest by androidx.compose.runtime.produceState(candidate.manifest, candidate, localeTags) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                com.lonx.lyrico.plugin.i18n.PluginStrings.load(candidate.pluginRoot, candidate.manifest)
+                    .snapshot(localeTags.split(',')).localize(candidate.manifest)
+            }.getOrDefault(candidate.manifest)
+        }
+    }
     val conflictText = candidate.versionConflict.toImportConflictText()
     val conflictColor = candidate.versionConflict.toImportConflictColor()
+    val iconPath = manifest.icon?.let { File(candidate.pluginRoot, it).absolutePath }
+    val versionText = if (candidate.existingPlugin != null) {
+        "${candidate.existingPlugin.versionName} -> ${manifest.versionName}"
+    } else {
+        manifest.versionName
+    }
+    val locationText = candidate.relativeRootInArchive.ifBlank { "/" }
+    val pluginTypeText = candidate.manifest.capabilities
+        .displaySourceTypes()
+        .map { stringResource(it.labelRes()) }
+        .joinToString(" / ")
 
     Card(
         colors = CardDefaults.defaultColors(
@@ -388,11 +558,18 @@ private fun PluginImportCandidateItem(
         )
     ) {
         BasicComponent(
-            insideMargin = PaddingValues(8.dp),
+            insideMargin = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
             onClick = {
                 onCheckedChange(!selected)
             },
             startAction = {
+                PluginIcon(
+                    iconPath = iconPath,
+                    contentDescription = manifest.name,
+                    size = 34.dp
+                )
+            },
+            endActions = {
                 Checkbox(
                     state = if (selected) ToggleableState.On else ToggleableState.Off,
                     onClick = {
@@ -401,7 +578,6 @@ private fun PluginImportCandidateItem(
                 )
             }
         ) {
-
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -421,8 +597,6 @@ private fun PluginImportCandidateItem(
                 )
             }
 
-            Spacer(modifier = Modifier.height(3.dp))
-
             Text(
                 text = manifest.id,
                 fontSize = 12.sp,
@@ -431,37 +605,34 @@ private fun PluginImportCandidateItem(
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            ImportInfoRow(
-                label = stringResource(R.string.plugin_import_version),
-                value = if (candidate.existingPlugin != null) {
-                    "${candidate.existingPlugin.versionName} -> ${manifest.versionName}"
-                } else {
-                    manifest.versionName
-                }
+            Text(
+                text = stringResource(R.string.plugin_import_version, versionText),
+                fontSize = 12.sp,
+                color = colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-
-            ImportInfoRow(
-                label = stringResource(R.string.plugin_import_path),
-                value = candidate.relativeRootInArchive.ifBlank { "/" }
+            Text(
+                text = stringResource(R.string.plugin_type_with_value, pluginTypeText),
+                fontSize = 12.sp,
+                color = colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-
-            ImportInfoRow(
-                label = stringResource(R.string.plugin_import_include_dirs),
-                value = manifest.includeDirs.joinToString().ifBlank {
-                    stringResource(R.string.plugin_import_none)
-                }
+            Text(
+                text = stringResource(R.string.plugin_import_path,locationText),
+                fontSize = 12.sp,
+                color = colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
             if (manifest.description.isNotBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-
                 Text(
-                    text = manifest.description,
-                    fontSize = 13.sp,
+                    text = stringResource(R.string.plugin_import_description,manifest.description),
+                    fontSize = 12.sp,
                     color = colorScheme.onSurfaceVariantSummary,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -615,36 +786,6 @@ private fun ImportStatusBadge(
 }
 
 @Composable
-private fun ImportInfoRow(
-    label: String,
-    value: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            color = colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.width(72.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        Text(
-            text = value,
-            fontSize = 12.sp,
-            color = colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.weight(1f),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
 private fun PluginVersionConflict.toImportConflictColor(): Color {
     return when (this) {
         PluginVersionConflict.NONE -> colorScheme.primary
@@ -674,21 +815,40 @@ private fun PluginVersionConflict.toImportConflictText(): String {
 @Composable
 fun PluginItem(
     plugin: SourcePluginEntity,
+    compact: Boolean,
+    enabled: Boolean,
     updateUrl: String,
     onUninstall: () -> Unit,
+    onRename: () -> Unit,
     onCheckChanged: (Boolean) -> Unit,
     onConfig: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    if (compact) {
+        CompactPluginItem(
+            plugin = plugin,
+            enabled = enabled,
+            onUninstall = onUninstall,
+            onRename = onRename,
+            onCheckChanged = onCheckChanged,
+            onConfig = onConfig,
+            modifier = modifier
+        )
+        return
+    }
+
     val secondaryContainer = colorScheme.secondaryContainer.copy(alpha = 0.8f)
     val actionIconTint = colorScheme.onSurface.copy(alpha = if (isDarkTheme) 0.7f else 0.9f)
 
     val pluginId = plugin.id
-    val pluginName = plugin.name
+    val pluginName = plugin.displayName
     val pluginAuthor = plugin.author
     val pluginVersion = plugin.versionName
     val pluginDescription = plugin.description
-    val pluginEnabled = plugin.enabled
+    val pluginEnabled = enabled
+    val pluginTypeText = plugin.displaySourceTypes
+        .map { stringResource(it.labelRes()) }
+        .joinToString(" / ")
 
     val hasDescription = pluginDescription.isNotBlank()
     val hasUpdateSource = updateUrl.isNotBlank()
@@ -708,6 +868,12 @@ fun PluginItem(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            PluginIcon(
+                iconPath = plugin.iconPath,
+                contentDescription = pluginName,
+                size = 40.dp
+            )
+
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -732,12 +898,34 @@ fun PluginItem(
                             text = stringResource(R.string.plugin_update_source_configured)
                         )
                     }
+
                 }
+
+                Text(
+                    text = pluginTypeText,
+                    fontSize = 12.sp,
+                    color = colorScheme.onSurfaceVariantSummary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
 
                 Text(
                     text = stringResource(R.string.plugin_version_with_value, pluginVersion),
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 2.dp),
+                    fontWeight = FontWeight(550),
+                    color = colorScheme.onSurfaceVariantSummary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Text(
+                    text = stringResource(
+                        R.string.plugin_api_versions_with_value,
+                        plugin.apiVersion,
+                        plugin.minHostApiVersion
+                    ),
+                    fontSize = 12.sp,
                     fontWeight = FontWeight(550),
                     color = colorScheme.onSurfaceVariantSummary,
                     maxLines = 1,
@@ -803,6 +991,13 @@ fun PluginItem(
                 background = secondaryContainer,
                 onClick = onConfig
             )
+            PluginActionChip(
+                text = stringResource(R.string.plugin_custom_name),
+                icon = MiuixIcons.Rename,
+                tint = actionIconTint,
+                background = secondaryContainer,
+                onClick = onRename
+            )
 
             Spacer(modifier = Modifier.weight(1f))
 
@@ -816,6 +1011,156 @@ fun PluginItem(
         }
     }
 }
+
+@Composable
+private fun CompactPluginItem(
+    plugin: SourcePluginEntity,
+    enabled: Boolean,
+    onUninstall: () -> Unit,
+    onRename: () -> Unit,
+    onCheckChanged: (Boolean) -> Unit,
+    onConfig: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val pluginName = plugin.displayName
+    val pluginTypeText = plugin.displaySourceTypes
+        .map { stringResource(it.labelRes()) }
+        .joinToString(" / ")
+    val neutralActionBackground = colorScheme.secondaryContainer.copy(alpha = 0.8f)
+    val neutralActionTint = colorScheme.onSurface.copy(alpha = if (isDarkTheme) 0.7f else 0.9f)
+
+    Card(
+        modifier = modifier,
+        insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            PluginIcon(
+                iconPath = plugin.iconPath,
+                contentDescription = pluginName,
+                size = 36.dp
+            )
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = pluginName,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight(550),
+                        color = colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+
+                }
+
+                Text(
+                    text = pluginTypeText,
+                    fontSize = 11.sp,
+                    color = colorScheme.onSurfaceVariantSummary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Text(
+                    text = stringResource(R.string.plugin_version_with_value, plugin.versionName),
+                    fontSize = 11.sp,
+                    color = colorScheme.onSurfaceVariantSummary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Text(
+                    text = stringResource(
+                        R.string.plugin_api_versions_with_value,
+                        plugin.apiVersion,
+                        plugin.minHostApiVersion
+                    ),
+                    fontSize = 11.sp,
+                    color = colorScheme.onSurfaceVariantSummary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Switch(
+                checked = enabled,
+                onCheckedChange = { checked ->
+                    if (checked != enabled) onCheckChanged(checked)
+                }
+            )
+        }
+
+        Row(
+            modifier = Modifier.padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Spacer(modifier = Modifier.weight(1f))
+            CompactPluginActionButton(
+                icon = MiuixIcons.Settings,
+                contentDescription = stringResource(R.string.plugin_config),
+                tint = neutralActionTint,
+                background = neutralActionBackground,
+                onClick = onConfig
+            )
+            CompactPluginActionButton(
+                icon = MiuixIcons.Rename,
+                contentDescription = stringResource(R.string.plugin_custom_name),
+                tint = neutralActionTint,
+                background = neutralActionBackground,
+                onClick = onRename
+            )
+            CompactPluginActionButton(
+                icon = MiuixIcons.Delete,
+                contentDescription = stringResource(R.string.plugin_uninstall),
+                tint = colorScheme.error,
+                background = colorScheme.errorContainer.copy(alpha = 0.45f),
+                onClick = onUninstall
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactPluginActionButton(
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color,
+    background: Color,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(30.dp)
+            .clip(CircleShape)
+            .background(background)
+            .combinedClickable(onClick = onClick, onLongClick = null),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+private fun PluginSourceType.labelRes(): Int = when (this) {
+    PluginSourceType.METADATA -> R.string.plugin_type_metadata
+    PluginSourceType.LYRICS -> R.string.plugin_type_lyrics
+    PluginSourceType.COVER -> R.string.plugin_type_cover
+}
+
+private const val PLUGIN_MANAGER_PREFERENCES = "plugin_manager_preferences"
+private const val KEY_COMPACT_MODE = "compact_mode"
 
 @Composable
 private fun PluginBadge(

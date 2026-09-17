@@ -9,9 +9,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -154,20 +157,36 @@ fun BatchRGBottomSheet(
                         style = MiuixTheme.textStyles.main
                     )
                 }
+                Spacer(modifier = Modifier.padding(vertical = 12.dp))
             }
         },
-        actions = {
-            top.yukonga.miuix.kmp.basic.TextButton(
-                text = if (batchReplayGainUiState.isRunning) stringResource(R.string.action_abort) else stringResource(R.string.action_close),
+        endAction = {
+            TextButton(
+                colors = ButtonColors(
+                    containerColor = Color.Transparent,
+                    contentColor = MiuixTheme.colorScheme.primary,
+                    disabledContainerColor = Color.Transparent,
+                    disabledContentColor = MiuixTheme.colorScheme.disabledPrimary
+                ),
                 onClick = {
                     if (batchReplayGainUiState.isRunning) {
                         onAbort()
                     } else {
                         onDismissRequest()
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+                }
+            ) {
+                Text(
+                    text = if (batchReplayGainUiState.isRunning) stringResource(R.string.action_abort) else stringResource(
+                        R.string.action_close
+                    ),
+                    color = if (batchReplayGainUiState.isRunning){
+                        MiuixTheme.colorScheme.error
+                    } else {
+                        MiuixTheme.colorScheme.primary
+                    }
+                )
+            }
         }
     )
 }

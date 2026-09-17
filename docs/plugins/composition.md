@@ -1,4 +1,6 @@
-# 插件组成
+# 插件包结构
+
+本文说明一个插件包在文件系统中的组织方式，包括 `manifest.json`、入口脚本、辅助脚本、图标和多插件 ZIP 包。写插件前建议先了解这一页的结构规则。
 
 ## 文件结构
 
@@ -41,7 +43,7 @@
 ```javascript
 // ✅ 正确：全局函数声明
 function searchSongs(request) {
-  return JSON.stringify([...]);
+  return [...];
 }
 
 // ❌ 错误：不支持 export

@@ -7,16 +7,25 @@ import android.media.MediaCodecList
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import androidx.core.net.toUri
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlin.coroutines.cancellation.CancellationException
 
 data class ReplayGainAnalysis(
     val loudnessLufs: Double,
     val sampleCount: Long,
     val peak: Double
+)
+
+data class AlbumReplayGainAnalysis(
+    val loudnessLufs: Double,
+    val sampleCount: Long,
+    val peak: Double,
+    val tracks: List<ReplayGainAnalysis>
 )
 
 // 定义具体的错误原因，方便调用方根据枚举或类名进行多语言/自定义处理
@@ -44,17 +53,101 @@ sealed interface ReplayGainCalculateState {
     ) : ReplayGainCalculateState
 }
 
+sealed interface AlbumReplayGainCalculateState {
+    data class Progress(val percent: Float) : AlbumReplayGainCalculateState
+    data object Cancelled : AlbumReplayGainCalculateState
+    data class Success(val analysis: AlbumReplayGainAnalysis) : AlbumReplayGainCalculateState
+    data class Failed(
+        val uriString: String?,
+        val mimeType: String?,
+        val error: ReplayGainError
+    ) : AlbumReplayGainCalculateState
+}
+
 class ReplayGainScanner(private val context: Context) {
     companion object {
-        private const val TARGET_LOUDNESS_LUFS = -18.0
+        const val DEFAULT_TARGET_LOUDNESS_LUFS = -18.0
         private const val PROGRESS_UPDATE_THRESHOLD = 0.01
     }
 
     fun analyze(uriString: String): Flow<ReplayGainCalculateState> = flow {
+        var decoded: ReplayGainDecodeResult? = null
+        try {
+            emit(ReplayGainCalculateState.Progress(0f))
+            decoded = decodeToState(uriString) { progress ->
+                emit(ReplayGainCalculateState.Progress(progress))
+            }
+            emit(ReplayGainCalculateState.Progress(1.0f))
+            emit(
+                ReplayGainCalculateState.Success(
+                    analysis = decoded.analysis,
+                    mimeType = decoded.mimeType
+                )
+            )
+        } catch (e: CancellationException) {
+            emit(ReplayGainCalculateState.Cancelled)
+            throw e
+        } catch (e: ReplayGainScanException) {
+            emit(ReplayGainCalculateState.Failed(e.mimeType, e.error))
+        } finally {
+            runCatching { decoded?.state?.close() }
+        }
+    }.flowOn(Dispatchers.IO)
+
+    fun analyzeAlbum(uriStrings: List<String>): Flow<AlbumReplayGainCalculateState> = flow {
+        if (uriStrings.isEmpty()) {
+            emit(AlbumReplayGainCalculateState.Failed(null, null, ReplayGainError.ZeroSampleCount))
+            return@flow
+        }
+
+        val decodedTracks = mutableListOf<ReplayGainDecodeResult>()
+        try {
+            emit(AlbumReplayGainCalculateState.Progress(0f))
+            uriStrings.forEachIndexed { index, uriString ->
+                val decoded = decodeToState(uriString) { trackProgress ->
+                    val albumProgress = (index + trackProgress) / uriStrings.size.toFloat()
+                    emit(AlbumReplayGainCalculateState.Progress(albumProgress.coerceIn(0f, 1f)))
+                }
+                decodedTracks += decoded
+            }
+
+            val states = decodedTracks.map { it.state }
+            val albumLoudness = LibEbuR128.loudnessMultiple(states)
+            val albumPeak = decodedTracks.maxOf { it.analysis.peak }
+            val sampleCount = decodedTracks.sumOf { it.analysis.sampleCount }
+
+            emit(AlbumReplayGainCalculateState.Progress(1.0f))
+            emit(
+                AlbumReplayGainCalculateState.Success(
+                    AlbumReplayGainAnalysis(
+                        loudnessLufs = albumLoudness,
+                        sampleCount = sampleCount,
+                        peak = albumPeak,
+                        tracks = decodedTracks.map { it.analysis }
+                    )
+                )
+            )
+        } catch (e: CancellationException) {
+            emit(AlbumReplayGainCalculateState.Cancelled)
+            throw e
+        } catch (e: ReplayGainScanException) {
+            emit(AlbumReplayGainCalculateState.Failed(e.uriString, e.mimeType, e.error))
+        } finally {
+            decodedTracks.forEach { decoded ->
+                runCatching { decoded.state.close() }
+            }
+        }
+    }.flowOn(Dispatchers.IO)
+
+    private suspend fun decodeToState(
+        uriString: String,
+        onProgress: suspend (Float) -> Unit
+    ): ReplayGainDecodeResult {
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
         var mimeType: String? = null
         var ebuR128: LibEbuR128? = null
+        var completed = false
 
         try {
             extractor.setDataSource(context, uriString.toUri(), null)
@@ -65,8 +158,7 @@ class ReplayGainScanner(private val context: Context) {
             }
 
             if (trackIndex == null) {
-                emit(ReplayGainCalculateState.Failed(null, ReplayGainError.NoAudioTrack))
-                return@flow
+                throw ReplayGainScanException(uriString, null, ReplayGainError.NoAudioTrack)
             }
 
             extractor.selectTrack(trackIndex)
@@ -75,14 +167,12 @@ class ReplayGainScanner(private val context: Context) {
 
             mimeType = format.getString(MediaFormat.KEY_MIME)
             if (mimeType == null) {
-                emit(ReplayGainCalculateState.Failed(null, ReplayGainError.UnknownMimeType))
-                return@flow
+                throw ReplayGainScanException(uriString, null, ReplayGainError.UnknownMimeType)
             }
 
             val decoderName = MediaCodecList(MediaCodecList.ALL_CODECS).findDecoderForFormat(format)
             if (decoderName == null) {
-                emit(ReplayGainCalculateState.Failed(mimeType, ReplayGainError.UnsupportedCodec(mimeType)))
-                return@flow
+                throw ReplayGainScanException(uriString, mimeType, ReplayGainError.UnsupportedCodec(mimeType))
             }
 
             codec = MediaCodec.createByCodecName(decoderName).apply {
@@ -96,7 +186,7 @@ class ReplayGainScanner(private val context: Context) {
             var pcmEncoding = AudioFormat.ENCODING_PCM_16BIT
             var lastReportedProgress = 0.0
 
-            emit(ReplayGainCalculateState.Progress(0f))
+            onProgress(0f)
 
             while (!outputEnded) {
                 // 检查协程是否被取消，如果取消会抛出 CancellationException
@@ -146,7 +236,7 @@ class ReplayGainScanner(private val context: Context) {
                                 if (durationUs > 0) {
                                     val currentProgress = (bufferInfo.presentationTimeUs.toDouble() / durationUs).coerceIn(0.0, 1.0)
                                     if (currentProgress - lastReportedProgress >= PROGRESS_UPDATE_THRESHOLD) {
-                                        emit(ReplayGainCalculateState.Progress(currentProgress.toFloat()))
+                                        onProgress(currentProgress.toFloat())
                                         lastReportedProgress = currentProgress
                                     }
                                 }
@@ -158,47 +248,103 @@ class ReplayGainScanner(private val context: Context) {
                 }
             }
 
-            emit(ReplayGainCalculateState.Progress(1.0f))
+            onProgress(1.0f)
 
             if (ebuR128 == null || ebuR128.sampleCount == 0L) {
-                emit(ReplayGainCalculateState.Failed(mimeType, ReplayGainError.ZeroSampleCount))
-            } else {
-                emit(
-                    ReplayGainCalculateState.Success(
-                        analysis = ReplayGainAnalysis(
-                            loudnessLufs = ebuR128.loudness,
-                            sampleCount = ebuR128.sampleCount,
-                            peak = ebuR128.truePeak
-                        ),
-                        mimeType = mimeType
-                    )
-                )
+                throw ReplayGainScanException(uriString, mimeType, ReplayGainError.ZeroSampleCount)
             }
 
+            completed = true
+            return ReplayGainDecodeResult(
+                analysis = ReplayGainAnalysis(
+                    loudnessLufs = ebuR128.loudness,
+                    sampleCount = ebuR128.sampleCount,
+                    peak = ebuR128.truePeak
+                ),
+                mimeType = mimeType,
+                state = ebuR128
+            )
+
         } catch (e: CancellationException) {
-            // 捕获取消异常，发射 Cancelled 状态并重新抛出
-            emit(ReplayGainCalculateState.Cancelled)
+            throw e
+        } catch (e: ReplayGainScanException) {
             throw e
         } catch (e: IllegalStateException) {
             val isAlacIssue = mimeType.equals("audio/alac", true) && e.message?.contains("Executing states", true) == true
-            emit(ReplayGainCalculateState.Failed(mimeType, ReplayGainError.CodecException(e.message, isAlacIssue)))
+            throw ReplayGainScanException(
+                uriString = uriString,
+                mimeType = mimeType,
+                error = ReplayGainError.CodecException(e.message, isAlacIssue)
+            )
         } catch (e: Exception) {
-            emit(ReplayGainCalculateState.Failed(mimeType, ReplayGainError.GeneralException(e.message)))
+            throw ReplayGainScanException(
+                uriString = uriString,
+                mimeType = mimeType,
+                error = ReplayGainError.GeneralException(e.message)
+            )
         } finally {
-            runCatching { ebuR128?.close() }
+            if (!completed) {
+                runCatching { ebuR128?.close() }
+            }
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
             runCatching { extractor.release() }
         }
     }
 
+    private data class ReplayGainDecodeResult(
+        val analysis: ReplayGainAnalysis,
+        val mimeType: String,
+        val state: LibEbuR128
+    )
+
+    private class ReplayGainScanException(
+        val uriString: String?,
+        val mimeType: String?,
+        val error: ReplayGainError
+    ) : Exception(
+        when (error) {
+            is ReplayGainError.NoAudioTrack -> "No audio track"
+            is ReplayGainError.UnknownMimeType -> "Unknown MIME type"
+            is ReplayGainError.ZeroSampleCount -> "Zero sample count"
+            is ReplayGainError.UnsupportedCodec -> "Unsupported codec: ${error.mimeType.orEmpty()}"
+            is ReplayGainError.CodecException -> error.message
+            is ReplayGainError.GeneralException -> error.message
+        }
+    )
+
+    /**
+     * 将解析出的 LUFS 响度格式化为 Track/Album Gain
+     */
+    fun formatGain(
+        loudnessLufs: Double,
+        targetLoudnessLufs: Double = DEFAULT_TARGET_LOUDNESS_LUFS
+    ): String {
+        // Gain = 目标参考响度 - 实际测量响度
+        val gainDb = targetLoudnessLufs - loudnessLufs
+        return "%.2f dB".format(java.util.Locale.US, gainDb)
+    }
+
     /**
      * 将解析出的 LUFS 响度格式化为 Track Gain
      */
-    fun formatGain(analysis: ReplayGainAnalysis): String {
-        // Gain = 目标参考响度 - 实际测量响度
-        val gainDb = TARGET_LOUDNESS_LUFS - analysis.loudnessLufs
-        return "%.2f dB".format(java.util.Locale.US, gainDb)
+    fun formatGain(
+        analysis: ReplayGainAnalysis,
+        targetLoudnessLufs: Double = DEFAULT_TARGET_LOUDNESS_LUFS
+    ): String {
+        return formatGain(analysis.loudnessLufs, targetLoudnessLufs)
+    }
+
+    /**
+     * 将目标参考响度格式化为写入标签的文本，例如 "-18 LUFS"
+     */
+    fun formatReferenceLoudness(targetLoudnessLufs: Double): String {
+        val value = if (targetLoudnessLufs % 1.0 == 0.0) {
+            "%.0f".format(java.util.Locale.US, targetLoudnessLufs)
+        } else {
+            "%.2f".format(java.util.Locale.US, targetLoudnessLufs)
+        }
+        return "$value LUFS"
     }
 
     /**

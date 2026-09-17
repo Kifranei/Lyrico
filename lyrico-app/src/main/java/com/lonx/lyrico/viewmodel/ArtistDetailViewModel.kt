@@ -2,8 +2,8 @@ package com.lonx.lyrico.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lonx.lyrico.data.model.dao.ArtistListItem
 import com.lonx.lyrico.data.model.entity.AlbumEntity
+import com.lonx.lyrico.data.model.entity.ArtistEntity
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.repository.LibraryIndexRepository
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,7 +15,7 @@ class ArtistDetailViewModel(
     artistId: Long
 ) : ViewModel() {
 
-    val artist: StateFlow<ArtistListItem?> = libraryIndexRepository
+    val artist: StateFlow<ArtistEntity?> = libraryIndexRepository
         .observeArtistById(artistId)
         .stateIn(
             viewModelScope,

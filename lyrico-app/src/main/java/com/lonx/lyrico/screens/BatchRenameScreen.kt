@@ -2,6 +2,8 @@ package com.lonx.lyrico.screens
 
 import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,21 +11,26 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -35,6 +42,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.RenamePreview
+import com.lonx.lyrico.ui.components.scaffoldBottomPadding
+import com.lonx.lyrico.ui.components.scaffoldTopHorizontalPadding
 import com.ramcosta.composedestinations.generated.destinations.CharacterMappingDestination
 import com.lonx.lyrico.utils.TagField
 import com.lonx.lyrico.viewmodel.BatchRenameViewModel
@@ -55,6 +64,7 @@ import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -68,7 +78,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
-import top.yukonga.miuix.kmp.window.WindowDialog
+import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.BasicComponent
+
+private enum class BatchRenameTab(val labelRes: Int) {
+    Config(R.string.batch_rename_tab_config),
+    Preview(R.string.batch_rename_tab_preview)
+}
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
@@ -81,7 +97,9 @@ fun BatchRenameScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val showDropdowns = remember { mutableStateOf(false) }
-
+    val tabs = remember { BatchRenameTab.entries }
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
+    val scope = rememberCoroutineScope()
 
     var showPlaceholderInfo by remember { mutableStateOf(false) }
 
@@ -117,145 +135,57 @@ fun BatchRenameScreen(
             )
         }
     ) { paddingValues ->
-        LazyColumn(
+        Column(
             modifier = Modifier
-                .scrollEndHaptic()
-                .overScrollVertical()
-                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
-                .fillMaxHeight(),
-            contentPadding = PaddingValues(
-                top = paddingValues.calculateTopPadding(),
-                bottom = paddingValues.calculateBottomPadding() + 12.dp,
-            ),
-            overscrollEffect = null,
+                .fillMaxSize()
+                .padding(scaffoldTopHorizontalPadding(paddingValues))
         ) {
-            item {
-                SmallTitle(text = stringResource(id = R.string.rename_format))
-                Card(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    TextField(
-                        modifier = Modifier.padding(12.dp),
-                        value = renameFormat,
-                        onValueChange = { viewModel.saveFormat(it) },
-                        trailingIcon = {
-                            Box() {
-                                IconButton(
-                                    modifier = Modifier.padding(end = 12.dp),
-                                    onClick = { showDropdowns.value = true }) {
-                                    Icon(
-                                        imageVector = MiuixIcons.Notes,
-                                        contentDescription = null
-                                    )
-                                }
-                                OverlayListPopup(
-                                    show = showDropdowns.value,
-                                    popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
-                                    onDismissRequest = { showDropdowns.value = false },
-                                    alignment = PopupPositionProvider.Align.TopEnd
-                                ) {
-                                    ListPopupColumn {
-                                        uiState.presetFormats.forEach { format ->
-                                            DropdownImpl(
-                                                text = format,
-                                                isSelected = renameFormat == format,
-                                                optionSize = uiState.presetFormats.size,
-                                                index = uiState.presetFormats.indexOf(format),
-                                                onSelectedIndexChange = {
-                                                    viewModel.saveFormat(format)
-                                                    showDropdowns.value = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                    )
-                    Text(
-                        modifier = Modifier.padding(12.dp),
-                        text = stringResource(id = R.string.format_hint),
-                        fontSize = MiuixTheme.textStyles.footnote1.fontSize,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantActions
-                    )
-                    SwitchPreference(
-                        title = stringResource(id = R.string.format_preset_show_placeholders),
-                        checked = showPlaceholderInfo,
-                        onCheckedChange = { showPlaceholderInfo = it }
-                    )
-                    AnimatedVisibility(visible = showPlaceholderInfo) {
-                        PlaceholderInfoContent()
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 8.dp)
+            ) {
+                val tabLabels = tabs.map { tab ->
+                    when (tab) {
+                        BatchRenameTab.Config -> stringResource(tab.labelRes)
+                        BatchRenameTab.Preview -> stringResource(tab.labelRes, uiState.previews.size)
                     }
-
-                    TextButton(
-                        modifier = Modifier
-                            .padding(12.dp)
-                            .fillMaxWidth(),
-                        onClick = { viewModel.executeRename() },
-                        text = stringResource(id = R.string.action_rename),
-                        enabled = uiState.previews.isNotEmpty() && !uiState.isRenamingInProgress,
-                        colors = ButtonDefaults.textButtonColorsPrimary()
-                    )
                 }
-            }
-
-            item {
-                SmallTitle(
-                    text = stringResource(
-                        if (uiState.isGeneratingPreview)
-                            R.string.preview_title_generating
-                        else
-                            R.string.preview_title,
-                        uiState.previews.size
-                    )
+                TabRowWithContour(
+                    tabs = tabLabels,
+                    selectedTabIndex = pagerState.currentPage,
+                    onTabSelected = { index ->
+                        scope.launch { pagerState.animateScrollToPage(index) }
+                    }
                 )
             }
 
-            if (uiState.previews.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = stringResource(id = R.string.preview_empty_tip),
-                            fontSize = MiuixTheme.textStyles.footnote1.fontSize,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                            modifier = Modifier.padding(12.dp)
-                        )
-                    }
-                }
-            } else {
-                itemsIndexed(
-                    items = uiState.previews,
-                    key = { _, preview -> "${preview.originalPath}\n${preview.newPath}" }
-                ) { _, preview ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 3.dp)
-                    ) {
-                        PreviewItem(preview = preview)
-                    }
-                }
-            }
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                key = { index -> tabs[index].name }
+            ) { page ->
+                when (tabs[page]) {
+                    BatchRenameTab.Config -> BatchRenameConfigTab(
+                        bottomPadding = scaffoldBottomPadding(paddingValues),
+                        topAppBarNestedScrollConnection = topAppBarScrollBehavior.nestedScrollConnection,
+                        renameFormat = renameFormat,
+                        uiState = uiState,
+                        showDropdowns = showDropdowns.value,
+                        onDropdownVisibleChange = { showDropdowns.value = it },
+                        showPlaceholderInfo = showPlaceholderInfo,
+                        onShowPlaceholderInfoChange = { showPlaceholderInfo = it },
+                        onFormatChange = viewModel::saveFormat,
+                        onExecuteRename = viewModel::executeRename,
+                        errorMessage = uiState.errorMessage?.asString(context)
+                    )
 
-            uiState.errorMessage?.let {
-                item {
-                    Card(
-                        modifier = Modifier
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                            .fillMaxWidth()
-                    ) {
-                        it.asString(context)?.let { text ->
-                            Text(
-                                text = text, fontSize = MiuixTheme.textStyles.footnote1.fontSize,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                modifier = Modifier.padding(12.dp)
-                            )
-                        }
-                    }
+                    BatchRenameTab.Preview -> BatchRenamePreviewTab(
+                        bottomPadding = scaffoldBottomPadding(paddingValues),
+                        topAppBarNestedScrollConnection = topAppBarScrollBehavior.nestedScrollConnection,
+                        uiState = uiState
+                    )
                 }
             }
         }
@@ -363,42 +293,239 @@ fun BatchRenameScreen(
 }
 
 @Composable
-private fun PreviewItem(preview: RenamePreview) {
-    Column(
+private fun BatchRenameConfigTab(
+    bottomPadding: androidx.compose.ui.unit.Dp,
+    topAppBarNestedScrollConnection: NestedScrollConnection,
+    renameFormat: String,
+    uiState: com.lonx.lyrico.viewmodel.BatchRenameUiState,
+    showDropdowns: Boolean,
+    onDropdownVisibleChange: (Boolean) -> Unit,
+    showPlaceholderInfo: Boolean,
+    onShowPlaceholderInfoChange: (Boolean) -> Unit,
+    onFormatChange: (String) -> Unit,
+    onExecuteRename: () -> Unit,
+    errorMessage: String?
+) {
+    LazyColumn(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .scrollEndHaptic()
+            .overScrollVertical()
+            .nestedScroll(topAppBarNestedScrollConnection)
+            .fillMaxHeight(),
+        contentPadding = PaddingValues(bottom = bottomPadding + 12.dp),
+        overscrollEffect = null,
     ) {
-        Text(
-            text = stringResource(
-                R.string.label_old_name,
-                preview.originalPath.substringAfterLast('/')
-            ),
-            style = MiuixTheme.textStyles.body1,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        item {
+            SmallTitle(text = stringResource(id = R.string.rename_format))
+            Card(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                TextField(
+                    modifier = Modifier.padding(12.dp),
+                    value = renameFormat,
+                    onValueChange = onFormatChange,
+                    trailingIcon = {
+                        Box {
+                            IconButton(
+                                modifier = Modifier.padding(end = 12.dp),
+                                onClick = { onDropdownVisibleChange(true) }) {
+                                Icon(
+                                    imageVector = MiuixIcons.Notes,
+                                    contentDescription = null
+                                )
+                            }
+                            OverlayListPopup(
+                                show = showDropdowns,
+                                popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
+                                onDismissRequest = { onDropdownVisibleChange(false) },
+                                alignment = PopupPositionProvider.Align.TopEnd
+                            ) {
+                                ListPopupColumn {
+                                    uiState.presetFormats.forEach { format ->
+                                        DropdownImpl(
+                                            text = format,
+                                            isSelected = renameFormat == format,
+                                            optionSize = uiState.presetFormats.size,
+                                            index = uiState.presetFormats.indexOf(format),
+                                            onSelectedIndexChange = {
+                                                onFormatChange(format)
+                                                onDropdownVisibleChange(false)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
+                Text(
+                    modifier = Modifier.padding(12.dp),
+                    text = stringResource(id = R.string.format_hint),
+                    fontSize = MiuixTheme.textStyles.footnote1.fontSize,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantActions
+                )
+                SwitchPreference(
+                    title = stringResource(id = R.string.format_preset_show_placeholders),
+                    checked = showPlaceholderInfo,
+                    onCheckedChange = onShowPlaceholderInfoChange
+                )
+                AnimatedVisibility(visible = showPlaceholderInfo) {
+                    PlaceholderInfoContent()
+                }
 
-        Text(
-            text = stringResource(
-                R.string.label_new_name,
-                preview.newPath.substringAfterLast('/')
-            ),
-            style = MiuixTheme.textStyles.body1.copy(if (preview.conflict) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+                TextButton(
+                    modifier = Modifier
+                        .padding(12.dp)
+                        .fillMaxWidth(),
+                    onClick = onExecuteRename,
+                    text = stringResource(id = R.string.action_rename),
+                    enabled = uiState.previews.isNotEmpty() && !uiState.isRenamingInProgress,
+                    colors = ButtonDefaults.textButtonColorsPrimary()
+                )
+            }
+        }
 
-        if (preview.conflict) {
-            Text(
-                text = stringResource(R.string.rename_conflict_warning),
-                fontSize = 11.sp,
-                color = MiuixTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 2.dp)
-            )
+        errorMessage?.let { text ->
+            item {
+                Card(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .fillMaxWidth()
+                ) {
+                    Text(
+                        text = text,
+                        fontSize = MiuixTheme.textStyles.footnote1.fontSize,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
         }
     }
 }
+
+@Composable
+private fun BatchRenamePreviewTab(
+    bottomPadding: androidx.compose.ui.unit.Dp,
+    topAppBarNestedScrollConnection: NestedScrollConnection,
+    uiState: com.lonx.lyrico.viewmodel.BatchRenameUiState
+) {
+    var expandedPreviewKey by remember { mutableStateOf<String?>(null) }
+
+    LazyColumn(
+        modifier = Modifier
+            .scrollEndHaptic()
+            .overScrollVertical()
+            .nestedScroll(topAppBarNestedScrollConnection)
+            .fillMaxHeight(),
+        contentPadding = PaddingValues(bottom = bottomPadding + 12.dp),
+        overscrollEffect = null,
+    ) {
+        item {
+            SmallTitle(
+                text = stringResource(
+                    if (uiState.isGeneratingPreview)
+                        R.string.preview_title_generating
+                    else
+                        R.string.preview_title,
+                    uiState.previews.size
+                )
+            )
+        }
+
+        if (uiState.previews.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.preview_empty_tip),
+                        fontSize = MiuixTheme.textStyles.footnote1.fontSize,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+        } else {
+            itemsIndexed(
+                items = uiState.previews,
+                key = { _, preview -> preview.key }
+            ) { _, preview ->
+                val previewKey = preview.key
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 3.dp)
+                        .animateContentSize()
+                ) {
+                    BasicComponent(
+                        onClick = {
+                            expandedPreviewKey = if (expandedPreviewKey == previewKey) null else previewKey
+                        }
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.label_old_name,
+                                preview.originalPath.substringAfterLast('/')
+                            ),
+                            style = MiuixTheme.textStyles.body1,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.label_new_name,
+                                preview.newPath.substringAfterLast('/')
+                            ),
+                            style = MiuixTheme.textStyles.body1.copy(if (preview.conflict) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        if (preview.conflict) {
+                            Text(
+                                text = stringResource(R.string.rename_conflict_warning),
+                                fontSize = 11.sp,
+                                color = MiuixTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                        AnimatedVisibility(visible = expandedPreviewKey == previewKey) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.label_old_path, preview.originalPath),
+                                    style = MiuixTheme.textStyles.footnote1,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantActions
+                                )
+                                Text(
+                                    text = stringResource(R.string.label_new_path, preview.newPath),
+                                    style = MiuixTheme.textStyles.footnote1,
+                                    color = if (preview.conflict) {
+                                        MiuixTheme.colorScheme.error
+                                    } else {
+                                        MiuixTheme.colorScheme.onSurfaceVariantActions
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+private val RenamePreview.key: String
+    get() = "$originalPath\n$newPath"
 
 @Composable
 private fun PlaceholderInfoContent() {

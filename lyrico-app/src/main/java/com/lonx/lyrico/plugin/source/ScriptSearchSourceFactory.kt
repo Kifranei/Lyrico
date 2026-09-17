@@ -1,32 +1,50 @@
 package com.lonx.lyrico.plugin.source
 
 import com.lonx.lyrico.data.model.entity.SourcePluginEntity
+import com.lonx.lyrico.data.model.entity.displayName
 import com.lonx.lyrico.data.model.plugin.PluginManifest
+import com.lonx.lyrico.data.repository.AppLogRepository
 import com.lonx.lyrico.plugin.runtime.PluginJsRuntime
 import com.lonx.lyrico.plugin.runtime.QuickJsRuntime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import com.lonx.lyrico.plugin.i18n.PluginStrings
+import com.lonx.lyrico.plugin.i18n.PluginLocales
 
 class ScriptSearchSourceFactory(
     private val json: Json,
-    private val runtimeFactory: () -> PluginJsRuntime = { QuickJsRuntime() }
+    private val appLogRepository: AppLogRepository? = null,
+    private val runtimeFactory: (SourcePluginEntity, PluginStrings) -> PluginJsRuntime = { _, strings ->
+        QuickJsRuntime(hostApi = com.lonx.lyrico.plugin.runtime.QuickJsHostApi(pluginStrings = strings))
+    }
 ) {
     suspend fun create(plugin: SourcePluginEntity): ScriptSearchSource =
         withContext(Dispatchers.IO) {
             val pluginDir = File(plugin.pluginDir)
             val manifestFile = File(pluginDir, MANIFEST_FILE)
             val manifest = json.decodeFromString<PluginManifest>(manifestFile.readText())
+            val strings = PluginStrings.load(pluginDir, manifest)
             val entryFile = File(pluginDir, plugin.entryFile.ifBlank { manifest.entry })
             val script = buildScript(pluginDir, entryFile, manifest)
 
             ScriptSearchSource(
                 manifest = manifest,
                 script = script,
+                displayName = plugin.displayName,
+                localizedManifest = { strings.snapshot(PluginLocales.preferences.value).localize(manifest) },
+                customName = plugin.customName,
+                iconPath = plugin.iconPath,
+                metadataEnabled = plugin.metadataEnabled,
+                lyricsEnabled = plugin.lyricsEnabled,
+                coverEnabled = plugin.coverEnabled,
+                metadataSortOrder = plugin.metadataSortOrder,
+                lyricsSortOrder = plugin.lyricsSortOrder,
+                coverSortOrder = plugin.coverSortOrder,
+                appLogRepository = appLogRepository,
                 json = json,
-                runtimeFactory = runtimeFactory
+                runtimeFactory = { runtimeFactory(plugin, strings) }
             )
         }
 

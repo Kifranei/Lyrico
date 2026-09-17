@@ -2,18 +2,13 @@ package com.lonx.lyrico.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lonx.lyrico.data.model.MetadataFieldWriteRule
-import com.lonx.lyrico.data.model.MetadataFieldWriteRuleFactory
-import com.lonx.lyrico.data.model.MetadataWriteMode
-import com.lonx.lyrico.data.model.lyrics.SearchSourceCapability
 import com.lonx.lyrico.data.model.plugin.PluginConfigField
-import com.lonx.lyrico.data.model.plugin.PluginLyricsConfig
-import com.lonx.lyrico.data.model.plugin.PluginMetadataField
-import com.lonx.lyrico.data.repository.PluginLyricsConfigRepository
+import com.lonx.lyrico.data.model.plugin.PluginConfigFieldType
+import com.lonx.lyrico.data.model.plugin.PluginSourceType
+import com.lonx.lyrico.data.model.plugin.displaySourceTypes
 import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.plugin.source.SearchSourceProvider
 import com.lonx.lyrico.utils.isSatisfied
-import com.lonx.lyrico.data.model.lyrics.SearchSource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,12 +18,12 @@ import kotlinx.coroutines.launch
 data class SearchSourceConfigUiState(
     val pluginId: String = "",
     val title: String = "",
-    val capabilities: Set<SearchSourceCapability> = emptySet(),
+    val apiVersion: Int = 1,
+    val minHostApiVersion: Int = 1,
+    val sourceTypes: Set<PluginSourceType> = emptySet(),
     val configFields: List<PluginConfigField> = emptyList(),
-    val metadataFields: List<PluginMetadataField> = emptyList(),
     val values: Map<String, String> = emptyMap(),
-    val metadataRules: List<MetadataFieldWriteRule> = emptyList(),
-    val lyricsConfig: PluginLyricsConfig? = null,
+    val pluginEnabled: Boolean = true,
     val validationErrors: Map<String, String> = emptyMap(),
     val isLoading: Boolean = true,
     val saved: Boolean = false,
@@ -37,49 +32,36 @@ data class SearchSourceConfigUiState(
 
 class SearchSourceConfigViewModel(
     private val settingsRepository: SettingsRepository,
-    private val pluginLyricsConfigRepository: PluginLyricsConfigRepository,
     private val searchSourceProvider: SearchSourceProvider
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SearchSourceConfigUiState())
     val uiState: StateFlow<SearchSourceConfigUiState> = _uiState.asStateFlow()
 
-    private var allMetadataRules: List<MetadataFieldWriteRule> = emptyList()
-
     fun load(pluginId: String) {
         viewModelScope.launch {
-            val allSources = searchSourceProvider.getAllSources()
-            val sourceImpl = findSource(pluginId, allSources)
-            if (sourceImpl == null) {
+            val sourceWithState = searchSourceProvider.getSourceWithState(pluginId)
+            if (sourceWithState == null) {
                 _uiState.update {
                     it.copy(isLoading = false, errorMessage = "无效的搜索源")
                 }
                 return@launch
             }
+            val sourceImpl = sourceWithState.source
             val fields = sourceImpl.configFields
-            val defaults = fields.associate { it.key to it.defaultValue }
+            val valueFields = fields.filter { it.type != PluginConfigFieldType.MARKDOWN }
+            val defaults = valueFields.associate { it.key to it.defaultValue }
             val saved = settingsRepository.getSourceSettings(sourceImpl.id).values
-            val lyricsConfig = if (SearchSourceCapability.GET_LYRICS in sourceImpl.capabilities) {
-                pluginLyricsConfigRepository.getConfig(sourceImpl.id)
-            } else {
-                null
-            }
-            allMetadataRules = MetadataFieldWriteRuleFactory.mergeWithDeclaredFields(
-                savedRules = settingsRepository.getMetadataFieldWriteRules(),
-                searchSources = allSources
-            )
 
             _uiState.update {
                 it.copy(
                     pluginId = sourceImpl.id,
                     title = sourceImpl.name,
-                    capabilities = sourceImpl.capabilities,
+                    apiVersion = sourceImpl.apiVersion,
+                    minHostApiVersion = sourceImpl.minHostApiVersion,
+                    sourceTypes = sourceImpl.capabilities.displaySourceTypes(),
                     configFields = fields,
-                    metadataFields = sourceImpl.metadataFields.filter { field ->
-                        field.writeable && !field.internal
-                    },
-                    values = defaults + saved,
-                    metadataRules = allMetadataRules.filter { rule -> rule.pluginId == sourceImpl.id },
-                    lyricsConfig = lyricsConfig,
+                    values = if (it.pluginId == sourceImpl.id && !it.isLoading) it.values else defaults + saved,
+                    pluginEnabled = sourceWithState.enabled,
                     validationErrors = emptyMap(),
                     isLoading = false,
                     saved = false,
@@ -99,61 +81,6 @@ class SearchSourceConfigViewModel(
         }
     }
 
-    fun updateMetadataRule(rule: MetadataFieldWriteRule) {
-        _uiState.update {
-            it.copy(
-                metadataRules = it.metadataRules.map { old ->
-                    if (old.pluginId == rule.pluginId && old.normalizedKey == rule.normalizedKey) rule else old
-                },
-                saved = false
-            )
-        }
-    }
-
-    fun updateMetadataRuleTarget(rule: MetadataFieldWriteRule, target: com.lonx.lyrico.data.model.MetadataFieldTarget) {
-        updateMetadataRule(rule.copy(target = target))
-    }
-
-    fun updateMetadataRuleMode(rule: MetadataFieldWriteRule, mode: com.lonx.lyrico.data.model.MetadataWriteMode) {
-        updateMetadataRule(rule.copy(mode = mode))
-    }
-
-    fun updateMetadataRuleCustomTagKey(rule: MetadataFieldWriteRule, customTagKey: String) {
-        updateMetadataRule(rule.copy(customTagKey = customTagKey.takeIf { it.isNotBlank() }))
-    }
-
-    fun updateAllMetadataRules(mode: MetadataWriteMode) {
-        val state = _uiState.value
-        val pluginId = state.pluginId
-        val writableKeys = state.metadataFields
-            .filter { it.writeable && !it.internal }
-            .mapTo(mutableSetOf()) { it.key }
-
-        _uiState.update {
-            it.copy(
-                metadataRules = it.metadataRules.map { rule ->
-                    if (rule.pluginId == pluginId && rule.normalizedKey in writableKeys) {
-                        rule.copy(fieldKey = rule.normalizedKey, mode = mode)
-                    } else {
-                        rule
-                    }
-                },
-                saved = false
-            )
-        }
-    }
-
-    fun updateLyricsConfig(config: PluginLyricsConfig) {
-        _uiState.update {
-            it.copy(
-                lyricsConfig = config.copy(
-                    pluginId = config.pluginId.ifBlank { it.pluginId }
-                ),
-                saved = false
-            )
-        }
-    }
-
     fun consumeSaved() {
         _uiState.update { it.copy(saved = false) }
     }
@@ -161,7 +88,12 @@ class SearchSourceConfigViewModel(
     fun save(requiredMessage: String = "必填") {
         val state = _uiState.value
         val pluginId = state.pluginId.takeIf { it.isNotBlank() } ?: return
-        val visibleFields = state.configFields.filter { it.dependency.isSatisfied(state.values) }
+        val valueFieldKeys = state.configFields
+            .filter { it.type != PluginConfigFieldType.MARKDOWN }
+            .mapTo(mutableSetOf()) { it.key }
+        val visibleFields = state.configFields.filter {
+            it.type != PluginConfigFieldType.MARKDOWN && it.dependency.isSatisfied(state.values)
+        }
         val errors = visibleFields
             .filter { it.required && state.values[it.key].isNullOrBlank() }
             .associate { it.key to requiredMessage }
@@ -171,24 +103,11 @@ class SearchSourceConfigViewModel(
         }
 
         viewModelScope.launch {
-            settingsRepository.saveSourceSettings(pluginId, state.values)
-            val updatedRules = allMetadataRules.map { old ->
-                state.metadataRules.firstOrNull {
-                    it.pluginId == old.pluginId && it.normalizedKey == old.normalizedKey
-                } ?: old
-            }
-            settingsRepository.saveMetadataFieldWriteRules(updatedRules)
-            state.lyricsConfig?.let { config ->
-                pluginLyricsConfigRepository.updateConfig(
-                    config.copy(pluginId = config.pluginId.ifBlank { pluginId })
-                )
-            }
-            allMetadataRules = settingsRepository.getMetadataFieldWriteRules()
+            settingsRepository.saveSourceSettings(
+                pluginId,
+                state.values.filterKeys { it in valueFieldKeys }
+            )
             _uiState.update { it.copy(saved = true, validationErrors = emptyMap()) }
         }
-    }
-
-    private fun findSource(pluginId: String, sources: List<SearchSource>): SearchSource? {
-        return sources.firstOrNull { searchSource -> searchSource.id == pluginId }
     }
 }

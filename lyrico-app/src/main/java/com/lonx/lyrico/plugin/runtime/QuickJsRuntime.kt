@@ -7,7 +7,7 @@ class QuickJsRuntime(
     memoryLimitBytes: Long = DEFAULT_MEMORY_LIMIT_BYTES,
     stackSizeBytes: Long = DEFAULT_STACK_SIZE_BYTES,
     timeoutMs: Long = DEFAULT_TIMEOUT_MS,
-    hostApi: QuickJsHostApi? = QuickJsHostApi()
+    private val hostApi: QuickJsHostApi? = QuickJsHostApi()
 ) : PluginJsRuntime {
     private var runtimePtr: Long = QuickJsNative.createRuntime(
         memoryLimitBytes = memoryLimitBytes,
@@ -23,12 +23,14 @@ class QuickJsRuntime(
     fun eval(script: String): String = eval(script, "<eval>")
 
     override fun eval(script: String, filename: String): String {
+        hostApi?.beginInvocation()
         val ptr = runtimePtr
         check(ptr != 0L) { "QuickJS runtime is closed" }
         return QuickJsNative.eval(ptr, script, filename)
     }
 
     override fun call(functionName: String, requestJson: String): String {
+        hostApi?.beginInvocation()
         val ptr = runtimePtr
         check(ptr != 0L) { "QuickJS runtime is closed" }
         return QuickJsNative.call(ptr, functionName, requestJson)
@@ -95,8 +97,37 @@ class QuickJsRuntime(
               };
 
               globalThis.Platform = {
+                i18n: {
+                  getLocale: function() { return hostCall("i18n.getLocale", {}); },
+                  t: function(key) {
+                    return hostCall("i18n.t", { key: String(key), args: Array.prototype.slice.call(arguments, 1) });
+                  }
+                },
                 app: globalThis.app,
                 runtime: globalThis.runtime,
+
+                cache: {
+                  get: function(key) {
+                    return hostCall("cache.get", {
+                      key: String(key || "")
+                    });
+                  },
+                  set: function(key, value, ttlMs) {
+                    return hostCall("cache.set", {
+                      key: String(key || ""),
+                      value: value == null ? "" : String(value),
+                      ttlMs: Number(ttlMs || 0)
+                    });
+                  },
+                  remove: function(key) {
+                    return hostCall("cache.remove", {
+                      key: String(key || "")
+                    });
+                  },
+                  clear: function() {
+                    return hostCall("cache.clear", {});
+                  }
+                },
 
                 crypto: {
                   md5: function(text) {
@@ -149,6 +180,36 @@ class QuickJsRuntime(
                   encodeBytes: function(bytes) {
                     return hostCall("base64.encodeBytes", {
                       bytes: Array.from(bytes || [])
+                    });
+                  },
+                  encodeUrlText: function(text) {
+                    return hostCall("base64.encodeUrlText", {
+                      text: String(text || "")
+                    });
+                  },
+                  decodeUrlText: function(base64Url) {
+                    return hostCall("base64.decodeUrlText", {
+                      base64Url: String(base64Url || "")
+                    });
+                  },
+                  encodeUrlBytes: function(bytes) {
+                    return hostCall("base64.encodeUrlBytes", {
+                      bytes: Array.from(bytes || [])
+                    });
+                  },
+                  decodeUrlBytes: function(base64Url) {
+                    return hostCall("base64.decodeUrlBytes", {
+                      base64Url: String(base64Url || "")
+                    });
+                  },
+                  toUrl: function(base64) {
+                    return hostCall("base64.toUrl", {
+                      base64: String(base64 || "")
+                    });
+                  },
+                  fromUrl: function(base64Url) {
+                    return hostCall("base64.fromUrl", {
+                      base64Url: String(base64Url || "")
                     });
                   }
                 },
@@ -287,7 +348,36 @@ class QuickJsRuntime(
                     return hostCall("http.postBytesResponse", payload);
                   }
                 },
+                
+                xml: {
+                  getRootAttributes: function(xml) {
+                    return hostCall("xml.getRootAttributes", {
+                      xml: String(xml || "")
+                    });
+                  },
 
+                  findElements: function(xml, query) {
+                    return hostCall("xml.findElements", {
+                      xml: String(xml || ""),
+                      query: query || {}
+                    });
+                  },
+
+                  replaceChildrenByAttr: function(xml, options) {
+                    return hostCall("xml.replaceChildrenByAttr", {
+                      xml: String(xml || ""),
+                      options: options || {}
+                    });
+                  },
+
+                  removeElements: function(xml, query) {
+                    return hostCall("xml.removeElements", {
+                      xml: String(xml || ""),
+                      query: query || {}
+                    });
+                  }
+                },
+                
                 log: {
                   debug: function(tag, message) {
                     if (message === undefined) {

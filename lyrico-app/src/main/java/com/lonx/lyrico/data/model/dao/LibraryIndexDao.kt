@@ -11,28 +11,12 @@ import com.lonx.lyrico.data.model.entity.ArtistSongCrossRef
 import com.lonx.lyrico.data.model.entity.SongEntity
 import kotlinx.coroutines.flow.Flow
 
-data class ArtistListItem(
-    val id: Long,
-    val name: String,
-    val songCount: Int,
-    val albumCount: Int,
-    val coverSongUri: String?,
-    val coverSongLastModified: Long,
-    val groupKey: String,
-    val sortKey: String
+data class ArtistCoverCandidateRow(
+    val artistId: Long,
+    val uri: String,
+    val lastModified: Long
 )
-data class AlbumListItem(
-    val id: Long,
-    val name: String,
-    val albumArtist: String?,
-    val normalizedKey: String,
-    val groupKey: String,
-    val sortKey: String,
-    val songCount: Int,
-    val coverSongUri: String?,
-    val coverSongLastModified: Long,
-    val year: String?
-)
+
 @Dao
 interface LibraryIndexDao {
     @Query("DELETE FROM artist_song WHERE songId = :songId")
@@ -165,7 +149,21 @@ interface LibraryIndexDao {
                     CAST(NULLIF(s.trackerNumber, '') AS INTEGER) ASC,
                     s.titleSortKey ASC, s.fileName ASC
                 LIMIT 1
-            ), 0)
+            ), 0),
+            year = (
+                SELECT TRIM(s.date)
+                FROM album_song AS als
+                INNER JOIN songs AS s ON s.id = als.songId
+                INNER JOIN folders AS f ON f.id = s.folderId
+                WHERE als.albumId = albums.id
+                  AND f.isIgnored = 0
+                  AND TRIM(COALESCE(s.date, '')) != ''
+                ORDER BY COALESCE(s.discNumber, 0) ASC,
+                    CAST(NULLIF(s.trackerNumber, '') AS INTEGER) ASC,
+                    s.titleSortKey ASC,
+                    s.fileName ASC
+                LIMIT 1
+            )
     """)
     suspend fun refreshAlbumCovers()
 
@@ -176,20 +174,36 @@ interface LibraryIndexDao {
     suspend fun deleteOrphanAlbums()
 
     @Query("""
-        SELECT id, name, songCount, albumCount, coverSongUri, coverSongLastModified, groupKey, sortKey
+        SELECT *
         FROM artists
         WHERE songCount > 0
         ORDER BY sortKey ASC, name ASC
     """)
-    fun observeArtists(): Flow<List<ArtistListItem>>
+    fun observeArtists(): Flow<List<ArtistEntity>>
 
     @Query("""
-        SELECT id, name, songCount, albumCount, coverSongUri, coverSongLastModified, groupKey, sortKey
+        SELECT *
         FROM artists
         WHERE id = :artistId
         LIMIT 1
     """)
-    fun observeArtistById(artistId: Long): Flow<ArtistListItem?>
+    fun observeArtistById(artistId: Long): Flow<ArtistEntity?>
+
+    @Query("""
+        SELECT
+            ars.artistId AS artistId,
+            s.uri AS uri,
+            s.fileLastModified AS lastModified
+        FROM artist_song AS ars
+        INNER JOIN songs AS s ON s.id = ars.songId
+        INNER JOIN folders AS f ON f.id = s.folderId
+        WHERE f.isIgnored = 0
+        ORDER BY ars.artistId ASC,
+            s.album ASC, COALESCE(s.discNumber, 0) ASC,
+            CAST(NULLIF(s.trackerNumber, '') AS INTEGER) ASC,
+            s.titleSortKey ASC, s.fileName ASC
+    """)
+    fun observeArtistCoverCandidates(): Flow<List<ArtistCoverCandidateRow>>
 
     @Query("""
         SELECT s.*
@@ -229,7 +243,7 @@ interface LibraryIndexDao {
             a.coverSongUri,
             a.coverSongLastModified,
             (
-                SELECT SUBSTR(TRIM(s.date), 1, 4)
+                SELECT TRIM(s.date)
                 FROM album_song AS als
                 INNER JOIN songs AS s ON s.id = als.songId
                 INNER JOIN folders AS f ON f.id = s.folderId
@@ -241,12 +255,13 @@ interface LibraryIndexDao {
                     s.titleSortKey ASC,
                     s.fileName ASC
                 LIMIT 1
-            ) AS year
+            ) AS year,
+            a.updatedAt
         FROM albums AS a
         WHERE a.songCount > 0
         ORDER BY a.sortKey ASC, a.name ASC
     """)
-    fun observeAlbums(): Flow<List<AlbumListItem>>
+    fun observeAlbums(): Flow<List<AlbumEntity>>
 
     @Query("SELECT * FROM albums WHERE id = :albumId LIMIT 1")
     fun observeAlbumById(albumId: Long): Flow<AlbumEntity?>
@@ -265,14 +280,27 @@ interface LibraryIndexDao {
     fun observeSongsByAlbumId(albumId: Long): Flow<List<SongEntity>>
 
     @Query("""
-        SELECT id, name, songCount, albumCount, coverSongUri, coverSongLastModified, groupKey, sortKey
+        SELECT s.*
+        FROM songs AS s
+        INNER JOIN album_song AS als ON s.id = als.songId
+        INNER JOIN folders AS f ON s.folderId = f.id
+        WHERE als.albumId = :albumId
+          AND f.isIgnored = 0
+        ORDER BY COALESCE(s.discNumber, 0) ASC,
+            CAST(NULLIF(s.trackerNumber, '') AS INTEGER) ASC,
+            s.titleSortKey ASC, s.fileName ASC
+    """)
+    suspend fun getSongsByAlbumId(albumId: Long): List<SongEntity>
+
+    @Query("""
+        SELECT id, name, normalizedName, groupKey, sortKey, songCount, albumCount, coverSongUri, coverSongLastModified, updatedAt
         FROM artists
         WHERE name LIKE '%' || :query || '%'
           AND songCount > 0
         ORDER BY CASE WHEN name LIKE :query || '%' THEN 0 ELSE 1 END,
             sortKey ASC, name ASC
     """)
-    fun searchArtists(query: String): Flow<List<ArtistListItem>>
+    fun searchArtists(query: String): Flow<List<ArtistEntity>>
 
     @Query("""
         SELECT *

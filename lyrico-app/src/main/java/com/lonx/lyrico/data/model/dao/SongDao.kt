@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
+import androidx.room.SkipQueryVerification
 import androidx.room.Update
 import androidx.room.Upsert
 import androidx.sqlite.db.SupportSQLiteQuery
@@ -18,14 +19,122 @@ data class SongSyncInfo(
     val filePath: String,
     val fileLastModified: Long,
     val fileSize: Long,
+    val durationMilliseconds: Int,
     val folderId: Long,
     val source: String
+)
+
+data class LibraryIndexSong(
+    val id: Long,
+    val artist: String?,
+    val albumArtist: String?,
+    val album: String?
 )
 
 data class SongFieldValue(
     val sourceUri: String,
     val value: String
 )
+
+data class SongLyricsForFts(
+    val id: Long,
+    val uri: String,
+    val lyrics: String?,
+    val lyricSearchText: String?
+)
+
+data class LocalLyricSearchRow(
+    val matchedLine: String,
+    val id: Long,
+    val folderId: Long,
+    val mediaId: Long,
+    val source: String,
+    val filePath: String,
+    val fileName: String,
+    val fileSize: Long,
+    val fileExtension: String?,
+    val title: String?,
+    val artist: String?,
+    val albumArtist: String?,
+    val discNumber: Int?,
+    val composer: String?,
+    val lyricist: String?,
+    val comment: String?,
+    val album: String?,
+    val genre: String?,
+    val language: String?,
+    val trackerNumber: String?,
+    val date: String?,
+    val copyright: String?,
+    val rating: Int?,
+    val replayGainTrackGain: String?,
+    val replayGainTrackPeak: String?,
+    val replayGainAlbumGain: String?,
+    val replayGainAlbumPeak: String?,
+    val replayGainReferenceLoudness: String?,
+    val durationMilliseconds: Int,
+    val bitrate: Int,
+    val sampleRate: Int,
+    val channels: Int,
+    val fileLastModified: Long,
+    val fileAdded: Long,
+    val dbUpdateTime: Long,
+    val titleGroupKey: String,
+    val titleSortKey: String,
+    val artistGroupKey: String,
+    val artistSortKey: String,
+    val albumGroupKey: String,
+    val albumSortKey: String,
+    val uri: String
+) {
+    fun toSongEntity(): SongEntity {
+        return SongEntity(
+            id = id,
+            folderId = folderId,
+            mediaId = mediaId,
+            source = source,
+            filePath = filePath,
+            fileName = fileName,
+            fileSize = fileSize,
+            fileExtension = fileExtension,
+            title = title,
+            artist = artist,
+            albumArtist = albumArtist,
+            discNumber = discNumber,
+            composer = composer,
+            lyricist = lyricist,
+            comment = comment,
+            album = album,
+            genre = genre,
+            language = language,
+            trackerNumber = trackerNumber,
+            date = date,
+            lyrics = null,
+            lyricSearchText = null,
+            copyright = copyright,
+            rating = rating,
+            replayGainTrackGain = replayGainTrackGain,
+            replayGainTrackPeak = replayGainTrackPeak,
+            replayGainAlbumGain = replayGainAlbumGain,
+            replayGainAlbumPeak = replayGainAlbumPeak,
+            replayGainReferenceLoudness = replayGainReferenceLoudness,
+            durationMilliseconds = durationMilliseconds,
+            bitrate = bitrate,
+            sampleRate = sampleRate,
+            channels = channels,
+            fileLastModified = fileLastModified,
+            fileAdded = fileAdded,
+            dbUpdateTime = dbUpdateTime,
+            titleGroupKey = titleGroupKey,
+            titleSortKey = titleSortKey,
+            artistGroupKey = artistGroupKey,
+            artistSortKey = artistSortKey,
+            albumGroupKey = albumGroupKey,
+            albumSortKey = albumSortKey,
+            uri = uri
+        )
+    }
+}
 
 data class AlbumSearchRow(
     val album: String,
@@ -66,12 +175,6 @@ interface SongDao {
     suspend fun deleteByUris(uris: List<String>)
 
     /**
-     * 批量删除指定路径的歌曲 (保留作为兼容或清理手段)
-     */
-    @Query("DELETE FROM songs WHERE filePath IN (:paths)")
-    suspend fun deleteByFilePaths(paths: List<String>)
-
-    /**
      * 根据 URI 删除单条 (可选，但在 Repository deleteSong 中很有用)
      */
     @Query("DELETE FROM songs WHERE uri = :uri")
@@ -91,18 +194,12 @@ interface SongDao {
     @Query("SELECT * FROM songs WHERE uri IN (:uris)")
     suspend fun getSongsByUris(uris: List<String>): List<SongEntity>
 
-    /**
-     * 根据路径查询 (辅助查询方式)
-     */
-    @Query("SELECT * FROM songs WHERE filePath = :filePath LIMIT 1")
-    suspend fun getSongByPath(filePath: String): SongEntity?
-
     // ================= 查询操作 (同步与元数据) =================
     /**
      * 获取同步所需信息
      * 关键修改：确保 SELECT 的列名与 SongSyncInfo 的字段名匹配
      */
-    @Query("SELECT id, uri, filePath, fileLastModified, fileSize, folderId, source FROM songs")
+    @Query("SELECT id, uri, filePath, fileLastModified, fileSize, durationMilliseconds, folderId, source FROM songs")
     suspend fun getAllSyncInfo(): List<SongSyncInfo>
 
     /**
@@ -177,6 +274,76 @@ interface SongDao {
             s.fileName ASC
     """)
     fun searchSongsForLocalSearch(query: String): Flow<List<SongEntity>>
+
+    @Query("""
+        SELECT * FROM songs
+        WHERE lyrics IS NOT NULL
+          AND TRIM(lyrics) != ''
+          AND (
+              lyricSearchText IS NULL
+              OR lyricSearchText = lyrics
+          )
+    """)
+    suspend fun getSongsNeedingLyricSearchTextIndex(): List<SongEntity>
+
+    @Query("""
+        SELECT id, uri, lyrics, lyricSearchText FROM songs
+        WHERE uri IN (:uris)
+          AND lyrics IS NOT NULL AND TRIM(lyrics) != ''
+          AND lyricSearchText IS NULL
+    """)
+    suspend fun getSongLyricsMissingIndex(uris: List<String>): List<SongLyricsForFts>
+
+    @Query("UPDATE songs SET lyricSearchText = :lyricSearchText WHERE uri = :uri")
+    suspend fun updateLyricSearchText(
+        uri: String,
+        lyricSearchText: String?
+    )
+
+    @SkipQueryVerification
+    @Query("SELECT COUNT(*) FROM song_lyric_lines_fts")
+    suspend fun getLyricFtsRowCount(): Int
+
+    @SkipQueryVerification
+    @Query("DELETE FROM song_lyric_lines_fts")
+    suspend fun clearLyricFts()
+
+    @SkipQueryVerification
+    @Query("DELETE FROM song_lyric_lines_fts WHERE songUri IN (:uris)")
+    suspend fun deleteLyricFtsByUris(uris: List<String>)
+
+    @SkipQueryVerification
+    @Query(
+        """
+        INSERT INTO song_lyric_lines_fts(songUri, lineIndex, lineText, indexedText)
+        VALUES(:songUri, :lineIndex, :lineText, :indexedText)
+        """
+    )
+    suspend fun insertLyricFtsLine(
+        songUri: String,
+        lineIndex: Int,
+        lineText: String,
+        indexedText: String
+    )
+
+    @Query("""
+        SELECT id, uri, lyrics, lyricSearchText
+        FROM songs
+        WHERE id > :lastId
+          AND lyrics IS NOT NULL
+          AND TRIM(lyrics) != ''
+        ORDER BY id ASC
+        LIMIT :limit
+    """)
+    suspend fun getSongLyricsForFtsAfterId(
+        lastId: Long,
+        limit: Int
+    ): List<SongLyricsForFts>
+
+    @RawQuery(observedEntities = [SongEntity::class, FolderEntity::class])
+    fun searchLyricFtsForLocalSearch(
+        query: SupportSQLiteQuery
+    ): Flow<List<LocalLyricSearchRow>>
 
     @Query("""
         SELECT
@@ -319,29 +486,13 @@ interface SongDao {
     """)
     fun observeAlbumsByArtistForSearch(artist: String): Flow<List<AlbumSearchRow>>
 
-    /**
-     * 获取所有歌曲 (默认排序)
-     */
     @Query("""
-        SELECT s.* FROM songs AS s
-        INNER JOIN folders AS f ON s.folderId = f.id
-        WHERE f.isIgnored = 0
+        SELECT id, artist, albumArtist, album
+        FROM songs
+        ORDER BY id ASC
+        LIMIT :limit OFFSET :offset
     """)
-    fun getAllSongs(): Flow<List<SongEntity>>
-
-    @Query("SELECT * FROM songs")
-    suspend fun getAllSongsSnapshot(): List<SongEntity>
-
-    /**
-     * 按文件夹 ID 获取歌曲
-     */
-    @Query("""
-        SELECT s.* FROM songs AS s
-        INNER JOIN folders AS f ON s.folderId = f.id
-        WHERE s.folderId = :folderId AND f.isIgnored = 0
-    """)
-    fun getSongsByFolderId(folderId: Long): Flow<List<SongEntity>>
-
+    suspend fun getLibraryIndexSongs(limit: Int, offset: Int): List<LibraryIndexSong>
 
     /**
      * 使用指定的查询来获取歌曲列表
@@ -364,7 +515,4 @@ interface SongDao {
         ORDER BY CASE WHEN s.artist = :artist THEN 0 ELSE 1 END, s.trackerNumber ASC
     """)
     suspend fun getSongsByAlbum(album: String, artist: String): List<SongEntity>
-
-    @Query("DELETE FROM songs WHERE folderId IN (:folderIds)")
-    suspend fun deleteByFolderIds(folderIds: List<Long>)
 }

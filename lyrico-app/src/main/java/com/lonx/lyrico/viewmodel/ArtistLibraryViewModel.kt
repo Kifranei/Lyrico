@@ -4,13 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.lyrico.data.model.ArtistSortBy
 import com.lonx.lyrico.data.model.ArtistSortInfo
-import com.lonx.lyrico.data.model.dao.ArtistListItem
+import com.lonx.lyrico.data.model.entity.ArtistEntity
 import com.lonx.lyrico.data.repository.LibraryIndexRepository
 import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.utils.LibraryScanManager
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -22,21 +23,19 @@ class ArtistLibraryViewModel(
     val sortInfo: StateFlow<ArtistSortInfo> = settingsRepository.artistSortInfo
         .stateIn(viewModelScope, SharingStarted.Eagerly, ArtistSortInfo())
 
-    val showScrollTopButton = settingsRepository.showScrollTopButton
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val scanState = libraryScanManager.state
-    val artists: StateFlow<List<ArtistListItem>> =
+    val artists: StateFlow<List<ArtistEntity>> =
         combine(libraryIndexRepository.observeArtists(), sortInfo) { artists, sort ->
             val sorted = when (sort.sortBy) {
                 ArtistSortBy.NAME -> artists.sortedWith(
-                    compareBy<ArtistListItem> { it.sortKey }.thenBy { it.name }
+                    compareBy<ArtistEntity> { it.sortKey }.thenBy { it.name }
                 )
                 ArtistSortBy.SONG_COUNT -> artists.sortedWith(
-                    compareByDescending<ArtistListItem> { it.songCount }.thenBy { it.sortKey }.thenBy { it.name }
+                    compareByDescending<ArtistEntity> { it.songCount }.thenBy { it.sortKey }.thenBy { it.name }
                 )
                 ArtistSortBy.ALBUM_COUNT -> artists.sortedWith(
-                    compareByDescending<ArtistListItem> { it.albumCount }.thenBy { it.sortKey }.thenBy { it.name }
+                    compareByDescending<ArtistEntity> { it.albumCount }.thenBy { it.sortKey }.thenBy { it.name }
                 )
             }
             if (sort.order == SortOrder.ASC) sorted else sorted.asReversed()
@@ -46,17 +45,21 @@ class ArtistLibraryViewModel(
             emptyList()
         )
 
+    val artistCoverCandidates = libraryIndexRepository
+        .observeArtistCoverCandidates()
+        .map { candidates -> candidates.groupBy { it.artistId } }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyMap()
+        )
+
     fun onSortChange(sortInfo: ArtistSortInfo) {
         viewModelScope.launch {
             settingsRepository.saveArtistSortInfo(sortInfo)
         }
     }
 
-    fun setScrollToTopButtonEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.saveShowScrollTopButton(enabled)
-        }
-    }
 
     fun refreshSongs() {
         libraryScanManager.scanAll {

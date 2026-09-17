@@ -7,14 +7,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.lyrico.BuildConfig
 import com.lonx.lyrico.R
-import com.lonx.lyrico.data.model.AppLogType
+import com.lonx.lyrico.data.model.log.AppLogType
 import com.lonx.lyrico.data.model.entity.AppLogEntity
 import com.lonx.lyrico.data.repository.AppLogRepository
 import com.lonx.lyrico.utils.UiMessage
 import com.hjq.device.compat.DeviceMarketName
 import com.hjq.device.compat.DeviceOs
 import com.hjq.device.compat.SystemPropertyCompat
-import com.lonx.lyrico.data.model.LogRetentionOption
+import com.lonx.lyrico.data.model.log.LogRetentionOption
 import com.lonx.lyrico.data.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow

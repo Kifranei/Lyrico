@@ -4,8 +4,7 @@ import androidx.room.withTransaction
 import com.lonx.lyrico.data.LyricoDatabase
 import com.lonx.lyrico.data.model.artist.ArtistSplitConfig
 import com.lonx.lyrico.data.model.artist.normalizedArtistKey
-import com.lonx.lyrico.data.model.dao.AlbumListItem
-import com.lonx.lyrico.data.model.dao.ArtistListItem
+import com.lonx.lyrico.data.model.dao.LibraryIndexSong
 import com.lonx.lyrico.data.model.dao.LibraryIndexDao
 import com.lonx.lyrico.data.model.dao.SongDao
 import com.lonx.lyrico.data.model.entity.AlbumEntity
@@ -26,13 +25,15 @@ class LibraryIndexRepositoryImpl(
     private val settingsRepository: SettingsRepository
 ) : LibraryIndexRepository {
 
-    override fun observeArtists(): Flow<List<ArtistListItem>> {
+    override fun observeArtists(): Flow<List<ArtistEntity>> {
         return indexDao.observeArtists()
     }
 
-    override fun observeArtistById(artistId: Long): Flow<ArtistListItem?> {
+    override fun observeArtistById(artistId: Long): Flow<ArtistEntity?> {
         return indexDao.observeArtistById(artistId)
     }
+
+    override fun observeArtistCoverCandidates() = indexDao.observeArtistCoverCandidates()
 
     override fun observeSongsByArtistId(artistId: Long): Flow<List<SongEntity>> {
         return indexDao.observeSongsByArtistId(artistId)
@@ -42,7 +43,7 @@ class LibraryIndexRepositoryImpl(
         return indexDao.observeAlbumsByArtistId(artistId)
     }
 
-    override fun observeAlbums(): Flow<List<AlbumListItem>> {
+    override fun observeAlbums(): Flow<List<AlbumEntity>> {
         return indexDao.observeAlbums()
     }
 
@@ -54,7 +55,11 @@ class LibraryIndexRepositoryImpl(
         return indexDao.observeSongsByAlbumId(albumId)
     }
 
-    override fun searchArtists(query: String): Flow<List<ArtistListItem>> {
+    override suspend fun getSongsByAlbumId(albumId: Long): List<SongEntity> {
+        return indexDao.getSongsByAlbumId(albumId)
+    }
+
+    override fun searchArtists(query: String): Flow<List<ArtistEntity>> {
         return indexDao.searchArtists(query)
     }
 
@@ -64,7 +69,6 @@ class LibraryIndexRepositoryImpl(
 
     override suspend fun rebuildAllIndexes() {
         val artistConfig = settingsRepository.artistSplitConfigFlow.first()
-        val songs = songDao.getAllSongsSnapshot()
 
         database.withTransaction {
             indexDao.clearArtistRefs()
@@ -72,7 +76,7 @@ class LibraryIndexRepositoryImpl(
             indexDao.clearAlbumRefs()
             indexDao.clearAlbums()
 
-            songs.forEach { song ->
+            forEachLibraryIndexSong { song ->
                 indexArtistsForSong(song, artistConfig)
                 indexAlbumForSong(song)
             }
@@ -83,13 +87,12 @@ class LibraryIndexRepositoryImpl(
 
     override suspend fun rebuildArtistIndex() {
         val artistConfig = settingsRepository.artistSplitConfigFlow.first()
-        val songs = songDao.getAllSongsSnapshot()
 
         database.withTransaction {
             indexDao.clearArtistRefs()
             indexDao.clearArtists()
 
-            songs.forEach { song ->
+            forEachLibraryIndexSong { song ->
                 indexArtistsForSong(song, artistConfig)
             }
 
@@ -100,13 +103,11 @@ class LibraryIndexRepositoryImpl(
     }
 
     override suspend fun rebuildAlbumIndex() {
-        val songs = songDao.getAllSongsSnapshot()
-
         database.withTransaction {
             indexDao.clearAlbumRefs()
             indexDao.clearAlbums()
 
-            songs.forEach { song ->
+            forEachLibraryIndexSong { song ->
                 indexAlbumForSong(song)
             }
 
@@ -180,12 +181,30 @@ class LibraryIndexRepositoryImpl(
         indexDao.deleteArtistRefsBySongId(song.id)
         indexDao.deleteAlbumRefsBySongId(song.id)
 
-        indexArtistsForSong(song, artistConfig)
-        indexAlbumForSong(song)
+        val indexSong = LibraryIndexSong(
+            id = song.id,
+            artist = song.artist,
+            albumArtist = song.albumArtist,
+            album = song.album
+        )
+
+        indexArtistsForSong(indexSong, artistConfig)
+        indexAlbumForSong(indexSong)
+    }
+
+    private suspend fun forEachLibraryIndexSong(action: suspend (LibraryIndexSong) -> Unit) {
+        var offset = 0
+        while (true) {
+            val songs = songDao.getLibraryIndexSongs(INDEX_REBUILD_BATCH_SIZE, offset)
+            if (songs.isEmpty()) break
+
+            songs.forEach { song -> action(song) }
+            offset += songs.size
+        }
     }
 
     private suspend fun indexArtistsForSong(
-        song: SongEntity,
+        song: LibraryIndexSong,
         config: ArtistSplitConfig
     ) {
         val artists = ArtistNameSplitter.splitArtists(song.artist, config)
@@ -218,7 +237,7 @@ class LibraryIndexRepositoryImpl(
         }
     }
 
-    private suspend fun indexAlbumForSong(song: SongEntity) {
+    private suspend fun indexAlbumForSong(song: LibraryIndexSong) {
         val albumName = song.album?.trim().orEmpty()
         if (albumName.isBlank()) return
 
@@ -264,5 +283,6 @@ class LibraryIndexRepositoryImpl(
 
     private companion object {
         const val LIBRARY_INDEX_VERSION = 3
+        const val INDEX_REBUILD_BATCH_SIZE = 500
     }
 }

@@ -9,6 +9,7 @@ enum class SortBy(
 ) {
     TITLE(R.string.label_title, true),
     ARTISTS(R.string.label_artists, true),
+    ALBUM(R.string.label_album, true),
     DATE_MODIFIED(R.string.label_date_modified, false),
     DATE_ADDED(R.string.label_date_added, false),
     FILE_SIZE(R.string.label_file_size, false),

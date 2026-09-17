@@ -5,6 +5,7 @@ import android.util.Log
 import com.lonx.audiotag.TagLib
 import com.lonx.audiotag.internal.FdUtils
 import com.lonx.audiotag.model.AudioPicture
+import com.lonx.audiotag.model.AudioPictureType
 import com.lonx.audiotag.model.AudioTagData
 import com.lonx.audiotag.model.AudioTagKeys
 import com.lonx.audiotag.model.CustomTagField
@@ -15,7 +16,11 @@ object AudioTagReader {
 
     private const val TAG = "AudioTagReader"
 
-    suspend fun read(pfd: ParcelFileDescriptor, readPictures: Boolean = true): AudioTagData {
+    suspend fun read(
+        pfd: ParcelFileDescriptor,
+        readPictures: Boolean = true,
+        multiValueSeparator: String = "/"
+    ): AudioTagData {
         return withContext(Dispatchers.IO) {
             try {
                 val nativeFd = FdUtils.getNativeFd(pfd)
@@ -58,7 +63,7 @@ object AudioTagReader {
                     return null
                 }
 
-                fun allJoined(separator: String = ", ", vararg keys: String): String? {
+                fun joinedOf(separator: String, vararg keys: String): String? {
                     for (key in keys) {
                         val arr = props[key]
                         if (!arr.isNullOrEmpty()) {
@@ -76,7 +81,8 @@ object AudioTagReader {
                     return raw.substringBefore('/').toIntOrNull()
                 }
 
-                val lyrics = firstOf(
+                val lyrics = joinedOf(
+                    multiValueSeparator,
                     "LYRICS",
                     "UNSYNCED LYRICS",
                     "USLT",
@@ -87,7 +93,8 @@ object AudioTagReader {
 
 
 
-                val albumArtist = firstOf(
+                val albumArtist = joinedOf(
+                    multiValueSeparator,
                     "ALBUMARTIST",     // FLAC/Vorbis
                     "ALBUM ARTIST",
                     "TPE2",            // ID3v2
@@ -102,32 +109,30 @@ object AudioTagReader {
                     "DISKNUMBER"
                 )
 
-                val composer = firstOf(
+                val composer = joinedOf(
+                    multiValueSeparator,
                     "COMPOSER",
                     "TCOM",           // ID3v2
                     "©wrt"            // MP4
                 )
 
-                val lyricist = firstOf(
+                val lyricist = joinedOf(
+                    multiValueSeparator,
                     "LYRICIST",
                     "TEXT",           // ID3v2 作词
                     "WRITER",
                     "LYRICS BY"
                 )
 
-                val comment = firstOf(
+                val comment = joinedOf(
+                    multiValueSeparator,
                     "COMMENT",
                     "COMM",           // ID3
                     "DESCRIPTION"
                 )
 
-                val style = firstOf(
-                    "STYLE",
-                    "SUBGENRE",
-                    "MOOD"
-                )
-
-                val copyright = firstOf(
+                val copyright = joinedOf(
+                    multiValueSeparator,
                     "COPYRIGHT",
                     "TCOP",
                     "CPRO",
@@ -178,12 +183,13 @@ object AudioTagReader {
                     .toList()
 
                 return@withContext AudioTagData(
-                    title = firstOf("TITLE"),
-                    artist = firstOf("ARTIST"),
-                    album = firstOf("ALBUM"),
-                    genre = allJoined(", ", "GENRE", "TCON") ?: allJoined(", ", "STYLE", "SUBGENRE", "MOOD"),
-                    date = firstOf("DATE", "YEAR"),
-                    language = allJoined(", ", "LANGUAGE", "TLAN"),
+                    title = joinedOf(multiValueSeparator, "TITLE"),
+                    artist = joinedOf(multiValueSeparator, "ARTIST"),
+                    album = joinedOf(multiValueSeparator, "ALBUM"),
+                    genre = joinedOf(multiValueSeparator, "GENRE", "TCON")
+                        ?: joinedOf(multiValueSeparator, "STYLE", "SUBGENRE", "MOOD"),
+                    date = joinedOf(multiValueSeparator, "DATE", "YEAR"),
+                    language = joinedOf(multiValueSeparator, "LANGUAGE", "TLAN"),
                     trackNumber = firstIntOf("TRACKNUMBER", "TRACK", "TRCK")?.toString(),
 
                     albumArtist = albumArtist,
@@ -194,11 +200,14 @@ object AudioTagReader {
                     lyrics = lyrics,
                     copyright = copyright,
                     rating = ratingStar,
-                    replayGainTrackGain = firstOf("REPLAYGAIN_TRACK_GAIN"),
-                    replayGainTrackPeak = firstOf("REPLAYGAIN_TRACK_PEAK"),
-                    replayGainAlbumGain = firstOf("REPLAYGAIN_ALBUM_GAIN"),
-                    replayGainAlbumPeak = firstOf("REPLAYGAIN_ALBUM_PEAK"),
-                    replayGainReferenceLoudness = firstOf("REPLAYGAIN_REFERENCE_LOUDNESS"),
+                    replayGainTrackGain = joinedOf(multiValueSeparator, "REPLAYGAIN_TRACK_GAIN"),
+                    replayGainTrackPeak = joinedOf(multiValueSeparator, "REPLAYGAIN_TRACK_PEAK"),
+                    replayGainAlbumGain = joinedOf(multiValueSeparator, "REPLAYGAIN_ALBUM_GAIN"),
+                    replayGainAlbumPeak = joinedOf(multiValueSeparator, "REPLAYGAIN_ALBUM_PEAK"),
+                    replayGainReferenceLoudness = joinedOf(
+                        multiValueSeparator,
+                        "REPLAYGAIN_REFERENCE_LOUDNESS"
+                    ),
 
                     durationMilliseconds = audioProps?.length ?: 0,
                     bitrate = audioProps?.bitrate ?: 0,
@@ -206,7 +215,8 @@ object AudioTagReader {
                     channels = audioProps?.channels ?: 0,
                     rawProperties = props,
                     customFields = customFields,
-                    pictures = picList
+                    pictures = picList,
+                    supportsTypedPictures = metadata.supportsTypedPictures
                 )
 
             } catch (e: Exception) {
@@ -215,11 +225,21 @@ object AudioTagReader {
             }
         }
     }
-    suspend fun readPicture(pfd: ParcelFileDescriptor): ByteArray {
+    suspend fun readPicture(
+        pfd: ParcelFileDescriptor,
+        pictureType: AudioPictureType = AudioPictureType.FrontCover,
+        fallbackPictureTypes: List<AudioPictureType> = emptyList(),
+        fallbackToAny: Boolean = pictureType == AudioPictureType.FrontCover
+    ): ByteArray {
         return withContext(Dispatchers.IO) {
             try {
                 val metaFd = FdUtils.getNativeFd(pfd)
-                val metadata = TagLib.getFrontCover(metaFd)
+                val metadata = TagLib.getPicture(
+                    fd = metaFd,
+                    pictureType = pictureType,
+                    fallbackPictureTypes = fallbackPictureTypes,
+                    fallbackToAny = fallbackToAny
+                )
                 val pic = metadata?.data
                 return@withContext pic ?: byteArrayOf()
             } catch (e: Exception) {

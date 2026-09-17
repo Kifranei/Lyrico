@@ -1,21 +1,14 @@
 package com.lonx.lyrico.ui.components.base
 
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import com.lonx.lyrico.R
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun YesNoBottomSheet(
@@ -39,21 +32,35 @@ fun YesNoBottomSheet(
         onDismissRequest = onDismissRequest,
         onDismissFinished = onDismissFinished,
         content = content,
-        actions = {
+        startAction =  {
             TextButton(
-                text = cancelText,
-                onClick = onCancel,
-                modifier = Modifier.weight(1f)
-            )
-
-            Spacer(modifier = Modifier.width(20.dp))
-
+                colors = ButtonColors(
+                    containerColor = MiuixTheme.colorScheme.surface,
+                    contentColor = MiuixTheme.colorScheme.onSurface,
+                    disabledContainerColor = MiuixTheme.colorScheme.surface,
+                    disabledContentColor = MiuixTheme.colorScheme.disabledOnSurface
+                ),
+                onClick = {
+                    onCancel()
+                }
+            ){
+                Text(text = cancelText)
+            }
+        },
+        endAction =  {
             TextButton(
-                text = confirmText,
-                onClick = onConfirm,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.textButtonColorsPrimary()
-            )
+                colors = ButtonColors(
+                    containerColor = MiuixTheme.colorScheme.surface,
+                    contentColor = MiuixTheme.colorScheme.primary,
+                    disabledContainerColor = MiuixTheme.colorScheme.surface,
+                    disabledContentColor = MiuixTheme.colorScheme.disabledPrimary
+                ),
+                onClick = {
+                    onConfirm()
+                }
+            ){
+                Text(text = confirmText, color = MiuixTheme.colorScheme.primary)
+            }
         }
     )
 }

@@ -1,8 +1,8 @@
 package com.lonx.lyrico.data.repository
 
-import com.lonx.lyrico.data.model.AppLogLevel
-import com.lonx.lyrico.data.model.AppLogType
-import com.lonx.lyrico.data.model.LogRetentionOption
+import com.lonx.lyrico.data.model.log.AppLogLevel
+import com.lonx.lyrico.data.model.log.AppLogType
+import com.lonx.lyrico.data.model.log.LogRetentionOption
 import com.lonx.lyrico.data.model.dao.AppLogDao
 import com.lonx.lyrico.data.model.entity.AppLogEntity
 import kotlinx.coroutines.flow.first

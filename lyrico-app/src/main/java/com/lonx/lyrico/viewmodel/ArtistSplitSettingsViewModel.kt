@@ -99,6 +99,12 @@ class ArtistSplitSettingsViewModel(
         }
     }
 
+    fun resetCustomNoSplitArtists() {
+        updateConfig { config ->
+            config.copy(customNoSplitArtists = emptyList())
+        }
+    }
+
     fun addCustomSeparator(value: String): Boolean {
         val config = uiState.value.config
         val validationError = validateCustomSeparatorInput(value, config)

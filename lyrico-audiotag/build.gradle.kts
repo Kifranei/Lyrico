@@ -8,7 +8,7 @@ android {
     namespace = "com.lonx.audiotag"
     ndkVersion = "29.0.14206865"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
@@ -16,6 +16,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
         externalNativeBuild {
             cmake {
                 cppFlags += ""

@@ -1,4 +1,8 @@
-# 插件系统概述
+# 架构与生命周期
+
+本文面向维护者和高级插件开发者，说明 Lyrico 如何导入、验证、安装、加载、执行和卸载插件。编写第一个插件不需要先阅读这一页。
+
+当前协议中，manifest 只声明身份、版本、入口、能力和 `configFields`。插件运行结果通过 `fields` 返回标准元数据，通过 `internal` 返回插件私有上下文；字段应用策略由 Lyrico 宿主管理。
 
 ## 系统架构
 
@@ -35,13 +39,13 @@ Lyrico 插件系统是一个基于 **QuickJS 嵌入式 JavaScript 引擎** 的�
 
 | 组件 | 职责 |
 |------|------|
-| `PluginManifest` | 插件声明数据模型，定义插件元数据、能力、配置 |
+| `PluginManifest` | 插件声明数据模型，定义插件基础信息、能力、配置 |
 | `SourcePluginInstaller` | 从 ZIP 文件导入、验证、安装插件到设备 |
 | `ScriptSearchSourceFactory` | 读取 manifest + JS 文件，拼接生成完整脚本 |
 | `PluginSearchSourceManager` | 缓存所有已启动插件的 ScriptSearchSource 实例 |
 | `ScriptSearchSource` | 包装单个插件的搜索源，管理其 JS 运行时生命周期 |
 | `QuickJsRuntime` | QuickJS 引擎封装，执行 JS 脚本并调用其全局函数 |
-| `QuickJsHostApi` | 实现所有宿主 API（HTTP、加密、编码、压缩等） |
+| `QuickJsHostApi` | 实现所有宿主 API（HTTP、加密、编码、压缩、XML 等） |
 | `PluginJsonParser` | 将插件返回的 JSON 解析为应用内部数据模型 |
 
 ## 完整流程
@@ -56,9 +60,8 @@ Lyrico 插件系统是一个基于 **QuickJS 嵌入式 JavaScript 引擎** 的�
 | 验证项 | 规则 |
 |--------|------|
 | ID 格式 | 必须匹配 `^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$`（反向域名） |
-| API 版本 | 必须与宿主 `PLUGIN_API_VERSION`（当前为 **1**）完全一致 |
-| 宿主 API 声明 | `requiredHostApis` 中的所有 API 必须在 `HostApiRegistry` 支持的集合内 |
-| 能力声明 | 若声明了 `capabilities`，必须包含 `searchSongs` |
+| API 版本 | 插件协议 `apiVersion` 必须在支持范围 **1..5** 内；`minHostApiVersion` 不得高于当前宿主 API **4** |
+| 能力声明 | 仅允许已知能力；三项能力可独立声明；缺省或空数组按旧插件的 `searchSongs` 处理 |
 | 入口文件 | 必须存在、`.js` 扩展名、路径不能逃逸插件根目录、≤ 1 MB |
 | 包含目录 | `includeDirs` 中的目录必须存在且在插件根目录内 |
 | 图标 | 若指定，必须存在且扩展名为 `png`/`jpg`/`jpeg`/`webp` |
@@ -97,14 +100,21 @@ Lyrico 插件系统是一个基于 **QuickJS 嵌入式 JavaScript 引擎** 的�
 | `pluginDir` | 插件安装目录的绝对路径 |
 | `entryFile` | 入口文件名 |
 | `includeDirsJson` | 包含目录的 JSON 序列化 |
+| `capabilitiesJson` | 能力组合的 JSON 序列化 |
 | `iconPath` | 图标绝对路径（可选） |
-| `enabled` | 启用状态（首次安装默认 `false`） |
-| `sortOrder` | 排序顺序 |
+| `enabled` | 旧版主搜索启用状态（仅为数据库兼容保留） |
+| `metadataEnabled` | 批量匹配启用状态 |
+| `lyricsEnabled` | 歌词源启用状态 |
+| `coverEnabled` | 封面源启用状态 |
+| `sortOrder` | 旧版主搜索优先级（仅为数据库兼容保留） |
+| `metadataSortOrder` | 批量匹配优先级 |
+| `lyricsSortOrder` | 歌词源优先级 |
+| `coverSortOrder` | 封面源优先级 |
 | `installedAt` / `updatedAt` | 时间戳 |
 
 ### 阶段 4：加载与激活
 
-1. `PluginSearchSourceManager.buildSourcesLocked()` 遍历所有 `enabled = true` 的插件
+1. `PluginSearchSourceManager.buildSourcesLocked()` 加载已安装插件；各调用场景随后按自己的能力和启用状态过滤
 2. 对每个插件调用 `ScriptSearchSourceFactory.create()`：
    - 读取 `manifest.json`
    - 按顺序拼接 JS 脚本：先拼接 `includeDirs` 中所有 `.js` 文件（按路径排序），再拼接入口文件
@@ -114,17 +124,20 @@ Lyrico 插件系统是一个基于 **QuickJS 嵌入式 JavaScript 引擎** 的�
 
 ### 阶段 5：运行时调用
 
-1. 用户在搜索界面输入关键词
-2. `SearchSourceProvider` 通过 `PluginSearchSourceManager` 获取所有启用的 SearchSource
-3. 对每个源调用 `searchSongs(keyword, page, separator, pageSize)`
-4. `ScriptSearchSource` 将请求序列化为 JSON，通过 JNI 调用插件的全局函数 `searchSongs(requestJson)`
-5. 插件返回 JSON 字符串，`PluginJsonParser` 解析为 `SongSearchResult` 列表
+1. 单曲编辑页右上角统一提供主搜索、歌词和封面三个搜索入口；主搜索加载已启用且声明 `searchSongs` 的元数据源，并仅对同时声明 `getLyrics` 的插件结果显示歌词页签与操作
+2. 编辑页的独立歌词搜索只加载具备 `getLyrics` 的源；任何同时具备 `searchSongs` 的源都会先展示该源的歌曲候选，用户选择后再调用同一源的 `getLyrics`；没有 `searchSongs` 的 API 4 及以上版本的源直接返回歌词候选，并由 `tags.ti/ar/al/date` 提供判断信息
+3. 独立封面搜索只加载 `searchCovers` 源，并直接按关键词请求封面候选
+4. 批量匹配同样分为三个任务入口：元数据任务调用 `searchSongs`，歌词任务调用 `getLyrics`，封面任务调用 `searchCovers`
+5. `ScriptSearchSource` 将请求序列化为 JSON，通过 JNI 调用对应的插件全局函数
+6. 插件直接返回 JavaScript 值；JNI 将其序列化一次，`PluginJsonParser` 再转换为宿主结果模型
+
+单曲主搜索与批量元数据匹配共用元数据源的开关和顺序；单曲与批量歌词共用歌词源顺序，单曲与批量封面共用封面源顺序。
 
 ### 阶段 6：启用/禁用
 
-- `PluginViewModel.setEnabled(id, enabled)` 更新数据库中的 `enabled` 字段
+- `PluginViewModel.setEnabled(id, sourceType, enabled)` 只更新当前类型的启用字段
 - `PluginSearchSourceManager.invalidate(pluginId)` 从缓存中移除并关闭对应运行时
-- 只有 `enabled = true` 的插件出现在 `observeEnabledSources()` 的 Flow 中
+- `SearchSourceProvider` 按当前 `sourceType` 同时检查能力声明和该类型的启用状态
 
 ### 阶段 7：卸载
 
@@ -172,17 +185,19 @@ Lyrico 插件系统是一个基于 **QuickJS 嵌入式 JavaScript 引擎** 的�
 
 ## 宿主能力总览
 
-插件通过 `globalThis.Platform` 对象访问宿主能力，共 **27 个 API**：
+插件通过 `globalThis.Platform` 对象访问宿主能力，共 **41 个 API**：
 
 | 分类 | API 数量 | 功能 |
 |------|----------|------|
 | `app` | 2 | 获取宿主应用信息、UserAgent |
 | `runtime` | 1 | 获取运行时信息 |
+| `cache` | 4 | 插件私有字符串缓存，支持过期和删除 |
 | `crypto` | 4 | MD5、AES-ECB 加解密 |
-| `base64` | 5 | Base64 编码/解码/截断/字节转换 |
+| `base64` | 11 | Base64/Base64URL 编码、解码、截断和字节转换 |
 | `bytes` | 2 | XOR 字节运算 |
 | `compression` | 2 | zlib inflate 解压 |
 | `http` | 8 | GET/POST 请求（文本/二进制），新旧两套 API |
+| `xml` | 4 | XML/TTML 查询和改写 |
 | `log` | 3 | debug/warn/error 日志输出 |
 
 详细 API 参考见 [宿主 API 参考](./host-api.md)。
@@ -197,10 +212,11 @@ interface SearchSource {
     val name: String         // 显示名称
     val capabilities: Set<SearchSourceCapability>  // SEARCH_SONGS, GET_LYRICS, SEARCH_COVERS
     val configFields: List<PluginConfigField>      // 可配置字段
-    val metadataFields: List<PluginMetadataField>  // 可写元数据
+    val apiVersion: Int                            // 插件协议版本
 
     suspend fun searchSongs(keyword, page, separator, pageSize): List<SongSearchResult>
     suspend fun getLyrics(song): LyricsResult?
-    suspend fun searchCovers(keyword, pageSize): List<SongSearchResult>
+    suspend fun getLyricsCandidates(song, page, pageSize): List<LyricsCandidateResult>
+    suspend fun searchCovers(keyword, page, pageSize): List<SongSearchResult>
 }
 ```

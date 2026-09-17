@@ -3,8 +3,8 @@ package com.lonx.lyrico.data.model.entity
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.lonx.lyrico.data.model.AppLogLevel
-import com.lonx.lyrico.data.model.AppLogType
+import com.lonx.lyrico.data.model.log.AppLogLevel
+import com.lonx.lyrico.data.model.log.AppLogType
 
 @Entity(
     tableName = "app_logs",

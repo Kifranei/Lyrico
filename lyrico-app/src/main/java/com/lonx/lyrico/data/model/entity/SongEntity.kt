@@ -42,6 +42,7 @@ import androidx.room.PrimaryKey
  * @property trackerNumber 音轨号（专辑内排序）
  * @property date 发行或录制日期（字符串形式，保留原始格式）
  * @property lyrics 歌词文本
+ * @property lyricSearchText 歌词纯文本搜索索引
  * @property replayGainTrackGain ReplayGain 曲目增益
  * @property replayGainTrackPeak ReplayGain 曲目峰值
  * @property replayGainAlbumGain ReplayGain 专辑增益
@@ -54,9 +55,6 @@ import androidx.room.PrimaryKey
  * @property sampleRate 采样率（Hz）
  * @property channels 声道数（1=单声道，2=立体声）
  *
- * —— 原始与扩展数据 ——
- * @property rawProperties 原始音频属性 JSON（用于调试或扩展字段存储）
- *
  * —— 文件与数据库状态 ——
  * @property fileLastModified 文件最后修改时间（毫秒，用于增量扫描）
  * @property fileAdded 文件添加时间（毫秒，用于排序）
@@ -67,6 +65,8 @@ import androidx.room.PrimaryKey
  * @property titleSortKey 标题排序键（拼音或英文首字母）
  * @property artistGroupKey 艺术家分组键（A–Z 或 #）
  * @property artistSortKey 艺术家排序键（拼音或英文首字母）
+ * @property albumGroupKey 专辑分组键（A–Z 或 #）
+ * @property albumSortKey 专辑排序键（拼音或英文首字母）
  */
 @Entity(
     tableName = "songs",
@@ -76,6 +76,7 @@ import androidx.room.PrimaryKey
         Index(value = ["folderId"]),
         Index(value = ["titleGroupKey", "titleSortKey"]),
         Index(value = ["artistGroupKey", "artistSortKey"]),
+        Index(value = ["albumGroupKey", "albumSortKey"]),
         Index(value = ["fileLastModified"]),
         Index(value = ["fileAdded"])
     ],
@@ -119,6 +120,8 @@ data class SongEntity(
     val date: String? = null,
     val lyrics: String? = null,
     @ColumnInfo(defaultValue = "NULL")
+    val lyricSearchText: String? = null,
+    @ColumnInfo(defaultValue = "NULL")
     val copyright: String? = null,
     @ColumnInfo(defaultValue = "NULL")
     val rating: Int? = null,
@@ -138,8 +141,6 @@ data class SongEntity(
     val sampleRate: Int = 0,
     val channels: Int = 0,
 
-    val rawProperties: String? = null,
-
     val fileLastModified: Long = 0,
 
     @ColumnInfo(defaultValue = "0")
@@ -151,6 +152,10 @@ data class SongEntity(
     val titleSortKey: String = "#",
     val artistGroupKey: String = "#",
     val artistSortKey: String = "#",
+    @ColumnInfo(defaultValue = "'#'")
+    val albumGroupKey: String = "#",
+    @ColumnInfo(defaultValue = "'2_'")
+    val albumSortKey: String = "2_",
 
     @ColumnInfo(defaultValue = "0")
     val uri: String = "",
@@ -173,6 +178,7 @@ data class SongEntity(
         if (trackerNumber != other.trackerNumber) return false
         if (date != other.date) return false
         if (lyrics != other.lyrics) return false
+        if (lyricSearchText != other.lyricSearchText) return false
         if (replayGainTrackGain != other.replayGainTrackGain) return false
         if (replayGainTrackPeak != other.replayGainTrackPeak) return false
         if (replayGainAlbumGain != other.replayGainAlbumGain) return false
@@ -182,7 +188,6 @@ data class SongEntity(
         if (bitrate != other.bitrate) return false
         if (sampleRate != other.sampleRate) return false
         if (channels != other.channels) return false
-        if (rawProperties != other.rawProperties) return false
         if (fileLastModified != other.fileLastModified) return false
         if (fileAdded != other.fileAdded) return false
         if (dbUpdateTime != other.dbUpdateTime) return false
@@ -207,6 +212,7 @@ data class SongEntity(
         result = 31 * result + (trackerNumber?.hashCode() ?: 0)
         result = 31 * result + (date?.hashCode() ?: 0)
         result = 31 * result + (lyrics?.hashCode() ?: 0)
+        result = 31 * result + (lyricSearchText?.hashCode() ?: 0)
         result = 31 * result + (replayGainTrackGain?.hashCode() ?: 0)
         result = 31 * result + (replayGainTrackPeak?.hashCode() ?: 0)
         result = 31 * result + (replayGainAlbumGain?.hashCode() ?: 0)
@@ -216,7 +222,6 @@ data class SongEntity(
         result = 31 * result + bitrate
         result = 31 * result + sampleRate
         result = 31 * result + channels
-        result = 31 * result + (rawProperties?.hashCode() ?: 0)
         result = 31 * result + fileLastModified.hashCode()
         result = 31 * result + fileAdded.hashCode()
         result = 31 * result + dbUpdateTime.hashCode()

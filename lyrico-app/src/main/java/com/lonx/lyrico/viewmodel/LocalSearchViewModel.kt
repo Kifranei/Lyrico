@@ -2,11 +2,11 @@ package com.lonx.lyrico.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lonx.lyrico.data.model.LocalSearchUiState
-import com.lonx.lyrico.data.model.toAlbumSearchResult
-import com.lonx.lyrico.data.model.toArtistSearchResult
+import com.lonx.lyrico.data.model.search.LocalSearchUiState
 import com.lonx.lyrico.data.repository.LibraryIndexRepository
-import com.lonx.lyrico.data.repository.SongRepository
+import com.lonx.lyrico.data.repository.SettingsRepository
+import com.lonx.lyrico.data.song.library.SongLibraryRepository
+import com.lonx.lyrico.data.song.search.SongSearchRepository
 import com.lonx.lyrico.utils.AdvancedSearch
 import com.lonx.lyrico.utils.AdvancedSearchCondition
 import com.lonx.lyrico.utils.AdvancedSearchJoinMode
@@ -26,8 +26,10 @@ import kotlinx.coroutines.flow.stateIn
 
 @OptIn(FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class LocalSearchViewModel(
-    private val songRepository: SongRepository,
-    private val libraryIndexRepository: LibraryIndexRepository
+    private val songSearchRepository: SongSearchRepository,
+    private val songLibraryRepository: SongLibraryRepository,
+    private val libraryIndexRepository: LibraryIndexRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -44,36 +46,50 @@ class LocalSearchViewModel(
         query,
         advancedSearchEnabled,
         advancedSearchJoinMode,
-        advancedSearchConditions
-    ) { keyword, advancedEnabled, joinMode, conditions ->
-        SearchInput(keyword, advancedEnabled, joinMode, conditions)
+        advancedSearchConditions,
+        settingsRepository.lyricIndexEnabled.distinctUntilChanged()
+    ) { keyword, advancedEnabled, joinMode, conditions, lyricIndexEnabled ->
+        SearchInput(keyword, advancedEnabled, joinMode, conditions, lyricIndexEnabled)
     }
         .debounce(250)
         .distinctUntilChanged()
         .flatMapLatest { input ->
             if (input.advancedEnabled) {
-                songRepository.observeSongs(SortBy.TITLE, SortOrder.ASC)
+                songLibraryRepository.observeSongs(SortBy.TITLE, SortOrder.ASC)
                     .map { songs ->
                         LocalSearchUiState(
                             query = input.keyword,
+                            lyricSearchEnabled = input.lyricSearchEnabled,
                             songs = songs.filter { song ->
                                 AdvancedSearch.matches(song, input.conditions, input.joinMode)
                             }
                         )
                     }
             } else if (input.keyword.isBlank()) {
-                flowOf(LocalSearchUiState(query = input.keyword))
-            } else {
-                combine(
-                    songRepository.searchSongsForLocalSearch(input.keyword),
-                    libraryIndexRepository.searchAlbums(input.keyword),
-                    libraryIndexRepository.searchArtists(input.keyword)
-                ) { songs, albums, artists ->
+                flowOf(
                     LocalSearchUiState(
                         query = input.keyword,
+                        lyricSearchEnabled = input.lyricSearchEnabled
+                    )
+                )
+            } else {
+                combine(
+                    songSearchRepository.searchSongsForLocalSearch(input.keyword),
+                    libraryIndexRepository.searchAlbums(input.keyword),
+                    libraryIndexRepository.searchArtists(input.keyword),
+                    if (input.lyricSearchEnabled) {
+                        songSearchRepository.searchLyricsForLocalSearch(input.keyword)
+                    } else {
+                        flowOf(emptyList())
+                    }
+                ) { songs, albums, artists, lyricMatches ->
+                    LocalSearchUiState(
+                        query = input.keyword,
+                        lyricSearchEnabled = input.lyricSearchEnabled,
                         songs = songs,
-                        albums = albums.map { it.toAlbumSearchResult() },
-                        artists = artists.map { it.toArtistSearchResult() }
+                        albums = albums,
+                        artists = artists,
+                        lyricMatches = lyricMatches
                     )
                 }
             }
@@ -136,6 +152,7 @@ class LocalSearchViewModel(
         val keyword: String,
         val advancedEnabled: Boolean,
         val joinMode: AdvancedSearchJoinMode,
-        val conditions: List<AdvancedSearchCondition>
+        val conditions: List<AdvancedSearchCondition>,
+        val lyricSearchEnabled: Boolean
     )
 }

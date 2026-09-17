@@ -27,6 +27,7 @@ import com.lonx.lyrico.App.Companion.REPO_NAME
 import com.lonx.lyrico.App.Companion.TELEGRAM_GROUP_LINK
 import com.lonx.lyrico.BuildConfig
 import com.lonx.lyrico.R
+import com.lonx.lyrico.ui.components.scaffoldContentPadding
 import com.lonx.lyrico.utils.UpdateEffect
 import com.lonx.lyrico.viewmodel.AboutViewModel
 import com.lonx.lyrico.viewmodel.UiError
@@ -99,9 +100,9 @@ fun AboutScreen(
                 .overScrollVertical()
                 .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
                 .fillMaxHeight(),
-            contentPadding = PaddingValues(
-                top = paddingValues.calculateTopPadding(),
-                bottom = paddingValues.calculateBottomPadding() + 12.dp,
+            contentPadding = scaffoldContentPadding(
+                paddingValues = paddingValues,
+                bottomExtra = 12.dp
             ),
             overscrollEffect = null,
         ) {

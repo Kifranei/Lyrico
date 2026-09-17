@@ -22,6 +22,7 @@ data class AlbumEntity(
     val songCount: Int = 0,
     val coverSongUri: String? = null,
     val coverSongLastModified: Long = 0,
+    val year: String? = null,
     val updatedAt: Long = System.currentTimeMillis()
 )
 

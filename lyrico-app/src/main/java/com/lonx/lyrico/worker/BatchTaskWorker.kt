@@ -9,10 +9,10 @@ import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.lonx.lyrico.R
-import com.lonx.lyrico.data.model.AppLogLevel
-import com.lonx.lyrico.data.model.AppLogType
+import com.lonx.lyrico.data.model.log.AppLogLevel
+import com.lonx.lyrico.data.model.log.AppLogType
 import com.lonx.lyrico.data.model.BatchTaskType
-import com.lonx.lyrico.data.model.MetadataWriteMode
+import com.lonx.lyrico.data.model.metadata.MetadataWriteMode
 import com.lonx.lyrico.data.repository.AppLogRepository
 import com.lonx.lyrico.data.repository.BatchTaskRepository
 import com.lonx.lyrico.worker.processor.BatchTaskProcessorFactory
@@ -125,6 +125,10 @@ class BatchTaskWorker(
                                     taskRepository.markItemSucceeded(item.itemId, result.resultJson)
                                     successCount.incrementAndGet()
                                 } catch (e: BatchTaskSkippedException) {
+                                    Log.i(
+                                        TAG,
+                                        "Item processing skipped: ${item.fileName}, reason=${e.message ?: "No reason"}"
+                                    )
                                     taskRepository.markItemSkipped(item.itemId, e.message)
                                     skippedCount.incrementAndGet()
                                     itemDetails.add("SKIPPED ${item.fileName}: ${e.message ?: "No reason"}")
@@ -289,6 +293,8 @@ class BatchTaskWorker(
     private fun getTaskTitle(type: BatchTaskType): String {
         return when (type) {
             BatchTaskType.MATCH_METADATA -> applicationContext.getString(R.string.batch_task_match_tags)
+            BatchTaskType.MATCH_LYRICS -> applicationContext.getString(R.string.batch_task_match_lyrics)
+            BatchTaskType.MATCH_COVER -> applicationContext.getString(R.string.batch_task_match_cover)
             BatchTaskType.EDIT_TAGS -> applicationContext.getString(R.string.batch_task_edit_tags)
             BatchTaskType.RENAME_FILES -> applicationContext.getString(R.string.batch_task_rename_files)
             BatchTaskType.CONVERT_LYRICS_FORMAT -> applicationContext.getString(R.string.batch_task_convert_lyrics_format)
@@ -359,7 +365,9 @@ class BatchTaskWorker(
         if (configJson.isNullOrBlank()) return "config=(none)"
         return runCatching {
             when (type) {
-                BatchTaskType.MATCH_METADATA -> summarizeMatchConfig(configJson)
+                BatchTaskType.MATCH_METADATA,
+                BatchTaskType.MATCH_LYRICS,
+                BatchTaskType.MATCH_COVER -> summarizeMatchConfig(configJson)
                 BatchTaskType.RENAME_FILES -> summarizeRenameConfig(configJson)
                 BatchTaskType.EDIT_TAGS -> summarizeEditTagsConfig(configJson)
                 BatchTaskType.CONVERT_LYRICS_FORMAT -> summarizeLyricsFormatConfig(configJson)
@@ -382,11 +390,7 @@ class BatchTaskWorker(
             appendLine("separator=${config.separator}")
             appendLine("preferFileName=${config.matchConfig.preferFileName}")
             appendLine("enabledSources=${config.enabledSourceOrderIds.joinToString(" > ").ifBlank { "(default)" }}")
-            appendLine("fields=${config.matchConfig.fields.toSortedMap(compareBy { it.name }).entries.joinToString(", ") { "${it.key.name}:${it.value.name}" }}")
-            val metadataRules = config.metadataFieldWriteRules
-                .filter { it.mode != MetadataWriteMode.DISABLED }
-                .map { "${it.pluginId}.${it.normalizedKey}:${it.mode.name}" }
-            appendLine("metadataFieldWriteRules=${metadataRules.joinToString(", ").ifBlank { "(none)" }}")
+            appendLine("fields=${config.matchConfig.targetModes.toSortedMap(compareBy { it.name }).entries.joinToString(", ") { "${it.key.name}:${it.value.name}" }}")
         }.trimEnd()
     }
 
@@ -421,7 +425,7 @@ class BatchTaskWorker(
             if (config.lyrics != keep) add("lyrics")
             if (config.ratingModified) add("rating")
             if (config.coverUri != null) add("cover")
-            if (config.removeCover) add("removeCover")
+            if (config.removeCover) add("removeFrontCover")
             if (config.lyricsOffset.isNotBlank()) add("lyricsOffset")
             if (config.replayGainTrackGain != keep) add("replayGainTrackGain")
             if (config.replayGainTrackPeak != keep) add("replayGainTrackPeak")
@@ -437,7 +441,7 @@ class BatchTaskWorker(
             appendLine("modifiedFields=${modifiedFields.joinToString(", ").ifBlank { "(none)" }}")
             if (config.ratingModified) appendLine("rating=${config.rating}")
             if (config.lyricsOffset.isNotBlank()) appendLine("lyricsOffset=${config.lyricsOffset}")
-            appendLine("customFieldKeys=${config.customFields.map { it.key }.joinToString(", ").ifBlank { "(none)" }}")
+            appendLine("customFieldKeys=${config.customFields.joinToString(", ") { it.key }.ifBlank { "(none)" }}")
             config.tagFindReplaceConfig?.let { replaceConfig ->
                 appendLine("tagFindReplaceFields=${replaceConfig.fields.joinToString(", ") { it.name }}")
                 appendLine("tagFindReplaceMode=${replaceConfig.mode}")
@@ -464,15 +468,18 @@ class BatchTaskWorker(
             appendSanitizedValue("replayGainReferenceLoudness", config.replayGainReferenceLoudness, keep)
             if (config.lyrics != keep) appendLine("lyrics=(modified, ${config.lyrics.length} chars)")
             if (config.coverUri != null) appendLine("coverUri=(set)")
-            if (config.removeCover) appendLine("removeCover=true")
+            if (config.removeCover) appendLine("removeFrontCover=true")
         }.trimEnd()
     }
 
     private fun summarizeLyricsFormatConfig(configJson: String): String {
         val config = Json.decodeFromString<LyricsFormatConfig>(configJson)
         return buildString {
-            appendLine("targetFormat=${config.targetFormat.name}")
+            appendLine("targetFormat=${config.targetFormat?.name ?: "KEEP"}")
             appendLine("concurrency=${config.concurrency}")
+            appendLine("formatLineOrder=${config.formatLineOrder}")
+            appendLine("removeTagLines=${config.removeTagLines}")
+            appendLine("removeEmptyLines=${config.removeEmptyLines}")
         }.trimEnd()
     }
 

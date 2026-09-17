@@ -1,15 +1,16 @@
 package com.lonx.lyrico.ui.components.fab
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,24 +20,28 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
-
 
 enum class ExpandableFabMenuPosition {
     BottomEnd,
@@ -46,19 +51,23 @@ enum class ExpandableFabMenuPosition {
     CenterStart,
     CenterEnd
 }
+
 @Composable
 fun BoxScope.ExpandableFabMenu(
     visible: Boolean,
     expanded: Boolean,
     enabled: Boolean,
+    itemCount: Int,
     modifier: Modifier = Modifier,
     style: ExpandableFabMenuStyle = ExpandableFabMenuStyle.default(),
     position: ExpandableFabMenuPosition = ExpandableFabMenuPosition.BottomEnd,
     onExpandedChange: (Boolean) -> Unit,
     menuContent: @Composable ColumnScope.() -> Unit
 ) {
+    val effectiveExpanded = visible && expanded && enabled
+
     AnimatedVisibility(
-        visible = visible && expanded,
+        visible = effectiveExpanded,
         enter = fadeIn(),
         exit = fadeOut(),
         modifier = Modifier.fillMaxSize()
@@ -83,214 +92,118 @@ fun BoxScope.ExpandableFabMenu(
         )
         .padding(position.padding)
 
-    when {
-        position.isHorizontal -> {
-            HorizontalExpandableFabMenu(
-                visible = visible,
-                expanded = expanded,
-                enabled = enabled,
-                position = position,
-                modifier = baseModifier,
-                style = style,
-                onExpandedChange = onExpandedChange,
-                menuContent = menuContent
-            )
-        }
-
-        else -> {
-            VerticalExpandableFabMenu(
-                visible = visible,
-                expanded = expanded,
-                enabled = enabled,
-                position = position,
-                modifier = baseModifier,
-                style = style,
-                onExpandedChange = onExpandedChange,
-                menuContent = menuContent
-            )
-        }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + scaleIn(),
+        exit = fadeOut() + scaleOut(),
+        modifier = baseModifier
+    ) {
+        MorphExpandableFabMenu(
+            expanded = effectiveExpanded,
+            enabled = enabled,
+            position = position,
+            style = style,
+            onExpandedChange = onExpandedChange,
+            menuContent = menuContent,
+            itemCount = itemCount
+        )
     }
 }
+
 @Composable
-private fun VerticalExpandableFabMenu(
-    visible: Boolean,
+private fun MorphExpandableFabMenu(
     expanded: Boolean,
     enabled: Boolean,
     position: ExpandableFabMenuPosition,
-    modifier: Modifier = Modifier,
-    style: ExpandableFabMenuStyle = ExpandableFabMenuStyle.default(),
+    itemCount: Int,
+    style: ExpandableFabMenuStyle,
     onExpandedChange: (Boolean) -> Unit,
     menuContent: @Composable ColumnScope.() -> Unit
 ) {
-    AnimatedVisibility(
-        visible = visible,
-        enter = scaleIn() + fadeIn(),
-        exit = scaleOut() + fadeOut(),
-        modifier = modifier
-    ) {
-        val horizontalAlignment = when (position) {
-            ExpandableFabMenuPosition.BottomStart,
-            ExpandableFabMenuPosition.TopStart -> Alignment.Start
+    val expandedHeight = style.expandedHeightFor(itemCount)
 
-            else -> Alignment.End
-        }
+    val transition = updateTransition(
+        targetState = expanded,
+        label = "expandableFabMenuTransition"
+    )
 
-        Column(
-            horizontalAlignment = horizontalAlignment,
-            verticalArrangement = Arrangement.spacedBy(style.fabToMenuSpacing)
-        ) {
-            if (position.expandTowardBottom) {
-                MainFab(
-                    expanded = expanded,
-                    enabled = enabled,
-                    style = style,
-                    onExpandedChange = onExpandedChange
-                )
-            }
+    val width by transition.animateDp(
+        transitionSpec = { spring(stiffness = 600f) },
+        label = "fabMenuWidth"
+    ) { isExpanded ->
+        if (isExpanded) style.expandedWidth else style.mainFabSize
+    }
 
-            AnimatedVisibility(
-                visible = expanded && enabled,
-                enter = slideInVertically {
-                    if (position.expandTowardBottom) -it / 2 else it / 2
-                } + fadeIn(),
-                exit = slideOutVertically {
-                    if (position.expandTowardBottom) -it / 2 else it / 2
-                } + fadeOut()
+    val height by transition.animateDp(
+        transitionSpec = { spring(stiffness = 600f) },
+        label = "fabMenuHeight"
+    ) { isExpanded ->
+        if (isExpanded) expandedHeight else style.mainFabSize
+    }
+
+    val containerColor by transition.animateColor(
+        transitionSpec = { spring(stiffness = 600f) },
+        label = "fabMenuContainerColor"
+    ) { isExpanded ->
+        if (isExpanded) style.expandedContainerColor else style.mainContainerColor
+    }
+
+    Box(
+        modifier = Modifier
+            .width(width)
+            .height(height)
+            .clip(RoundedCornerShape(style.cornerRadius))
+            .background(containerColor)
+            .clickable(
+                enabled = enabled && !expanded,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
             ) {
+                onExpandedChange(true)
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Crossfade(
+            targetState = expanded,
+            animationSpec = tween(durationMillis = 120),
+            label = "expandableFabMenuContent"
+        ) { isExpanded ->
+            if (isExpanded) {
                 Column(
-                    horizontalAlignment = horizontalAlignment,
-                    verticalArrangement = Arrangement.spacedBy(style.menuItemSpacing),
-                    modifier = Modifier.padding(
-                        top = if (position.expandTowardBottom) style.menuToFabPadding else 0.dp,
-                        bottom = if (position.expandTowardBottom) 0.dp else style.menuToFabPadding
-                    ),
+                    modifier = Modifier
+                        .width(style.expandedWidth)
+                        .height(expandedHeight)
+                        .padding(style.contentPadding)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(0.dp),
+                    horizontalAlignment = position.horizontalContentAlignment,
                     content = menuContent
                 )
-            }
-
-            if (!position.expandTowardBottom) {
-                MainFab(
-                    expanded = expanded,
-                    enabled = enabled,
-                    style = style,
-                    onExpandedChange = onExpandedChange
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HorizontalExpandableFabMenu(
-    visible: Boolean,
-    expanded: Boolean,
-    enabled: Boolean,
-    position: ExpandableFabMenuPosition,
-    modifier: Modifier = Modifier,
-    style: ExpandableFabMenuStyle = ExpandableFabMenuStyle.default(),
-    onExpandedChange: (Boolean) -> Unit,
-    menuContent: @Composable ColumnScope.() -> Unit
-) {
-    AnimatedVisibility(
-        visible = visible,
-        enter = scaleIn() + fadeIn(),
-        exit = scaleOut() + fadeOut(),
-        modifier = modifier
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            if (position == ExpandableFabMenuPosition.CenterEnd) {
-                AnimatedHorizontalMenu(
-                    expanded = expanded,
-                    enabled = enabled,
-                    expandTowardEnd = false,
-                    style = style,
-                    menuContent = menuContent
-                )
-            }
-
-            MainFab(
-                expanded = expanded,
-                enabled = enabled,
-                style = style,
-                onExpandedChange = onExpandedChange
-            )
-
-            if (position == ExpandableFabMenuPosition.CenterStart) {
-                AnimatedHorizontalMenu(
-                    expanded = expanded,
-                    enabled = enabled,
-                    expandTowardEnd = false,
-                    style = style,
-                    menuContent = menuContent
-                )
+            } else {
+                Box(
+                    modifier = Modifier.size(style.mainFabSize),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CollapsedFabIcon(
+                        style = style
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun AnimatedHorizontalMenu(
-    expanded: Boolean,
-    enabled: Boolean,
-    expandTowardEnd: Boolean,
-    style: ExpandableFabMenuStyle,
-    menuContent: @Composable ColumnScope.() -> Unit
+private fun CollapsedFabIcon(
+    style: ExpandableFabMenuStyle
 ) {
-    AnimatedVisibility(
-        visible = expanded && enabled,
-        enter = slideInHorizontally {
-            if (expandTowardEnd) -it / 2 else it / 2
-        } + fadeIn(),
-        exit = slideOutHorizontally {
-            if (expandTowardEnd) -it / 2 else it / 2
-        } + fadeOut()
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(style.menuItemSpacing),
-                horizontalAlignment = if (expandTowardEnd) Alignment.Start else Alignment.End,
-                content = menuContent
-            )
-        }
-    }
-}
-
-@Composable
-private fun MainFab(
-    expanded: Boolean,
-    enabled: Boolean,
-    style: ExpandableFabMenuStyle,
-    onExpandedChange: (Boolean) -> Unit
-) {
-    FloatingActionButton(
-        onClick = {
-            if (enabled) {
-                onExpandedChange(!expanded)
-            }
-        },
-        modifier = Modifier.size(style.mainFabSize),
-        containerColor = style.mainContainerColor
-    ) {
-        val rotation by animateFloatAsState(
-            targetValue = if (expanded) style.mainIconRotationWhenExpanded else 0f,
-            label = "expandableFabRotation"
-        )
-
-        Icon(
-            imageVector = style.mainIcon,
-            contentDescription = "Actions",
-            tint = style.mainContentColor,
-            modifier = Modifier
-                .size(style.mainIconSize)
-                .rotate(rotation)
-        )
-    }
+    Icon(
+        imageVector = style.mainIcon,
+        contentDescription = "Actions",
+        tint = style.mainContentColor,
+        modifier = Modifier
+            .size(style.mainIconSize)
+    )
 }
 
 private val ExpandableFabMenuPosition.alignment: Alignment
@@ -328,14 +241,6 @@ private val ExpandableFabMenuPosition.padding: PaddingValues
         )
     }
 
-private val ExpandableFabMenuPosition.isHorizontal: Boolean
-    get() = this == ExpandableFabMenuPosition.CenterStart ||
-            this == ExpandableFabMenuPosition.CenterEnd
-
-private val ExpandableFabMenuPosition.expandTowardBottom: Boolean
-    get() = this == ExpandableFabMenuPosition.TopStart ||
-            this == ExpandableFabMenuPosition.TopEnd
-
 private val ExpandableFabMenuPosition.windowInsets: WindowInsets?
     @Composable
     get() = when (this) {
@@ -347,4 +252,51 @@ private val ExpandableFabMenuPosition.windowInsets: WindowInsets?
 
         ExpandableFabMenuPosition.CenterStart,
         ExpandableFabMenuPosition.CenterEnd -> null
+    }
+private val ExpandableFabMenuPosition.sizeAnimationAlignment: Alignment
+    get() = when (this) {
+        ExpandableFabMenuPosition.BottomEnd -> Alignment.BottomEnd
+        ExpandableFabMenuPosition.BottomStart -> Alignment.BottomStart
+        ExpandableFabMenuPosition.TopEnd -> Alignment.TopEnd
+        ExpandableFabMenuPosition.TopStart -> Alignment.TopStart
+        ExpandableFabMenuPosition.CenterStart -> Alignment.CenterStart
+        ExpandableFabMenuPosition.CenterEnd -> Alignment.CenterEnd
+    }
+
+private val ExpandableFabMenuPosition.contentAlignment: Alignment
+    get() = when (this) {
+        ExpandableFabMenuPosition.BottomEnd -> Alignment.BottomEnd
+        ExpandableFabMenuPosition.BottomStart -> Alignment.BottomStart
+        ExpandableFabMenuPosition.TopEnd -> Alignment.TopEnd
+        ExpandableFabMenuPosition.TopStart -> Alignment.TopStart
+        ExpandableFabMenuPosition.CenterStart -> Alignment.CenterStart
+        ExpandableFabMenuPosition.CenterEnd -> Alignment.CenterEnd
+    }
+
+private val ExpandableFabMenuPosition.horizontalContentAlignment: Alignment.Horizontal
+    get() = when (this) {
+        ExpandableFabMenuPosition.BottomEnd,
+        ExpandableFabMenuPosition.TopEnd,
+        ExpandableFabMenuPosition.CenterEnd -> Alignment.End
+
+        ExpandableFabMenuPosition.BottomStart,
+        ExpandableFabMenuPosition.TopStart,
+        ExpandableFabMenuPosition.CenterStart -> Alignment.Start
+    }
+@Composable
+fun ExpandableFabMenuStyle.expandedHeightFor(itemCount: Int): Dp {
+
+    val verticalPadding = contentPadding.calculateTopPadding() + contentPadding.calculateBottomPadding()
+
+    return (itemHeight * itemCount.coerceAtLeast(1) + verticalPadding)
+        .coerceIn(minExpandedHeight, maxExpandedHeight)
+}
+private val ExpandableFabMenuPosition.transformOrigin: TransformOrigin
+    get() = when (this) {
+        ExpandableFabMenuPosition.BottomEnd -> TransformOrigin(1f, 1f)
+        ExpandableFabMenuPosition.BottomStart -> TransformOrigin(0f, 1f)
+        ExpandableFabMenuPosition.TopEnd -> TransformOrigin(1f, 0f)
+        ExpandableFabMenuPosition.TopStart -> TransformOrigin(0f, 0f)
+        ExpandableFabMenuPosition.CenterStart -> TransformOrigin(0f, 0.5f)
+        ExpandableFabMenuPosition.CenterEnd -> TransformOrigin(1f, 0.5f)
     }

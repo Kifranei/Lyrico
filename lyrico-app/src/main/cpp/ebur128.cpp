@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <cmath>
 #include <algorithm>
+#include <vector>
 #include "ebur128/ebur128.h"
 
 extern "C" {
@@ -68,6 +69,35 @@ Java_com_lonx_lyrico_utils_LibEbuR128_getTruePeakNative(JNIEnv *env, jobject thi
         }
     }
     return maxPeak;
+}
+
+// 获取多个状态合并后的全局 LUFS 响度，用于专辑 ReplayGain
+JNIEXPORT jdouble JNICALL
+Java_com_lonx_lyrico_utils_LibEbuR128_getMultipleLoudnessNative(JNIEnv *env, jobject thiz, jlongArray statePtrs) {
+    if (!statePtrs) return -70.0;
+
+    const jsize length = env->GetArrayLength(statePtrs);
+    if (length <= 0) return -70.0;
+
+    std::vector<jlong> ptrValues(static_cast<size_t>(length));
+    env->GetLongArrayRegion(statePtrs, 0, length, ptrValues.data());
+
+    std::vector<ebur128_state*> states;
+    states.reserve(static_cast<size_t>(length));
+    for (jlong ptr : ptrValues) {
+        auto* state = reinterpret_cast<ebur128_state*>(ptr);
+        if (state != nullptr) {
+            states.push_back(state);
+        }
+    }
+
+    if (states.empty()) return -70.0;
+
+    double loudness = -70.0;
+    if (ebur128_loudness_global_multiple(states.data(), states.size(), &loudness) != EBUR128_SUCCESS) {
+        return -70.0;
+    }
+    return loudness;
 }
 
 }

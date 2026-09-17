@@ -4,10 +4,11 @@ import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import com.lonx.audiotag.model.frontCoverOrFallback
 import com.lonx.lyrico.data.model.BatchTaskType
 import com.lonx.lyrico.data.model.entity.BatchTaskEntity
 import com.lonx.lyrico.data.model.entity.BatchTaskItemEntity
-import com.lonx.lyrico.data.repository.SongRepository
+import com.lonx.lyrico.data.song.tag.AudioTagRepository
 import com.lonx.lyrico.utils.CoverSourceType
 import com.lonx.lyrico.utils.getCoverSourceType
 import kotlinx.serialization.Serializable
@@ -23,7 +24,7 @@ data class BatchExportTaskConfig(
 
 class BatchExportProcessor(
     private val context: Context,
-    private val songRepository: SongRepository
+    private val audioTagRepository: AudioTagRepository
 ) : BatchTaskProcessor {
 
     override suspend fun process(
@@ -41,11 +42,11 @@ class BatchExportProcessor(
             throw Exception("Destination folder is not writable")
         }
 
-        val tagData = songRepository.readAudioTagData(item.songUri)
+        val tagData = audioTagRepository.read(item.songUri)
         val result = when (task.type) {
             BatchTaskType.EXPORT_LYRICS -> exportLyrics(item, tagData.lyrics, directory)
             BatchTaskType.EXPORT_COVER -> {
-                val coverSource = tagData.pictures.firstOrNull()?.data ?: tagData.picUrl
+                val coverSource = tagData.pictures.frontCoverOrFallback()?.data
                 exportCover(item, coverSource, directory)
             }
             else -> throw IllegalArgumentException("Unsupported export task type: ${task.type}")

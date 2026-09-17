@@ -29,6 +29,7 @@ import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.BatchTaskStatus
 import com.lonx.lyrico.data.model.BatchTaskType
 import com.lonx.lyrico.data.model.entity.BatchTaskEntity
+import com.lonx.lyrico.ui.components.scaffoldContentPadding
 import com.lonx.lyrico.viewmodel.BatchTaskListViewModel
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -233,9 +234,9 @@ fun BatchTaskListScreen(
                 .overScrollVertical()
                 .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
                 .fillMaxHeight(),
-            contentPadding = PaddingValues(
-                top = paddingValues.calculateTopPadding(),
-                bottom = paddingValues.calculateBottomPadding() + 12.dp,
+            contentPadding = scaffoldContentPadding(
+                paddingValues = paddingValues,
+                bottomExtra = 12.dp
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             overscrollEffect = null,

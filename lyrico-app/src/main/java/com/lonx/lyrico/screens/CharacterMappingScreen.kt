@@ -22,6 +22,7 @@ import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.CharacterMappingRule
 import com.lonx.lyrico.data.model.ReplacementCharOption
 import com.lonx.lyrico.data.model.toReplacementOption
+import com.lonx.lyrico.ui.components.scaffoldTopHorizontalPadding
 import com.lonx.lyrico.viewmodel.CharacterMappingViewModel
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -69,7 +70,7 @@ fun CharacterMappingScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(scaffoldTopHorizontalPadding(paddingValues))
         ) {
             Text(
                 text = stringResource(R.string.character_mapping_description),

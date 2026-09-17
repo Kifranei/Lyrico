@@ -6,14 +6,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.LyricoDatabase
-import com.lonx.lyrico.data.model.AppLogLevel
-import com.lonx.lyrico.data.model.AppLogType
+import com.lonx.lyrico.data.model.log.AppLogLevel
+import com.lonx.lyrico.data.model.log.AppLogType
 import com.lonx.lyrico.data.model.ArtistSeparator
-import com.lonx.lyrico.data.model.CacheCategory
+import com.lonx.lyrico.data.model.cache.CacheCategory
 import com.lonx.lyrico.data.model.ConversionMode
-import com.lonx.lyrico.data.model.LyricFormat
-import com.lonx.lyrico.data.model.MetadataFieldWriteRule
+import com.lonx.lyrico.data.model.FloatingBarEffect
+import com.lonx.lyrico.data.model.lyrics.LyricFormat
+import com.lonx.lyrico.data.model.lyrics.LyricLineTrack
+import com.lonx.lyrico.data.model.lyrics.LyricsProcessingOptions
+import com.lonx.lyrico.data.model.plugin.PluginMetadataFieldWriteRule
 import com.lonx.lyrico.data.model.ThemeMode
+import com.lonx.lyrico.data.model.SearchSourceTabStyle
+import com.lonx.lyrico.data.model.lyrics.LyricRenderConfig
 import com.lonx.lyrico.data.repository.SettingsRepository
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -33,23 +38,33 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 
 data class SettingsUiState(
+    val isInitialized: Boolean = false,
     val lyricFormat: LyricFormat = LyricFormat.VERBATIM_LRC,
     val separator: ArtistSeparator = ArtistSeparator.SLASH,
     val romaEnabled: Boolean = false,
+    val lyricLineOrder: List<LyricLineTrack> = emptyList(),
     val translationEnabled: Boolean = false,
+    val lyricIndexEnabled: Boolean = false,
     val ignoreShortAudio: Boolean = false,
     val searchSourceOrder: List<String> = emptyList(),
     val enabledSearchSources: Set<String> = emptySet(),
     val searchPageSize: Int = 20,
+    val searchSourceTabStyle: SearchSourceTabStyle = SearchSourceTabStyle.ICON_AND_TEXT,
+    val showAllSearchResultFields: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.AUTO,
     val monetEnable: Boolean = false,
+    val floatingBottomBarEnabled: Boolean = true,
+    val barBlurEnabled: Boolean = false,
+    val floatingBarEffect: FloatingBarEffect = FloatingBarEffect.NONE,
     val keyColor: KeyColor = KeyColors[1],
     val onlyTranslationIfAvailable: Boolean = false,
     val removeEmptyLines: Boolean = true,
     val categorizedCacheSize: Map<CacheCategory, Long> = emptyMap(),
     val totalCacheSize: Long = 0L,
     val conversionMode: ConversionMode = ConversionMode.NONE,
-    val metadataFieldWriteRules: List<MetadataFieldWriteRule> = emptyList()
+    val lyricsTagLineKeywords: List<String> = emptyList(),
+    val metadataFieldWriteRules: List<PluginMetadataFieldWriteRule> = emptyList(),
+    val replayGainTargetLoudness: Double = -18.0
 ) {
     /**
      * 返回按优先级排序且启用的搜索源列表
@@ -69,45 +84,103 @@ class SettingsViewModel(
     private val _categorizedCacheSize = MutableStateFlow<Map<CacheCategory, Long>>(emptyMap())
 
     private data class SettingsBaseState(
-        val lyric: com.lonx.lyrico.data.model.LyricRenderConfig,
+        val lyric: LyricRenderConfig,
         val search: com.lonx.lyrico.data.model.SearchConfig,
         val theme: com.lonx.lyrico.data.model.ThemeConfig,
         val ignoreShortAudio: Boolean,
-        val metadataFieldRules: List<MetadataFieldWriteRule>
+        val lyricsTagLineKeywords: List<String>,
+        val metadataFieldRules: List<PluginMetadataFieldWriteRule>,
+        val replayGainTargetLoudness: Double,
+        val floatingBottomBarEnabled: Boolean,
+        val barBlurEnabled: Boolean,
+        val floatingBarEffect: FloatingBarEffect
     )
+
+    private data class VisualSettingsState(
+        val floatingBottomBarEnabled: Boolean,
+        val barBlurEnabled: Boolean,
+        val floatingBarEffect: FloatingBarEffect,
+    )
+
+    private data class SettingsTailState(
+        val ignoreShortAudio: Boolean,
+        val lyricsTagLineKeywords: List<String>,
+        val metadataFieldRules: List<PluginMetadataFieldWriteRule>,
+        val replayGainTargetLoudness: Double,
+        val visual: VisualSettingsState
+    )
+
+    private val visualSettingsState = combine(
+        settingsRepository.floatingBottomBarEnabled,
+        settingsRepository.barBlurEnabled,
+        settingsRepository.floatingBarEffect,
+    ) { floatingBar, barBlur, floatingBarEffect ->
+        VisualSettingsState(floatingBar, barBlur, floatingBarEffect)
+    }
+
+    private val settingsTailState = combine(
+        settingsRepository.ignoreShortAudio,
+        settingsRepository.lyricsTagLineKeywords,
+        settingsRepository.metadataFieldWriteRules,
+        settingsRepository.replayGainTargetLoudness,
+        visualSettingsState,
+    ) { ignoreShort, lyricsTagLineKeywords, metadataFieldRules, rgTargetLoudness, visual ->
+        SettingsTailState(ignoreShort, lyricsTagLineKeywords, metadataFieldRules, rgTargetLoudness, visual)
+    }
 
     private val settingsBaseState = combine(
         settingsRepository.lyricRenderConfigFlow,
         settingsRepository.searchConfigFlow,
         settingsRepository.themeConfigFlow,
-        settingsRepository.ignoreShortAudio,
-        settingsRepository.metadataFieldWriteRules
-    ) { lyric, search, theme, ignoreShort, metadataFieldRules ->
-        SettingsBaseState(lyric, search, theme, ignoreShort, metadataFieldRules)
+        settingsTailState
+    ) { lyric, search, theme, tail ->
+        SettingsBaseState(
+            lyric,
+            search,
+            theme,
+            tail.ignoreShortAudio,
+            tail.lyricsTagLineKeywords,
+            tail.metadataFieldRules,
+            tail.replayGainTargetLoudness,
+            tail.visual.floatingBottomBarEnabled,
+            tail.visual.barBlurEnabled,
+            tail.visual.floatingBarEffect,
+        )
     }
 
     private val baseUiState = combine(
         settingsBaseState,
-        _categorizedCacheSize
-    ) { base, cacheMap ->
+        _categorizedCacheSize,
+        settingsRepository.lyricIndexEnabled
+    ) { base, cacheMap, lyricIndexEnabled ->
         SettingsUiState(
+            isInitialized = true,
             lyricFormat = base.lyric.format,
             romaEnabled = base.lyric.showRomanization,
+            lyricLineOrder = base.lyric.normalizedLineOrder,
             translationEnabled = base.lyric.showTranslation,
             separator = base.search.separator.toArtistSeparator(),
             searchSourceOrder = base.search.searchSourceOrder,
             enabledSearchSources = base.search.enabledSearchSources,
             searchPageSize = base.search.searchPageSize,
+            searchSourceTabStyle = base.search.searchSourceTabStyle,
+            showAllSearchResultFields = base.search.showAllSearchResultFields,
             themeMode = base.theme.themeMode,
+            lyricIndexEnabled = lyricIndexEnabled,
             ignoreShortAudio = base.ignoreShortAudio,
             monetEnable = base.theme.monetEnable,
+            floatingBottomBarEnabled = base.floatingBottomBarEnabled,
+            barBlurEnabled = base.barBlurEnabled,
+            floatingBarEffect = base.floatingBarEffect,
             keyColor = base.theme.keyColor,
             categorizedCacheSize = cacheMap,
             onlyTranslationIfAvailable = base.lyric.onlyTranslationIfAvailable,
             totalCacheSize = cacheMap.values.sum(),
             removeEmptyLines = base.lyric.removeEmptyLines,
             conversionMode = base.lyric.conversionMode,
-            metadataFieldWriteRules = base.metadataFieldRules
+            lyricsTagLineKeywords = base.lyricsTagLineKeywords,
+            metadataFieldWriteRules = base.metadataFieldRules,
+            replayGainTargetLoudness = base.replayGainTargetLoudness
         )
     }
 
@@ -142,6 +215,11 @@ class SettingsViewModel(
             settingsRepository.saveRomaEnabled(enabled)
         }
     }
+    fun setLyricLineOrder(order: List<LyricLineTrack>) {
+        viewModelScope.launch {
+            settingsRepository.saveLyricLineOrder(order)
+        }
+    }
     suspend fun clearSongs(): Boolean = withContext(Dispatchers.IO) {
         folder.clearAllFolders()
         val counts = folder.getFoldersCount()
@@ -162,6 +240,25 @@ class SettingsViewModel(
             settingsRepository.saveMonetEnable(enabled)
         }
     }
+
+    fun setFloatingBottomBarEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.saveFloatingBottomBarEnabled(enabled)
+        }
+    }
+
+    fun setBarBlurEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.saveBarBlurEnabled(enabled)
+        }
+    }
+
+    fun setFloatingBarEffect(effect: FloatingBarEffect) {
+        viewModelScope.launch {
+            settingsRepository.saveFloatingBarEffect(effect)
+        }
+    }
+
     fun setKeyColor(selectedMode: KeyColor) {
         viewModelScope.launch {
             settingsRepository.saveKeyColor(selectedMode)
@@ -171,6 +268,42 @@ class SettingsViewModel(
         viewModelScope.launch {
             settingsRepository.saveRemoveEmptyLines(enabled)
         }
+    }
+    fun setLyricsTagLineKeywords(keywords: List<String>) {
+        viewModelScope.launch {
+            settingsRepository.saveLyricsTagLineKeywords(keywords)
+        }
+    }
+
+    fun addNonLyricsContentRule(rule: String): Boolean {
+        val normalized = normalizeNonLyricsContentRule(rule) ?: return false
+        val current = uiState.value.lyricsTagLineKeywords
+        if (current.any { it.equals(normalized, ignoreCase = true) }) return false
+        setLyricsTagLineKeywords(current + normalized)
+        return true
+    }
+
+    fun updateNonLyricsContentRule(oldRule: String, newRule: String): Boolean {
+        val normalized = normalizeNonLyricsContentRule(newRule) ?: return false
+        val current = uiState.value.lyricsTagLineKeywords
+        if (current.any { !it.equals(oldRule, ignoreCase = false) && it.equals(normalized, ignoreCase = true) }) {
+            return false
+        }
+        setLyricsTagLineKeywords(current.map { if (it == oldRule) normalized else it })
+        return true
+    }
+
+    fun removeNonLyricsContentRule(rule: String) {
+        setLyricsTagLineKeywords(uiState.value.lyricsTagLineKeywords.filterNot { it == rule })
+    }
+
+    fun resetNonLyricsContentRules() {
+        setLyricsTagLineKeywords(LyricsProcessingOptions.DefaultTagLineKeywords)
+    }
+
+    private fun normalizeNonLyricsContentRule(input: String): String? {
+        val value = input.trim()
+        return value.takeIf { it.isNotEmpty() && !it.contains('\n') && !it.contains('\r') }
     }
     fun setSeparator(separator: ArtistSeparator) {
         viewModelScope.launch {
@@ -183,9 +316,21 @@ class SettingsViewModel(
             settingsRepository.saveConversionMode(mode)
         }
     }
+    fun setLyricIndexEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.saveLyricIndexEnabled(enabled)
+        }
+    }
+
     fun setIgnoreShortAudio(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.saveIgnoreShortAudio(enabled)
+        }
+    }
+
+    fun setReplayGainTargetLoudness(loudness: Double) {
+        viewModelScope.launch {
+            settingsRepository.saveReplayGainTargetLoudness(loudness)
         }
     }
     fun setSearchSourceOrder(sources: List<String>) {
@@ -205,7 +350,19 @@ class SettingsViewModel(
         }
     }
 
-    fun setMetadataFieldWriteRules(rules: List<MetadataFieldWriteRule>) {
+    fun setSearchSourceTabStyle(style: SearchSourceTabStyle) {
+        viewModelScope.launch {
+            settingsRepository.saveSearchSourceTabStyle(style)
+        }
+    }
+
+    fun setShowAllSearchResultFields(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.saveShowAllSearchResultFields(enabled)
+        }
+    }
+
+    fun setMetadataFieldWriteRules(rules: List<PluginMetadataFieldWriteRule>) {
         viewModelScope.launch {
             settingsRepository.saveMetadataFieldWriteRules(rules)
         }

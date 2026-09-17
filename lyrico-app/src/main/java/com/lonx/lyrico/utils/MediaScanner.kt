@@ -1,7 +1,6 @@
 package com.lonx.lyrico.utils
 
 import android.content.Context
-import android.database.Cursor
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
@@ -20,17 +19,8 @@ data class SafScanResult(
 
 data class SafScannedSongFile(
     val songFile: SongFile,
-    val rootFolderId: Long
-)
-
-private data class SafDocumentRow(
-    val documentId: String,
-    val displayName: String,
-    val mimeType: String?,
-    val size: Long,
-    val lastModified: Long,
-    val uri: Uri,
-    val isDirectory: Boolean
+    val rootFolderId: Long,
+    val folderPath: String
 )
 
 class MediaScanner(
@@ -148,6 +138,10 @@ class MediaScanner(
                 output.add(
                     SafScannedSongFile(
                         rootFolderId = rootFolderId,
+                        folderPath = buildDisplayFolderPath(
+                            rootPath = displayRootPath,
+                            relativePath = currentRelativePath
+                        ),
                         songFile = SongFile(
                             mediaId = createVirtualMediaId(child.uri.toString()),
                             uri = child.uri,
@@ -167,79 +161,8 @@ class MediaScanner(
     private fun queryChildren(
         treeUri: Uri,
         parentDocumentId: String
-    ): List<SafDocumentRow> {
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
-            treeUri,
-            parentDocumentId
-        )
-
-        val projection = arrayOf(
-            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-            DocumentsContract.Document.COLUMN_MIME_TYPE,
-            DocumentsContract.Document.COLUMN_SIZE,
-            DocumentsContract.Document.COLUMN_LAST_MODIFIED
-        )
-
-        val result = mutableListOf<SafDocumentRow>()
-
-        try {
-            context.contentResolver.query(
-                childrenUri,
-                projection,
-                null,
-                null,
-                null
-            )?.use { cursor ->
-                val documentIdIndex = cursor.getColumnIndexOrThrow(
-                    DocumentsContract.Document.COLUMN_DOCUMENT_ID
-                )
-                val displayNameIndex = cursor.getColumnIndexOrThrow(
-                    DocumentsContract.Document.COLUMN_DISPLAY_NAME
-                )
-                val mimeTypeIndex = cursor.getColumnIndexOrThrow(
-                    DocumentsContract.Document.COLUMN_MIME_TYPE
-                )
-                val sizeIndex = cursor.getColumnIndexOrThrow(
-                    DocumentsContract.Document.COLUMN_SIZE
-                )
-                val lastModifiedIndex = cursor.getColumnIndexOrThrow(
-                    DocumentsContract.Document.COLUMN_LAST_MODIFIED
-                )
-
-                while (cursor.moveToNext()) {
-                    val documentId = cursor.getStringOrNull(documentIdIndex)
-                        ?: continue
-                    val displayName = cursor.getStringOrNull(displayNameIndex)
-                        ?: continue
-                    val mimeType = cursor.getStringOrNull(mimeTypeIndex)
-                    val size = cursor.getLongOrZero(sizeIndex)
-                    val lastModified = cursor.getLongOrZero(lastModifiedIndex)
-
-                    val documentUri = DocumentsContract.buildDocumentUriUsingTree(
-                        treeUri,
-                        documentId
-                    )
-
-                    result.add(
-                        SafDocumentRow(
-                            documentId = documentId,
-                            displayName = displayName,
-                            mimeType = mimeType,
-                            size = size,
-                            lastModified = lastModified,
-                            uri = documentUri,
-                            isDirectory = mimeType == DocumentsContract.Document.MIME_TYPE_DIR
-                        )
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(tag, "读取 SAF 子文件失败: parentDocumentId=$parentDocumentId", e)
-        }
-
-        return result
-    }
+    ): List<SafDocumentRow> =
+        SafDocuments.children(context, treeUri, parentDocumentId).orEmpty()
 
     private fun canQueryDocument(documentUri: Uri): Boolean {
         val projection = arrayOf(
@@ -260,16 +183,6 @@ class MediaScanner(
         } catch (e: Exception) {
             false
         }
-    }
-
-    private fun Cursor.getStringOrNull(index: Int): String? {
-        if (index < 0 || isNull(index)) return null
-        return getString(index)
-    }
-
-    private fun Cursor.getLongOrZero(index: Int): Long {
-        if (index < 0 || isNull(index)) return 0L
-        return runCatching { getLong(index) }.getOrDefault(0L)
     }
 
     private val supportedAudioExtensions = setOf(
@@ -303,6 +216,17 @@ class MediaScanner(
             "${rootPath.trimEnd('/')}/$fileName"
         } else {
             "${rootPath.trimEnd('/')}/$relativePath/$fileName"
+        }
+    }
+
+    private fun buildDisplayFolderPath(
+        rootPath: String,
+        relativePath: String
+    ): String {
+        return if (relativePath.isBlank()) {
+            rootPath.trimEnd('/')
+        } else {
+            "${rootPath.trimEnd('/')}/$relativePath"
         }
     }
 

@@ -3,7 +3,7 @@ package com.lonx.lyrico.utils
 import android.content.Context
 import coil.annotation.ExperimentalCoilApi
 import coil.imageLoader
-import com.lonx.lyrico.data.model.CacheCategory
+import com.lonx.lyrico.data.model.cache.CacheCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File

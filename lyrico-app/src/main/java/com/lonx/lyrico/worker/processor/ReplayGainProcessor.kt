@@ -3,13 +3,19 @@ package com.lonx.lyrico.worker.processor
 import com.lonx.audiotag.model.AudioTagData
 import com.lonx.lyrico.data.model.entity.BatchTaskEntity
 import com.lonx.lyrico.data.model.entity.BatchTaskItemEntity
-import com.lonx.lyrico.data.repository.SongRepository
+import com.lonx.lyrico.data.repository.SettingsRepository
+import com.lonx.lyrico.data.song.library.SongLibraryRepository
+import com.lonx.lyrico.domain.song.usecase.PatchSongTagsUseCase
+import com.lonx.lyrico.domain.song.usecase.SaveAudioTagsResult
 import com.lonx.lyrico.utils.ReplayGainCalculateState
 import com.lonx.lyrico.utils.ReplayGainScanner
+import kotlinx.coroutines.flow.first
 
 class ReplayGainProcessor(
-    private val songRepository: SongRepository,
-    private val replayGainScanner: ReplayGainScanner
+    private val songLibraryRepository: SongLibraryRepository,
+    private val patchSongTagsUseCase: PatchSongTagsUseCase,
+    private val replayGainScanner: ReplayGainScanner,
+    private val settingsRepository: SettingsRepository
 ) : BatchTaskProcessor {
 
     override suspend fun process(
@@ -17,7 +23,7 @@ class ReplayGainProcessor(
         item: BatchTaskItemEntity,
         onProgress: suspend (Float) -> Unit
     ): BatchTaskProcessResult {
-        val song = songRepository.getSongByUri(item.songUri)
+        val song = songLibraryRepository.getSongByUri(item.songUri)
             ?: throw BatchTaskSkippedException("Song not found")
 
         val hasExisting = !song.replayGainTrackGain.isNullOrBlank() ||
@@ -52,22 +58,17 @@ class ReplayGainProcessor(
             throw Exception("ReplayGain analysis failed")
         }
 
+        val targetLoudness = settingsRepository.replayGainTargetLoudness.first()
         val tagData = AudioTagData(
-            replayGainTrackGain = replayGainScanner.formatGain(analysisResult),
+            replayGainTrackGain = replayGainScanner.formatGain(analysisResult, targetLoudness),
             replayGainTrackPeak = replayGainScanner.formatPeak(analysisResult.peak),
-            replayGainReferenceLoudness = "-18 LUFS"
+            replayGainReferenceLoudness = replayGainScanner.formatReferenceLoudness(targetLoudness)
         )
 
-        val writeSuccess = songRepository.patchAudioTags(item.songUri, tagData)
-        if (!writeSuccess) {
+        val result = patchSongTagsUseCase(item.songUri, tagData)
+        if (result !is SaveAudioTagsResult.Success) {
             throw Exception("Write failed")
         }
-
-        songRepository.updateSongMetadata(
-            tagData,
-            item.songUri,
-            System.currentTimeMillis()
-        )
 
         return BatchTaskProcessResult()
     }

@@ -1,320 +1,213 @@
-# 配置与元数据
+# 配置与运行时字段
 
-## 用户配置（configFields）
+本文档说明三个方面的数据传递：
 
-插件可通过 `manifest.json` 中的 `configFields` 定义用户可配置项。这些配置项在插件的设置页面展示，运行时通过 `request.config` 传递给插件函数。
+1. **用户配置注入**：`configFields` 中声明的配置项如何传入插件函数
+2. **插件返回数据**：`fields` 和 `internal` 两个 JSON 对象的作用与规范
+3. **宿主任意**：Lyrico 如何根据用户策略将 `fields` 中的值写入音频标签
 
-### 配置示例
+---
+
+## 1. 用户配置注入
+
+用户在插件配置界面填写并保存的值，会在每次调用插件函数时通过 `request.config` 传入。
+
+假设 manifest 中声明了以下 `configFields`：
 
 ```json
 {
-  "configFields": [
-    {
-      "key": "lyrics_provider",
-      "title": "歌词源",
-      "summary": "选择歌词数据来源",
-      "group": "歌词",
-      "type": "dropdown",
-      "required": true,
-      "defaultValue": "third_party",
-      "options": [
-        { "value": "third_party", "label": "第三方" },
-        { "value": "official", "label": "官方" }
-      ]
-    },
-    {
-      "key": "token",
-      "title": "Token",
-      "type": "password",
-      "required": true,
-      "defaultValue": "",
-      "dependency": {
-        "match": { "key": "lyrics_provider", "value": "official" }
-      }
-    },
-    {
-      "key": "cover_size",
-      "title": "封面大小",
-      "type": "dropdown",
-      "required": true,
-      "defaultValue": "1200",
-      "options": [
-        { "value": "500", "label": "500 × 500" },
-        { "value": "800", "label": "800 × 800" },
-        { "value": "1200", "label": "1200 × 1200" }
-      ]
-    }
+  "key": "api_key", "title": "API Key", "type": "password", "required": true,
+  "key": "lyrics_source", "title": "歌词来源", "type": "dropdown", "defaultValue": "official",
+  "options": [
+    { "value": "official", "label": "官方歌词" },
+    { "value": "translated", "label": "翻译歌词" }
   ]
 }
 ```
 
-### 运行时访问配置
+用户保存 `api_key = "abc123"` 且歌词来源保持默认值不变后，调用 `searchSongs` 时传入的 `request` 形如：
 
-配置值通过 `request.config` 传递给插件函数：
-
-```javascript
-function searchSongs(request) {
-  var coverSize = request.config.cover_size || "1200";
-  var provider = request.config.lyrics_provider || "third_party";
-  var token = request.config.token || "";
-
-  Platform.log.debug("Config", "Cover size: " + coverSize);
+```json
+{
+  "keyword": "晴天 周杰伦",
+  "page": 1,
+  "pageSize": 20,
+  "config": {
+    "api_key": "abc123",
+    "lyrics_source": "official"
+  }
 }
 ```
 
-`request.config` 是一个键值对 Map，键名对应 `configFields` 中的 `key`，值始终为字符串。
+**注意事项**：
 
-### 控件类型
+- `config` 中所有值都是 `string` 类型，包括 `switch`（`"true"` / `"false"`）和 `number`（`"15"`）。
+- `type: "markdown"` 的配置项不会出现在 `config` 中，它仅用于在配置界面渲染说明文本。
+- 依赖条件未满足而隐藏的配置项，其值会保留上一次保存的内容（或默认值），仍会出现在 `config` 中。
 
-| 类型 | UI 表现 | 存储值示例 |
-|------|---------|-----------|
-| `"text"` | 文本输入框 | `"任意字符串"` |
-| `"password"` | 密码输入框（遮蔽显示） | `"secret_token"` |
-| `"number"` | 数字输入框 | `"42"` |
-| `"switch"` | 开关 | `"true"` 或 `"false"` |
-| `"dropdown"` | 下拉选择框 | `"option_value"` |
+---
 
-### 开关类型说明
+## 2. fields — 标准元数据字段
 
-`type: "switch"` 配置的值是字符串 `"true"` 或 `"false"`，JavaScript 中需注意比较：
+插件在 `searchSongs` 的返回结果中，通过 `fields` 对象返回宿主认可的标准元数据。
 
+### 返回格式
+
+```json
+{
+  "id": "12345",
+  "title": "晴天",
+  "artist": "周杰伦",
+  "fields": {
+    "title": "晴天",
+    "artist": "周杰伦",
+    "album": "叶惠美",
+    "date": "2003",
+    "track_number": "3",
+    "cover_url": "https://img.example.com/cover/12345.jpg"
+  },
+  "internal": {
+    "song_id": "12345"
+  }
+}
+```
+
+`fields` 中的值与顶层 `title`、`artist` 等字段作用相似，都会被纳入元数据候选。不同之处在于 `fields` 可以包含顶层不支持的字段（如 `genre`、`composer` 等）。
+
+触发歌词请求时，`fields` 中的 `lyrics` 字段会作为候选歌词来源。
+
+### 标准字段列表
+
+插件只能使用以下预定义的 key 来填充 `fields`。使用未知 key 会被丢弃并在调试日志中产生 warning。
+
+| key | 含义 | 示例值 |
+|-----|------|--------|
+| `title` | 歌曲标题 | `"晴天"` |
+| `artist` | 艺术家 | `"周杰伦"` |
+| `album` | 专辑名称 | `"叶惠美"` |
+| `album_artist` | 专辑艺术家 | `"周杰伦"` |
+| `genre` | 流派 | `"Pop"` |
+| `date` | 发行日期 | `"2003-07-31"` |
+| `track_number` | 音轨号 | `"3"` |
+| `disc_number` | 碟片号 | `"1"` |
+| `composer` | 作曲 | `"周杰伦"` |
+| `lyricist` | 作词 | `"方文山"` |
+| `comment` | 备注 | `"..."` |
+| `lyrics` | 歌词（LRC 文本） | `"[00:00.00]晴天\n..."` |
+| `cover_url` | 封面图片 URL | `"https://..."` |
+| `language` | 语言 | `"Chinese"` |
+| `copyright` | 版权信息 | `"© 2003 JVR Music"` |
+| `rating` | 评分（0-100） | `"85"` |
+| `replaygain_track_gain` | 音轨增益（dB） | `"-8.50 dB"` |
+| `replaygain_track_peak` | 音轨峰值 | `"0.98"` |
+| `replaygain_album_gain` | 专辑增益（dB） | `"-7.20 dB"` |
+| `replaygain_album_peak` | 专辑峰值 | `"0.95"` |
+| `replaygain_reference_loudness` | 参考响度（LUFS） | `"-14.00 LUFS"` |
+
+除此以外的 key 都会被忽略。不要把平台 ID、hash、token 等放入 `fields`，它们应该放入 `internal`。
+
+---
+
+## 3. internal — 插件私有上下文
+
+插件在 `searchSongs` 中返回的 `internal` 对象，用于保存非标准元数据的上下文信息。
+
+### 适用场景
+
+- 平台的歌曲 ID、专辑 ID、歌词 ID
+- 请求 hash、签名、cookie token
+- 用于后续请求的路由信息
+- 任何不应对用户展示、不应写入标签、不应参与跨插件匹配的私有数据
+
+### 返回格式
+
+```json
+{
+  "id": "12345",
+  "title": "晴天",
+  "fields": { "title": "晴天" },
+  "internal": {
+    "song_id": "12345",
+    "album_id": "67890",
+    "lyrics_id": "abc"
+  }
+}
+```
+
+### 约束
+
+| 约束 | 值 |
+|------|-----|
+| 单个 key 最大长度 | 64 字符 |
+| 单个 value 最大长度 | 4096 字符 |
+| 最多保留条目数 | 64 条 |
+
+超出约束的条目会被静默丢弃。
+
+### 传递规则
+
+- `internal` **不展示**给用户
+- `internal` **不入写入**音频标签
+- `internal` **不参与**批量匹配的字段选择
+- `internal` **不传给**其他插件
+- `internal` 只会在后续请求中**原样传回同一个插件**
+
+例如，`searchSongs` 返回的歌曲中 `internal.lyrics_id = "abc"` 会在该歌曲的 `getLyrics` 请求中出现在 `request.song.internal.lyrics_id`：
+
+```json
+{
+  "song": {
+    "id": "12345",
+    "title": "晴天",
+    "fields": { "title": "晴天" },
+    "internal": { "lyrics_id": "abc" }
+  },
+  "config": { ... }
+}
+```
+
+JS 端读取：
 ```javascript
-var enabled = request.config.my_switch === "true";
+function getLyrics(request) {
+  var lyricsId = request.song.internal.lyrics_id;
+  if (!lyricsId) return null;
+  var response = Platform.http.getText(
+    "https://api.example.com/lyrics?id=" + encodeURIComponent(lyricsId),
+    { headers: { "Authorization": "Bearer " + request.config.api_key } }
+  );
+  return response;
+}
 ```
 
 ---
 
-## 配置依赖（条件可见性）
+## 4. 写入策略
 
-配置依赖系统控制某个配置字段的显示/隐藏，基于其他字段的值。
+`fields` 中的值是否写入音频标签、写入到哪个字段、以什么方式写入——这些完全由 Lyrico 宿主控制，插件无需也无法干预。
 
-### 依赖类型
+### 三态写入模式
 
-| 类型 | JSON 结构 | 说明 |
-|------|-----------|------|
-| `match` | `{ "match": { "key": "K", "value": "V" } }` | 当 `config[K] == V` 时显示 |
-| `and` | `{ "and": { "conditions": [...] } }` | 所有条件都满足时显示 |
-| `or` | `{ "or": { "conditions": [...] } }` | 任一条件满足时显示 |
-| `not` | `{ "not": { "condition": {...} } }` | 条件不满足时显示 |
-
-### 示例：match 依赖
-
-当 `lyrics_provider` 的值为 `"official"` 时，显示 `token` 字段：
-
-```json
-{
-  "key": "token",
-  "title": "Token",
-  "type": "password",
-  "dependency": {
-    "match": { "key": "lyrics_provider", "value": "official" }
-  }
-}
-```
-
-### 示例：复合条件
-
-当 `advanced_mode` 为 `"true"` **且** `source_type` 为 `"external"` 时显示：
-
-```json
-{
-  "dependency": {
-    "and": {
-      "conditions": [
-        { "match": { "key": "advanced_mode", "value": "true" } },
-        { "match": { "key": "source_type", "value": "external" } }
-      ]
-    }
-  }
-}
-```
-
-### 示例：取反条件
-
-当 `use_proxy` 的值**不等于** `"true"` 时显示：
-
-```json
-{
-  "dependency": {
-    "not": {
-      "condition": {
-        "match": { "key": "use_proxy", "value": "true" }
-      }
-    }
-  }
-}
-```
-
-### 完整示例：连锁依赖
-
-```json
-{
-  "configFields": [
-    {
-      "key": "lyrics_provider",
-      "title": "歌词源",
-      "type": "dropdown",
-      "options": [
-        { "value": "third_party", "label": "第三方" },
-        { "value": "official", "label": "官方" },
-        { "value": "none", "label": "无" }
-      ]
-    },
-    {
-      "key": "token",
-      "title": "Token",
-      "type": "password",
-      "dependency": { "match": { "key": "lyrics_provider", "value": "official" } }
-    },
-    {
-      "key": "third_party_url",
-      "title": "第三方 API 地址",
-      "type": "text",
-      "dependency": { "match": { "key": "lyrics_provider", "value": "third_party" } }
-    }
-  ]
-}
-```
-
-效果：
-- 选择"官方" → 显示 Token 输入框，隐藏 API 地址
-- 选择"第三方" → 显示 API 地址输入框，隐藏 Token
-- 选择"无" → 两者都隐藏
-
----
-
-## 元数据字段（metadataFields）
-
-`metadataFields` 声明插件可以写入音频文件的元数据。各字段的定义和可选值详见 [Manifest 字段参考](./manifest.md) 中的 `metadataFields` 章节。
-
-### 写入流程
-
-1. 插件在 `searchSongs` 返回的 `fields` 中包含键名，键名对应 `metadataFields` 中的 `key`：
-
-```javascript
-{
-  id: "12345",
-  title: "歌曲名",
-  fields: {
-    title: "歌曲名",
-    artist: "歌手",
-    album: "专辑名",
-    date: "2024-01-01",
-    track_number: "3",
-    source_platform_key: "encrypted_metadata_string..."
-  }
-}
-```
-
-2. 用户（或系统）根据 `metadataFields` 声明决定将哪些字段写入音频文件。每个字段的 `defaultTarget` 决定默认写入哪个标签，`defaultMode` 决定写入策略：
-
-| `fields` 键 | `defaultTarget` | 效果 |
-|-------------|-----------------|------|
-| `title` | `TITLE` | 写入歌曲标题标签 |
-| `artist` | `ARTIST` | 写入艺术家标签 |
-| `album` | `ALBUM` | 写入专辑标签 |
-| `date` | `DATE` | 写入发行日期标签 |
-| `track_number` | `TRACK_NUMBER` | 写入音轨号标签 |
-| `source_platform_key` | `COMMENT` | 写入注释标签（默认不启用） |
-
-### 写入模式
+批量匹配页中，用户可以为每个标准字段选择写入模式：
 
 | 模式 | 行为 |
 |------|------|
-| `DISABLED` | 默认不写入，用户需手动启用 |
-| `SUPPLEMENT` | 仅在目标字段为空时写入（不覆盖已有内容） |
-| `OVERWRITE` | 始终以插件数据覆盖目标字段 |
+| 禁用 | 不写入该字段的标签 |
+| 补充 | 仅当本地标签为空时才用插件数据填充 |
+| 覆盖 | 始终用插件数据替换本地标签 |
 
-### internal 字段
+### 数据流转总览
 
-`"internal": true` 的元数据字段在元数据管理界面中不会展示给用户，但系统内部仍可使用。适用于：
-
-- 平台专属 ID（如平台用户 ID、专辑 ID）
-- 后续查询需要的持久化密钥
-- 不需要用户关注的内部数据
-
-```json
-{
-  "key": "platform_id",
-  "title": "平台 ID",
-  "internal": true,
-  "defaultTarget": "CUSTOM",
-  "defaultMode": "DISABLED",
-  "defaultCustomTagKey": "PLATFORM_ID"
-}
+```
+manifest.json                    JS 插件                          Lyrico 宿主
+─────────────                    ──────                          ──────────
+configFields ──────────► request.config ────► 发起 API 请求
+                           (用户配置值)
+                                                          ▲
+                             返回 JSON                   │
+                        ┌──── fields ─────────► 展示/写入候选
+                        │
+                        └──── internal ──────► 传回同一插件
+                                                 (下次请求时)
 ```
 
----
-
-## 完整配置示例
-
-以下是一个包含所有配置字段类型和依赖组合的完整示例：
-
-```json
-{
-  "configFields": [
-    {
-      "key": "api_type",
-      "title": "API 类型",
-      "summary": "选择要使用的 API 接口",
-      "group": "API",
-      "type": "dropdown",
-      "required": true,
-      "defaultValue": "standard",
-      "options": [
-        { "value": "standard", "label": "标准接口" },
-        { "value": "premium", "label": "高级接口" }
-      ]
-    },
-    {
-      "key": "api_key",
-      "title": "API Key",
-      "summary": "高级接口需要的密钥",
-      "group": "API",
-      "type": "password",
-      "required": false,
-      "dependency": {
-        "and": {
-          "conditions": [
-            { "match": { "key": "api_type", "value": "premium" } }
-          ]
-        }
-      }
-    },
-    {
-      "key": "timeout",
-      "title": "超时时间（秒）",
-      "summary": "HTTP 请求超时时间",
-      "group": "网络",
-      "type": "number",
-      "required": true,
-      "defaultValue": "30"
-    },
-    {
-      "key": "enable_cache",
-      "title": "启用缓存",
-      "group": "性能",
-      "type": "switch",
-      "defaultValue": "true"
-    }
-  ]
-}
-```
-
-对应插件代码中的使用：
-
-```javascript
-function searchSongs(request) {
-  var cfg = request.config;
-  var apiType = cfg.api_type || "standard";
-  var apiKey = cfg.api_key || "";
-  var timeout = parseInt(cfg.timeout || "30", 10);
-  var useCache = cfg.enable_cache === "true";
-
-  if (apiType === "premium" && !apiKey) {
-    Platform.log.warn("Plugin", "Premium API selected but no API key provided");
-  }
-
-  // 使用配置发起请求...
-}
-```
+插件开发者只需关注第一步（读取 `request.config`）和第二步（构造 `fields` 与 `internal`）。写入策略由用户在 Lyrico 中自行控制。

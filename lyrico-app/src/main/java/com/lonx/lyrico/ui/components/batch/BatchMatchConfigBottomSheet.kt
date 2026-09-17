@@ -24,13 +24,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.state.ToggleableState
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.BatchMatchConfig
-import com.lonx.lyrico.data.model.BatchMatchField
-import com.lonx.lyrico.data.model.BatchMatchMode
+import com.lonx.lyrico.data.model.metadata.MetadataFieldTarget
+import com.lonx.lyrico.data.model.metadata.MetadataWriteMode
 import com.lonx.lyrico.ui.components.base.YesNoBottomSheet
+import com.lonx.lyrico.viewmodel.BatchMatchType
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -48,27 +48,40 @@ import kotlin.math.roundToInt
 @Composable
 fun BatchMatchConfigBottomSheet(
     show: Boolean,
+    matchType: BatchMatchType,
     initialConfig: BatchMatchConfig,
+    visibleTargets: List<MetadataFieldTarget>,
     onDismissRequest: (BatchMatchConfig) -> Unit,
     onConfirm: (BatchMatchConfig) -> Unit
 ) {
-    var config by remember { mutableStateOf(initialConfig) }
+    var config by remember(show, initialConfig) { mutableStateOf(initialConfig) }
 
-    val allFields = remember { BatchMatchField.entries }
+    val targets = visibleTargets.filter { it in matchType.targets }
 
-    fun updateField(field: BatchMatchField, isSelected: Boolean, mode: BatchMatchMode) {
-        val currentMap = config.fields.toMutableMap()
-        if (isSelected) {
-            currentMap[field] = mode
+    fun updateTarget(
+        target: MetadataFieldTarget,
+        isSelected: Boolean,
+        mode: MetadataWriteMode
+    ) {
+        val currentMap = config.targetModes.toMutableMap()
+        currentMap[target] = if (isSelected) {
+            mode.takeIf { it != MetadataWriteMode.DISABLED }
+                ?: MetadataWriteMode.SUPPLEMENT
         } else {
-            currentMap.remove(field)
+            MetadataWriteMode.DISABLED
         }
-        config = config.copy(fields = currentMap)
+        config = config.copy(targetModes = currentMap)
     }
 
     YesNoBottomSheet(
         show = show,
-        title = stringResource(R.string.batch_match_config_title),
+        title = stringResource(
+            when (matchType) {
+                BatchMatchType.METADATA -> R.string.batch_match_metadata_config_title
+                BatchMatchType.LYRICS -> R.string.batch_match_lyrics_config_title
+                BatchMatchType.COVER -> R.string.batch_match_cover_config_title
+            }
+        ),
         enableNestedScroll = false,
         content = {
             Column(
@@ -85,25 +98,31 @@ fun BatchMatchConfigBottomSheet(
                     LazyColumn(
                         modifier = Modifier.heightIn(max = 250.dp)
                     ) {
-                        items(allFields, key = { it.name }) { field ->
-                            val isSelected = config.fields.containsKey(field)
-                            val mode = config.fields[field] ?: BatchMatchMode.SUPPLEMENT
+                        items(targets, key = { it.name }) { target ->
+                            val mode = config.targetModes[target] ?: MetadataWriteMode.DISABLED
+                            val isSelected = mode != MetadataWriteMode.DISABLED
+                            val effectiveMode = if (isSelected) {
+                                mode
+                            } else {
+                                MetadataWriteMode.SUPPLEMENT
+                            }
 
-                            BatchMatchFieldItem(
-                                field = field,
+                            BatchMatchTargetItem(
+                                target = target,
                                 isSelected = isSelected,
-                                mode = mode,
+                                mode = effectiveMode,
                                 onCheckedChange = { checked ->
-                                    updateField(field, checked, mode)
+                                    updateTarget(target, checked, effectiveMode)
                                 },
                                 onModeToggle = {
-                                    updateField(
-                                        field,
-                                        isSelected,
-                                        if (mode == BatchMatchMode.OVERWRITE)
-                                            BatchMatchMode.SUPPLEMENT
-                                        else
-                                            BatchMatchMode.OVERWRITE
+                                    updateTarget(
+                                        target = target,
+                                        isSelected = isSelected,
+                                        mode = if (effectiveMode == MetadataWriteMode.OVERWRITE) {
+                                            MetadataWriteMode.SUPPLEMENT
+                                        } else {
+                                            MetadataWriteMode.OVERWRITE
+                                        }
                                     )
                                 }
                             )
@@ -111,7 +130,6 @@ fun BatchMatchConfigBottomSheet(
                     }
                 }
                 Card(
-                    modifier = Modifier.padding(bottom = 12.dp),
                     colors = CardDefaults.defaultColors(
                         color = MiuixTheme.colorScheme.secondaryContainer,
                     )
@@ -124,20 +142,20 @@ fun BatchMatchConfigBottomSheet(
                         summary = stringResource(R.string.batch_match_prefer_filename_summary),
                         checked = config.preferFileName,
                         onCheckedChange = { checked ->
-                            val updatedFields = config.fields.toMutableMap()
+                            val updatedTargetModes = config.targetModes.toMutableMap()
 
                             if (checked) {
-                                if (updatedFields.containsKey(BatchMatchField.TITLE)) {
-                                    updatedFields[BatchMatchField.TITLE] = BatchMatchMode.OVERWRITE
+                                if (updatedTargetModes[MetadataFieldTarget.TITLE] != MetadataWriteMode.DISABLED) {
+                                    updatedTargetModes[MetadataFieldTarget.TITLE] = MetadataWriteMode.OVERWRITE
                                 }
-                                if (updatedFields.containsKey(BatchMatchField.ARTIST)) {
-                                    updatedFields[BatchMatchField.ARTIST] = BatchMatchMode.OVERWRITE
+                                if (updatedTargetModes[MetadataFieldTarget.ARTIST] != MetadataWriteMode.DISABLED) {
+                                    updatedTargetModes[MetadataFieldTarget.ARTIST] = MetadataWriteMode.OVERWRITE
                                 }
                             }
 
                             config = config.copy(
                                 preferFileName = checked,
-                                fields = updatedFields
+                                targetModes = updatedTargetModes
                             )
                         },
                         insideMargin = PaddingValues(12.dp)
@@ -177,7 +195,7 @@ fun BatchMatchConfigBottomSheet(
                         }
                     )
                 }
-
+                Spacer(modifier = Modifier.padding(vertical = 12.dp))
             }
         },
         onDismissRequest = { onDismissRequest(config) },
@@ -189,10 +207,10 @@ fun BatchMatchConfigBottomSheet(
 }
 
 @Composable
-private fun BatchMatchFieldItem(
-    field: BatchMatchField,
+private fun BatchMatchTargetItem(
+    target: MetadataFieldTarget,
     isSelected: Boolean,
-    mode: BatchMatchMode,
+    mode: MetadataWriteMode,
     onCheckedChange: (Boolean) -> Unit,
     onModeToggle: () -> Unit
 ) {
@@ -219,8 +237,9 @@ private fun BatchMatchFieldItem(
                         style = MiuixTheme.textStyles.footnote2
                     )
                 }
+
                 Switch(
-                    checked = mode == BatchMatchMode.OVERWRITE,
+                    checked = mode == MetadataWriteMode.OVERWRITE,
                     onCheckedChange = { onModeToggle() },
                     enabled = isSelected
                 )
@@ -228,53 +247,14 @@ private fun BatchMatchFieldItem(
         }
     ) {
         Text(
-            text = stringResource(field.labelRes),
+            text = stringResource(target.labelRes),
             style = MiuixTheme.textStyles.main,
-            color = if (isSelected) MiuixTheme.colorScheme.onSurfaceContainer else MiuixTheme.colorScheme.onSecondaryContainer,
-        )
-        if (field.summaryRes != 0) {
-            Text(
-                text = stringResource(field.summaryRes),
-                style = MiuixTheme.textStyles.footnote1,
-                color = MiuixTheme.colorScheme.onSurfaceVariantActions
-            )
-        }
-    }
-}
-
-
-@Preview(showBackground = true)
-@Composable
-private fun BatchMatchFieldItemPreview() {
-    Column(
-        modifier = Modifier.padding(16.dp)
-    ) {
-        BatchMatchFieldItem(
-            field = BatchMatchField.TITLE,
-            isSelected = true,
-            mode = BatchMatchMode.SUPPLEMENT,
-            onCheckedChange = {},
-            onModeToggle = {}
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        BatchMatchFieldItem(
-            field = BatchMatchField.ARTIST,
-            isSelected = true,
-            mode = BatchMatchMode.OVERWRITE,
-            onCheckedChange = {},
-            onModeToggle = {}
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        BatchMatchFieldItem(
-            field = BatchMatchField.ALBUM,
-            isSelected = false,
-            mode = BatchMatchMode.SUPPLEMENT,
-            onCheckedChange = {},
-            onModeToggle = {}
+            color = if (isSelected) {
+                MiuixTheme.colorScheme.onSurfaceContainer
+            } else {
+                MiuixTheme.colorScheme.onSecondaryContainer
+            }
         )
     }
 }
+

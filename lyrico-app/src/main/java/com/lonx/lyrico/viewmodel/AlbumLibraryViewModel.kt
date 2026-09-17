@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.lyrico.data.model.AlbumSortBy
 import com.lonx.lyrico.data.model.AlbumSortInfo
-import com.lonx.lyrico.data.model.dao.AlbumListItem
+import com.lonx.lyrico.data.model.entity.AlbumEntity
 import com.lonx.lyrico.data.repository.LibraryIndexRepository
 import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.utils.LibraryScanManager
@@ -22,38 +22,36 @@ class AlbumLibraryViewModel(
     val sortInfo: StateFlow<AlbumSortInfo> = settingsRepository.albumSortInfo
         .stateIn(viewModelScope, SharingStarted.Eagerly, AlbumSortInfo())
 
-    val showScrollTopButton = settingsRepository.showScrollTopButton
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val gridColumns = settingsRepository.albumGridColumns
         .stateIn(viewModelScope, SharingStarted.Eagerly, 2)
 
     val scanState = libraryScanManager.state
-    val albums: StateFlow<List<AlbumListItem>> =
+    val albums: StateFlow<List<AlbumEntity>> =
         combine(libraryIndexRepository.observeAlbums(), sortInfo) { albums, sort ->
             val sorted = when (sort.sortBy) {
                 AlbumSortBy.NAME -> albums.sortedWith(
-                    compareBy<AlbumListItem> { it.sortKey }.thenBy { it.name }
+                    compareBy<AlbumEntity> { it.sortKey }.thenBy { it.name }
                 )
 
                 AlbumSortBy.ALBUM_ARTIST -> albums.sortedWith(
-                    compareBy<AlbumListItem> { it.albumArtist.orEmpty().uppercase() }
+                    compareBy<AlbumEntity> { it.albumArtist.orEmpty().uppercase() }
                         .thenBy { it.sortKey }
                         .thenBy { it.name }
                 )
 
                 AlbumSortBy.SONG_COUNT -> albums.sortedWith(
-                    compareByDescending<AlbumListItem> { it.songCount }
+                    compareByDescending<AlbumEntity> { it.songCount }
                         .thenBy { it.sortKey }
                         .thenBy { it.name }
                 )
                 AlbumSortBy.YEAR -> {
                     val comparator = if (sort.order == SortOrder.ASC) {
-                        compareBy<AlbumListItem> { it.year?.toIntOrNull() ?: Int.MAX_VALUE }
+                        compareBy<AlbumEntity> { it.year?.toIntOrNull() ?: Int.MAX_VALUE }
                             .thenBy { it.sortKey }
                             .thenBy { it.name }
                     } else {
-                        compareBy<AlbumListItem> { it.year?.toIntOrNull() == null }
+                        compareBy<AlbumEntity> { it.year?.toIntOrNull() == null }
                             .thenByDescending { it.year?.toIntOrNull() ?: Int.MIN_VALUE }
                             .thenBy { it.sortKey }
                             .thenBy { it.name }
@@ -74,11 +72,6 @@ class AlbumLibraryViewModel(
         }
     }
 
-    fun setScrollToTopButtonEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.saveShowScrollTopButton(enabled)
-        }
-    }
 
     fun setGridColumns(columns: Int) {
         viewModelScope.launch {

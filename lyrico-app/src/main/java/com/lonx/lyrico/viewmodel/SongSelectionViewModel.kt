@@ -10,20 +10,30 @@ import com.lonx.lyrico.data.SharedSelectionManager
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.data.model.entity.getUri
 import com.lonx.lyrico.data.repository.PlaybackRepository
-import com.lonx.lyrico.data.repository.SongRepository
+import com.lonx.lyrico.domain.song.usecase.DeleteSongsUseCase
+import com.lonx.lyrico.domain.song.usecase.RenameSongUseCase
 import kotlinx.coroutines.launch
 
 class SongSelectionViewModel(
-    private val songRepository: SongRepository,
+    private val deleteSongsUseCase: DeleteSongsUseCase,
+    private val renameSongUseCase: RenameSongUseCase,
     private val playbackRepository: PlaybackRepository,
     private val selectionManager: SharedSelectionManager
 ) : ViewModel() {
 
     val selectedSongUris = selectionManager.selectedUris
     val isSelectionMode = selectionManager.isSelectionMode
+    val swipeAnchorUri = selectionManager.swipeAnchorUri
 
     fun toggleSelection(uri: String) {
         selectionManager.toggle(uri)
+    }
+
+    fun swipeSelect(song: SongEntity, visibleSongs: List<SongEntity>) {
+        selectionManager.selectSwipeRange(
+            uri = song.uri,
+            visibleUris = visibleSongs.map { it.uri }
+        )
     }
 
     fun exitSelectionMode() {
@@ -52,7 +62,7 @@ class SongSelectionViewModel(
 
     fun delete(song: SongEntity) {
         viewModelScope.launch {
-            songRepository.deleteSong(song)
+            deleteSongsUseCase(listOf(song))
         }
     }
 
@@ -61,7 +71,7 @@ class SongSelectionViewModel(
         val toDelete = songs.filter { it.uri in selectedUris }
 
         viewModelScope.launch {
-            songRepository.deleteSongs(toDelete)
+            deleteSongsUseCase(toDelete)
             exitSelectionMode()
         }
     }
@@ -89,7 +99,7 @@ class SongSelectionViewModel(
 
     fun renameSong(song: SongEntity, newFileName: String) {
         viewModelScope.launch {
-            songRepository.renameSong(song, newFileName)
+            renameSongUseCase(song, newFileName)
         }
     }
 }

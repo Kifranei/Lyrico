@@ -10,6 +10,11 @@ class LibEbuR128(val channels: Int, sampleRate: Int) : AutoCloseable {
         }
         const val FORMAT_SHORT = 1
         const val FORMAT_FLOAT = 2
+
+        fun loudnessMultiple(states: List<LibEbuR128>): Double {
+            if (states.isEmpty()) return -70.0
+            return states.first().getMultipleLoudnessNative(states.map { it.nativePtr }.toLongArray())
+        }
     }
 
     private var nativePtr: Long = 0
@@ -48,4 +53,5 @@ class LibEbuR128(val channels: Int, sampleRate: Int) : AutoCloseable {
     private external fun processDirectNative(statePtr: Long, buffer: ByteBuffer, format: Int, frames: Int)
     private external fun getLoudnessNative(statePtr: Long): Double
     private external fun getTruePeakNative(statePtr: Long, channels: Int): Double
+    private external fun getMultipleLoudnessNative(statePtrs: LongArray): Double
 }

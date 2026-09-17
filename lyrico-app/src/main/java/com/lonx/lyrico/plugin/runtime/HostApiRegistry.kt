@@ -1,13 +1,27 @@
 package com.lonx.lyrico.plugin.runtime
 
 object HostApiRegistry {
-    const val PLUGIN_API_VERSION = 1
-    const val HOST_API_VERSION = 1
+    const val MIN_PLUGIN_PROTOCOL_VERSION = 1
+    const val PLUGIN_PROTOCOL_VERSION = 5
+    const val MIN_PLATFORM_API_VERSION = 1
+    const val PLATFORM_API_VERSION = 4
+
+    fun supportsPluginApiVersion(apiVersion: Int): Boolean =
+        apiVersion in MIN_PLUGIN_PROTOCOL_VERSION..PLUGIN_PROTOCOL_VERSION
+
+    fun supportsHostApiVersion(minHostApiVersion: Int): Boolean =
+        minHostApiVersion in MIN_PLATFORM_API_VERSION..PLATFORM_API_VERSION
 
     val SUPPORTED_HOST_APIS = setOf(
+        "i18n.getLocale",
+        "i18n.t",
         "app.info",
         "app.userAgent",
         "runtime.info",
+        "cache.get",
+        "cache.set",
+        "cache.remove",
+        "cache.clear",
         "crypto.md5",
         "crypto.aesEcbPkcs5EncryptBase64",
         "crypto.aesEcbPkcs5EncryptHex",
@@ -17,6 +31,12 @@ object HostApiRegistry {
         "base64.dropBytes",
         "base64.decodeBytes",
         "base64.encodeBytes",
+        "base64.encodeUrlText",
+        "base64.decodeUrlText",
+        "base64.encodeUrlBytes",
+        "base64.decodeUrlBytes",
+        "base64.toUrl",
+        "base64.fromUrl",
         "bytes.xor",
         "bytes.xorBase64",
         "compression.inflateBytesToText",
@@ -30,6 +50,10 @@ object HostApiRegistry {
         "http.postBytesResponse",
         "log.debug",
         "log.warn",
-        "log.error"
+        "log.error",
+        "xml.getRootAttributes",
+        "xml.findElements",
+        "xml.replaceChildrenByAttr",
+        "xml.removeElements"
     )
 }

@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.lyrico.data.model.BatchTaskStatus
 import com.lonx.lyrico.data.model.BatchTaskType
-import com.lonx.lyrico.data.model.LyricFormat
+import com.lonx.lyrico.data.model.lyrics.LyricFormat
+import com.lonx.lyrico.data.model.lyrics.LyricsProcessingOptions
 import com.lonx.lyrico.data.repository.BatchTaskRepository
-import com.lonx.lyrico.data.repository.SongRepository
+import com.lonx.lyrico.data.repository.SettingsRepository
+import com.lonx.lyrico.data.song.library.SongLibraryRepository
 import com.lonx.lyrico.worker.BatchTaskScheduler
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +21,11 @@ import kotlinx.serialization.json.Json
 data class BatchLyricsFormatUiState(
     val isRunning: Boolean = false,
     val concurrency: Int = 3,
-    val targetFormat: LyricFormat = LyricFormat.VERBATIM_LRC,
+    val targetFormat: LyricFormat? = null,
+    val formatLineOrder: Boolean = true,
+    val removeTagLines: Boolean = false,
+    val tagLineKeywords: List<String> = LyricsProcessingOptions.DefaultTagLineKeywords,
+    val removeEmptyLines: Boolean = false,
     val progress: Pair<Int, Int>? = null,
     val successCount: Int = 0,
     val failureCount: Int = 0,
@@ -33,9 +39,10 @@ data class BatchLyricsFormatUiState(
 )
 
 class BatchLyricsFormatViewModel(
-    private val songRepository: SongRepository,
+    private val songLibraryRepository: SongLibraryRepository,
     private val batchTaskRepository: BatchTaskRepository,
-    private val batchTaskScheduler: BatchTaskScheduler
+    private val batchTaskScheduler: BatchTaskScheduler,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BatchLyricsFormatUiState())
@@ -49,6 +56,11 @@ class BatchLyricsFormatViewModel(
             val runningTask = batchTaskRepository.getRunningTaskByType(BatchTaskType.CONVERT_LYRICS_FORMAT)
             if (runningTask != null) {
                 resumeObservingTask(runningTask.taskId)
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.lyricsTagLineKeywords.collect { keywords ->
+                _uiState.update { it.copy(tagLineKeywords = keywords) }
             }
         }
     }
@@ -112,8 +124,20 @@ class BatchLyricsFormatViewModel(
         _uiState.update { it.copy(concurrency = count.coerceIn(1, 5)) }
     }
 
-    fun setTargetFormat(targetFormat: LyricFormat) {
+    fun setTargetFormat(targetFormat: LyricFormat?) {
         _uiState.update { it.copy(targetFormat = targetFormat) }
+    }
+
+    fun setFormatLineOrder(enabled: Boolean) {
+        _uiState.update { it.copy(formatLineOrder = enabled) }
+    }
+
+    fun setRemoveTagLines(enabled: Boolean) {
+        _uiState.update { it.copy(removeTagLines = enabled) }
+    }
+
+    fun setRemoveEmptyLines(enabled: Boolean) {
+        _uiState.update { it.copy(removeEmptyLines = enabled) }
     }
 
     fun startBatchConvert() {
@@ -121,7 +145,14 @@ class BatchLyricsFormatViewModel(
         if (uris.isEmpty()) return
 
         val concurrency = _uiState.value.concurrency
-        val targetFormat = _uiState.value.targetFormat
+        val options = LyricsProcessingOptions(
+            targetFormat = _uiState.value.targetFormat,
+            formatLineOrder = _uiState.value.formatLineOrder,
+            removeTagLines = _uiState.value.removeTagLines,
+            tagLineKeywords = _uiState.value.tagLineKeywords,
+            removeEmptyLines = _uiState.value.removeEmptyLines
+        )
+        if (options.targetFormat == null && !options.hasTextOperations()) return
 
         _uiState.update {
             it.copy(
@@ -139,7 +170,7 @@ class BatchLyricsFormatViewModel(
 
         viewModelScope.launch {
             val songs = uris.mapNotNull { uri ->
-                songRepository.getSongByUri(uri)
+                songLibraryRepository.getSongByUri(uri)
             }
             if (songs.isEmpty()) {
                 _uiState.update { it.copy(isRunning = false, showProgressDialog = false) }
@@ -148,7 +179,14 @@ class BatchLyricsFormatViewModel(
 
             val configJson = Json.encodeToString(
                 LyricsFormatConfig.serializer(),
-                LyricsFormatConfig(targetFormat = targetFormat, concurrency = concurrency)
+                LyricsFormatConfig(
+                    targetFormat = options.targetFormat,
+                    concurrency = concurrency,
+                    formatLineOrder = options.formatLineOrder,
+                    removeTagLines = options.removeTagLines,
+                    tagLineKeywords = options.tagLineKeywords,
+                    removeEmptyLines = options.removeEmptyLines
+                )
             )
             val taskId = batchTaskRepository.createTask(
                 type = BatchTaskType.CONVERT_LYRICS_FORMAT,
@@ -189,6 +227,10 @@ class BatchLyricsFormatViewModel(
 
 @kotlinx.serialization.Serializable
 data class LyricsFormatConfig(
-    val targetFormat: LyricFormat,
-    val concurrency: Int
+    val targetFormat: LyricFormat? = null,
+    val concurrency: Int,
+    val formatLineOrder: Boolean = true,
+    val removeTagLines: Boolean = false,
+    val tagLineKeywords: List<String> = LyricsProcessingOptions.DefaultTagLineKeywords,
+    val removeEmptyLines: Boolean = false
 )

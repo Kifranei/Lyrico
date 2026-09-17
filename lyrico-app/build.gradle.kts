@@ -1,3 +1,5 @@
+import com.android.build.api.variant.FilterConfiguration
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -6,6 +8,31 @@ plugins {
     id("kotlin-parcelize")
     alias(libs.plugins.aboutLibraries)
 }
+// 记得在发布版本时更新此处的值
+val baseVersionName = "1.6.0"
+val baseVersionCode = 20
+
+val releaseSigningEnv = listOf(
+    "LYRICO_KEYSTORE_PATH",
+    "LYRICO_KEYSTORE_PASSWORD",
+    "LYRICO_KEY_ALIAS",
+    "LYRICO_KEY_PASSWORD"
+).associateWith { providers.environmentVariable(it).orNull?.takeIf(String::isNotEmpty) }
+val hasReleaseSigning = releaseSigningEnv.values.any { it != null }
+if (hasReleaseSigning) {
+    require(releaseSigningEnv.values.all { it != null }) {
+        "Incomplete Release signing configuration. Missing: " +
+            releaseSigningEnv.filterValues { it == null }.keys.joinToString()
+    }
+}
+
+fun gitCommitHash(): Provider<String> = providers.exec {
+    commandLine("git", "rev-parse", "--short", "HEAD")
+    isIgnoreExitValue = true
+}.standardOutput.asText.map { it.trim().ifEmpty { "unknown" } }
+    .orElse("unknown")
+
+
 
 android {
     namespace = "com.lonx.lyrico"
@@ -14,13 +41,20 @@ android {
         version = release(37)
     }
 
-
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
+        }
+    }
     defaultConfig {
         applicationId = "com.lonx.lyrico"
         minSdk = 28
         targetSdk = 36
-        versionCode = 17
-        versionName = "1.3.2"
+        versionCode = baseVersionCode
+        versionName = "$baseVersionName-${gitCommitHash().get()}"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
@@ -30,8 +64,20 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseSigningEnv.getValue("LYRICO_KEYSTORE_PATH")!!)
+                storePassword = releaseSigningEnv.getValue("LYRICO_KEYSTORE_PASSWORD")
+                keyAlias = releaseSigningEnv.getValue("LYRICO_KEY_ALIAS")
+                keyPassword = releaseSigningEnv.getValue("LYRICO_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isShrinkResources = true
             isMinifyEnabled = true
             proguardFiles(
@@ -52,6 +98,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
+    // JVM 单元测试中 android.util.Log 调用返回默认值而非抛异常：
+    // PluginJsonParser 解析 metadata 三分支规则时会对非法结构打 warn 日志，单测需覆盖该分支
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -63,6 +114,24 @@ android {
         }
     }
 }
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.forEach { output ->
+            val abi = output.filters
+                .singleOrNull { it.filterType == FilterConfiguration.FilterType.ABI }
+                ?.identifier
+            val abiSuffix = abi?.let { "-$it" }.orEmpty()
+
+            output.outputFileName.set(
+                output.versionName.map { versionName ->
+                    "Lyrico-$versionName$abiSuffix.apk"
+                }
+            )
+        }
+    }
+}
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
@@ -70,13 +139,10 @@ dependencies {
     // Project Modules
     implementation(project(":lyrico-audiotag"))
 
-
     // network
     implementation(libs.okhttp)
-    implementation(libs.retrofit)
     // JSON 解析
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.retrofit2.kotlinx.serialization.converter)
     // Compose & UI
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -84,12 +150,13 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.compose.destinations.core)
     implementation(libs.miuix.preference.android)
     implementation(libs.miuix.ui.android)
     implementation(libs.miuix.icons.android)
-    implementation(libs.shapes)
+    implementation(libs.miuix.blur.android)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.reorderable)

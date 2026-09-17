@@ -1,5 +1,6 @@
 package com.lonx.lyrico.screens
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -15,9 +16,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -25,8 +23,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,7 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,10 +43,14 @@ import com.lonx.lyrico.R
 import com.lonx.lyrico.data.model.entity.SongEntity
 import com.lonx.lyrico.ui.components.bar.SongBatchSelectionActions
 import com.lonx.lyrico.ui.components.bar.SongSelectionTopAppBar
+import com.lonx.lyrico.ui.components.base.YesNoDialog
 import com.lonx.lyrico.ui.components.cover.CoverImage
+import com.lonx.lyrico.ui.components.library.AlbumReplayGainProgressBottomSheet
+import com.lonx.lyrico.ui.components.scaffoldTopHorizontalPadding
 import com.lonx.lyrico.ui.components.song.SongActionSheets
 import com.lonx.lyrico.ui.components.song.SongListItem
 import com.lonx.lyrico.ui.components.song.SongListItemActions
+import com.lonx.lyrico.viewmodel.AlbumActionsViewModel
 import com.lonx.lyrico.viewmodel.AlbumDetailViewModel
 import com.lonx.lyrico.viewmodel.SongSelectionViewModel
 import com.ramcosta.composedestinations.annotation.Destination
@@ -56,6 +59,8 @@ import com.ramcosta.composedestinations.generated.destinations.EditMetadataDesti
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -64,6 +69,8 @@ import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.More
+import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -78,8 +85,10 @@ fun AlbumDetailScreen(
         parameters = { parametersOf(albumId) }
     )
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
+    val albumActionsViewModel: AlbumActionsViewModel = koinViewModel()
     val album by viewModel.album.collectAsStateWithLifecycle()
     val songs by viewModel.songs.collectAsStateWithLifecycle()
+    val albumActionsUiState by albumActionsViewModel.uiState.collectAsStateWithLifecycle()
     val albumName = album?.name.orEmpty()
     val albumArtist = album?.albumArtist?.takeIf { it.isNotBlank() }
         ?: songs.firstNotNullOfOrNull { song ->
@@ -87,7 +96,23 @@ fun AlbumDetailScreen(
         }
     val isSelectionMode by selectionViewModel.isSelectionMode.collectAsStateWithLifecycle()
     val selectedSongUris by selectionViewModel.selectedSongUris.collectAsStateWithLifecycle()
+    val swipeAnchorUri by selectionViewModel.swipeAnchorUri.collectAsStateWithLifecycle()
+    val swipeSelectionLabel = stringResource(
+        if (!isSelectionMode) {
+            R.string.swipe_selection_enter_selection
+        } else if (swipeAnchorUri == null) {
+            R.string.swipe_selection_range_start
+        } else {
+            R.string.swipe_selection_range_end
+        }
+    )
+    val swipeSelectionSecondaryLabel = if (!isSelectionMode) {
+        stringResource(R.string.swipe_selection_range_start)
+    } else {
+        null
+    }
     val topAppBarScrollBehavior = MiuixScrollBehavior()
+    val listState = rememberLazyListState()
     val context = LocalContext.current
     var isFabMenuExpanded by remember { mutableStateOf(false) }
 
@@ -96,7 +121,15 @@ fun AlbumDetailScreen(
     var showDetailSheet by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
-    val layoutDirection = LocalLayoutDirection.current
+    var showDeleteAlbumDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(albumActionsViewModel, context) {
+        albumActionsViewModel.events.collect { message ->
+            message.asString(context)?.let { text ->
+                Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     BackHandler(enabled = isSelectionMode) {
         if (isFabMenuExpanded) {
@@ -155,6 +188,29 @@ fun AlbumDetailScreen(
                                     )
                                 }
                             },
+                            actions = {
+                                OverlayIconDropdownMenu(
+                                    entries = listOf(
+                                        albumActionsDropdownEntry(
+                                            isCalculatingReplayGain = albumActionsUiState.isCalculatingAlbumReplayGain,
+                                            onShare = {
+                                                albumActionsViewModel.shareAlbum(context, songs)
+                                            },
+                                            onDelete = {
+                                                showDeleteAlbumDialog = true
+                                            },
+                                            onCalculateReplayGain = {
+                                                albumActionsViewModel.calculateAlbumReplayGain(songs)
+                                            }
+                                        )
+                                    )
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.More,
+                                        contentDescription = stringResource(R.string.album_action_more)
+                                    )
+                                }
+                            },
                             scrollBehavior = topAppBarScrollBehavior
                         )
                     }
@@ -162,60 +218,67 @@ fun AlbumDetailScreen(
             }
         ) { paddingValues ->
             Box {
-                LazyColumn(
+                Column(
                     modifier = Modifier
-                        .scrollEndHaptic()
-                        .overScrollVertical()
-                        .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
-                        .fillMaxHeight(),
-                    contentPadding = PaddingValues(
-                        start = paddingValues.calculateStartPadding(layoutDirection),
-                        top = paddingValues.calculateTopPadding(),
-                        end = paddingValues.calculateEndPadding(layoutDirection)
-                    ),
-                    overscrollEffect = null
+                        .fillMaxSize()
+                        .padding(scaffoldTopHorizontalPadding(paddingValues))
                 ) {
-                    item {
-                        AlbumDetailHeader(
-                            album = albumName,
-                            albumArtist = albumArtist,
-                            songCount = songs.size,
-                            coverSong = songs.firstOrNull()
-                        )
-                    }
+                    AlbumDetailHeader(
+                        album = albumName,
+                        albumArtist = albumArtist,
+                        songCount = songs.size,
+                        coverSong = songs.firstOrNull()
+                    )
 
-                    items(
-                        items = songs,
-                        key = { song ->
-                            song.uri.takeIf { it.isNotBlank() && it != "0" } ?: "song-${song.id}"
-                        }
-                    ) { song ->
-                        SongListItem(
-                            song = song,
-                            isSelectionMode = isSelectionMode,
-                            isSelected = selectedSongUris.contains(song.uri),
-                            onClick = {
-                                navigator.navigate(EditMetadataDestination(songFileUri = song.uri))
-                            },
-                            onToggleSelection = {
-                                selectionViewModel.toggleSelection(song.uri)
-                            },
-                            trailingContent = {
-                                Box(modifier = Modifier.padding(end = 8.dp)) {
-                                    SongListItemActions(
-                                        isSelectionMode = isSelectionMode,
-                                        isSelected = selectedSongUris.contains(song.uri),
-                                        onToggleSelection = {
-                                            selectionViewModel.toggleSelection(song.uri)
-                                        },
-                                        onShowMenu = {
-                                            selectedSong = song
-                                            showMenuSheet = true
-                                        }
-                                    )
-                                }
+                    LazyColumn(
+                        modifier = Modifier
+                            .scrollEndHaptic()
+                            .overScrollVertical()
+                            .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+                            .weight(1f),
+                        state = listState,
+                        contentPadding = PaddingValues(bottom = 12.dp),
+                        overscrollEffect = null
+                    ) {
+                        items(
+                            items = songs,
+                            key = { song ->
+                                song.uri.takeIf { it.isNotBlank() && it != "0" } ?: "song-${song.id}"
                             }
-                        )
+                        ) { song ->
+                            SongListItem(
+                                song = song,
+                                showTrackNumbers = true,
+                                isSelectionMode = isSelectionMode,
+                                isSelected = selectedSongUris.contains(song.uri),
+                                swipeSelectionLabel = swipeSelectionLabel,
+                                swipeSelectionSecondaryLabel = swipeSelectionSecondaryLabel,
+                                onClick = {
+                                    navigator.navigate(EditMetadataDestination(songFileUri = song.uri))
+                                },
+                                onToggleSelection = {
+                                    selectionViewModel.toggleSelection(song.uri)
+                                },
+                                onSwipeSelection = {
+                                    selectionViewModel.swipeSelect(song, songs)
+                                },
+                                trailingContent = {
+                                    Box(modifier = Modifier.padding(end = 8.dp)) {
+                                        SongListItemActions(
+                                            isSelectionMode = isSelectionMode,
+                                            isSelected = selectedSongUris.contains(song.uri),
+                                            onToggleSelection = {
+                                                selectionViewModel.toggleSelection(song.uri)
+                                            },
+                                            onShowMenu = {
+                                                selectedSong = song
+                                                showMenuSheet = true
+                                            }
+                                        )
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -242,10 +305,33 @@ fun AlbumDetailScreen(
             }
         }
 
+        YesNoDialog(
+            title = stringResource(R.string.dialog_delete_album_title),
+            show = showDeleteAlbumDialog,
+            summary = stringResource(
+                R.string.dialog_delete_album_content,
+                songs.size,
+                albumName.ifBlank { stringResource(R.string.album_detail_title) }
+            ),
+            onConfirm = {
+                showDeleteAlbumDialog = false
+                albumActionsViewModel.deleteAlbum(songs)
+                navigator.popBackStack()
+            },
+            onDismissRequest = { showDeleteAlbumDialog = false }
+        )
+
+        AlbumReplayGainProgressBottomSheet(
+            uiState = albumActionsUiState,
+            onDismissRequest = albumActionsViewModel::closeAlbumReplayGainProgressDialog,
+            onDismissFinished = albumActionsViewModel::clearAlbumReplayGainProgressDialog,
+            onAbort = albumActionsViewModel::cancelAlbumReplayGain
+        )
+
         SongBatchSelectionActions(
             navigator = navigator,
             songs = songs,
-            isSelectionMode = isSelectionMode,
+            show = isSelectionMode,
             expanded = isFabMenuExpanded,
             selectedSongUris = selectedSongUris,
             onExpandedChange = { isFabMenuExpanded = it },
@@ -254,6 +340,35 @@ fun AlbumDetailScreen(
             onBatchShare = selectionViewModel::batchShare
         )
     }
+}
+
+@Composable
+private fun albumActionsDropdownEntry(
+    isCalculatingReplayGain: Boolean,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+    onCalculateReplayGain: () -> Unit
+): DropdownEntry {
+    return DropdownEntry(
+        items = listOf(
+            DropdownItem(
+                text = stringResource(R.string.menu_action_calculate_album_replay_gain),
+                onClick = {
+                    if (!isCalculatingReplayGain) {
+                        onCalculateReplayGain()
+                    }
+                }
+            ),
+            DropdownItem(
+                text = stringResource(R.string.menu_action_share_album),
+                onClick = onShare
+            ),
+            DropdownItem(
+                text = stringResource(R.string.menu_action_delete_album),
+                onClick = onDelete
+            )
+        )
+    )
 }
 
 @Composable

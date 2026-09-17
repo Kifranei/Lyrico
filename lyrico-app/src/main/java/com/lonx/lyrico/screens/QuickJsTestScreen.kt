@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.lonx.lyrico.R
+import com.lonx.lyrico.ui.components.scaffoldContentPadding
 import com.lonx.lyrico.plugin.runtime.QuickJsRuntime
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -380,9 +381,10 @@ fun QuickJsTestScreen(
             modifier = Modifier
                 .scrollEndHaptic()
                 .overScrollVertical(),
-            contentPadding = PaddingValues(
-                top = paddingValues.calculateTopPadding() + 8.dp,
-                bottom = paddingValues.calculateBottomPadding() + 12.dp
+            contentPadding = scaffoldContentPadding(
+                paddingValues = paddingValues,
+                topExtra = 8.dp,
+                bottomExtra = 12.dp
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {

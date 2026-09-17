@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.lonx.lyrico.R
+import com.lonx.lyrico.ui.components.scaffoldContentPadding
 import com.mikepenz.aboutlibraries.ui.compose.android.produceLibraries
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -69,9 +70,9 @@ fun OpenSourceLicenceScreen(
         LazyColumnScrollbar(
             state = listState,
             modifier = Modifier.padding(
-                PaddingValues(
-                    top = paddingValues.calculateTopPadding(),
-                    bottom = paddingValues.calculateBottomPadding() + 12.dp,
+                scaffoldContentPadding(
+                    paddingValues = paddingValues,
+                    bottomExtra = 12.dp
                 )
             ),
             settings = ScrollbarSettings.Default.copy(

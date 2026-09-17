@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="artist_poster_folders_empty">选择保存艺术家海报的文件夹</string>
+    <string name="artist_poster_folder_unavailable">文件夹不可用，请重新授权</string>
+    <string name="artist_poster_file_count">%1$d 张海报</string>
+    <string name="artist_poster_folder_status">%1$d 张海报 · %2$d 张匹配到库内艺术家</string>
+    <string name="artist_poster_folder_remove_tip">停止使用此文件夹中的海报，不会删除文件。</string>
+    <string name="artist_poster_folders">艺术家海报文件夹</string>
+    <string name="artist_poster_folders_count">%1$d 个文件夹</string>
+    <string name="artist_poster_folders_help">**命名规则**\n\n- `艺术家.jpg` —— 与艺术家名完全一致\n- `艺术家_live.jpg` —— 艺术家名后接 `_` 和后缀\n- `AC_DC.jpg`、`AC-DC.jpg`、`AC／DC.jpg` 或 `ACDC.jpg` —— 艺术家名中含有文件名不能出现的字符时（`\\ / : * ? \" &lt; &gt; |`）\n\n支持 JPG、JPEG、PNG、WebP 和 MP4。\n\n仅查找所选文件夹中的文件。多个文件夹按添加顺序查找，同一文件夹优先匹配完整艺术家名。</string>
+    <string name="artist_poster_folder_add">添加文件夹</string>
+    <string name="artist_poster_folder_remove">移除文件夹</string>
+    <string name="artist_poster_folder_error">操作失败，请重试</string>
+    <string name="artist_poster_folders_summary">内嵌艺术家图片不可用时，使用文件夹中的海报</string>
+    <string name="artist_poster_naming">命名规则</string>
+    <string name="artist_poster_back">返回</string>
+    <string name="artist_poster_no_files">没有找到海报</string>
+    <string name="artist_poster_preview_error">无法预览</string>
+</resources>

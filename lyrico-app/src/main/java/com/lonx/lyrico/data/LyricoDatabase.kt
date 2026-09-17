@@ -10,6 +10,7 @@ import com.lonx.lyrico.data.model.dao.BatchTaskDao
 import com.lonx.lyrico.data.model.dao.FolderDao
 import com.lonx.lyrico.data.model.dao.LibraryIndexDao
 import com.lonx.lyrico.data.model.dao.SongDao
+import com.lonx.lyrico.data.model.dao.SongCustomTagKeyDao
 import com.lonx.lyrico.data.model.dao.SourcePluginDao
 import com.lonx.lyrico.data.model.entity.AlbumEntity
 import com.lonx.lyrico.data.model.entity.AlbumSongCrossRef
@@ -20,7 +21,9 @@ import com.lonx.lyrico.data.model.entity.BatchTaskEntity
 import com.lonx.lyrico.data.model.entity.BatchTaskItemEntity
 import com.lonx.lyrico.data.model.entity.FolderEntity
 import com.lonx.lyrico.data.model.entity.SongEntity
+import com.lonx.lyrico.data.model.entity.SongCustomTagKeyEntity
 import com.lonx.lyrico.data.model.entity.SourcePluginEntity
+import com.lonx.lyrico.data.model.entity.DEFAULT_PLUGIN_CAPABILITIES_SQL
 
 @Database(
     entities = [
@@ -33,9 +36,10 @@ import com.lonx.lyrico.data.model.entity.SourcePluginEntity
         ArtistSongCrossRef::class,
         AlbumEntity::class,
         AlbumSongCrossRef::class,
-        SourcePluginEntity::class
+        SourcePluginEntity::class,
+        SongCustomTagKeyEntity::class
     ],
-    version = 13,
+    version = 21,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 2, to = 3),
@@ -43,7 +47,12 @@ import com.lonx.lyrico.data.model.entity.SourcePluginEntity
         AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
-        AutoMigration(from = 8, to = 9)
+        AutoMigration(from = 8, to = 9),
+        AutoMigration(
+            from = 14,
+            to = 15,
+            spec = DeleteRawPropertiesMigration::class
+        )
     ]
 )
 abstract class LyricoDatabase : RoomDatabase() {
@@ -53,6 +62,7 @@ abstract class LyricoDatabase : RoomDatabase() {
     abstract fun appLogDao(): AppLogDao
     abstract fun libraryIndexDao(): LibraryIndexDao
     abstract fun sourcePluginDao(): SourcePluginDao
+    abstract fun songCustomTagKeyDao(): SongCustomTagKeyDao
 
     companion object {
         val MIGRATION_9_10 = object : Migration(9, 10) {
@@ -279,6 +289,155 @@ abstract class LyricoDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE source_plugins ADD COLUMN includeDirsJson TEXT NOT NULL DEFAULT '[]'")
             }
+        }
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS song_custom_tag_keys (
+                        songUri TEXT NOT NULL,
+                        `key` TEXT NOT NULL,
+                        PRIMARY KEY(songUri, `key`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE INDEX IF NOT EXISTS index_song_custom_tag_keys_key
+                    ON song_custom_tag_keys(`key`)
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE INDEX IF NOT EXISTS index_song_custom_tag_keys_songUri
+                    ON song_custom_tag_keys(songUri)
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE source_plugins ADD COLUMN customName TEXT")
+            }
+        }
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE albums ADD COLUMN year TEXT")
+            }
+        }
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE songs ADD COLUMN lyricSearchText TEXT DEFAULT NULL")
+                db.execSQL(
+                    """
+                    UPDATE songs
+                    SET lyricSearchText = lyrics
+                    WHERE lyrics IS NOT NULL AND TRIM(lyrics) != ''
+                    """.trimIndent()
+                )
+            }
+        }
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                createLyricFtsTable(db)
+            }
+        }
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE songs ADD COLUMN albumGroupKey TEXT NOT NULL DEFAULT '#'")
+                db.execSQL("ALTER TABLE songs ADD COLUMN albumSortKey TEXT NOT NULL DEFAULT '2_'")
+                db.execSQL(
+                    """
+                    UPDATE songs
+                    SET
+                        albumGroupKey = CASE
+                            WHEN album IS NULL OR TRIM(album) = '' THEN '#'
+                            WHEN SUBSTR(TRIM(album), 1, 1) GLOB '[0-9]' THEN '0'
+                            WHEN UPPER(SUBSTR(TRIM(album), 1, 1)) GLOB '[A-Z]' THEN UPPER(SUBSTR(TRIM(album), 1, 1))
+                            ELSE '#'
+                        END,
+                        albumSortKey = CASE
+                            WHEN album IS NULL OR TRIM(album) = '' THEN '2_'
+                            WHEN SUBSTR(TRIM(album), 1, 1) GLOB '[0-9]' THEN '0_' || TRIM(album)
+                            WHEN UPPER(SUBSTR(TRIM(album), 1, 1)) GLOB '[A-Z]' THEN '1_' || UPPER(TRIM(album))
+                            ELSE '2_' || TRIM(album)
+                        END
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE INDEX IF NOT EXISTS index_songs_albumGroupKey_albumSortKey
+                    ON songs(albumGroupKey, albumSortKey)
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE source_plugins " +
+                        "ADD COLUMN capabilitiesJson TEXT NOT NULL " +
+                        "DEFAULT $DEFAULT_PLUGIN_CAPABILITIES_SQL"
+                )
+                db.execSQL(
+                    "ALTER TABLE source_plugins ADD COLUMN minHostApiVersion INTEGER NOT NULL DEFAULT 1"
+                )
+                db.execSQL(
+                    "ALTER TABLE source_plugins ADD COLUMN metadataSortOrder INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE source_plugins ADD COLUMN lyricsSortOrder INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE source_plugins ADD COLUMN coverSortOrder INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    """
+                    UPDATE source_plugins SET
+                        metadataSortOrder = sortOrder,
+                        lyricsSortOrder = sortOrder,
+                        coverSortOrder = sortOrder
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "ALTER TABLE source_plugins ADD COLUMN metadataEnabled INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE source_plugins ADD COLUMN lyricsEnabled INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE source_plugins ADD COLUMN coverEnabled INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    """
+                    UPDATE source_plugins SET
+                        metadataEnabled = enabled,
+                        lyricsEnabled = enabled,
+                        coverEnabled = enabled
+                    """.trimIndent()
+                )
+            }
+        }
+
+        fun createLyricFtsTable(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS song_lyric_lines_fts
+                USING fts4(
+                    songUri,
+                    lineIndex,
+                    lineText,
+                    indexedText,
+                    notindexed=songUri,
+                    notindexed=lineIndex,
+                    notindexed=lineText,
+                    tokenize=unicode61
+                )
+                """.trimIndent()
+            )
         }
     }
 }

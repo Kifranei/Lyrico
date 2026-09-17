@@ -15,8 +15,10 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import java.util.zip.Inflater
@@ -31,23 +33,66 @@ class QuickJsHostApi(
     private val appInfo: HostAppInfo = HostAppInfo(),
     private val runtimeInfo: HostRuntimeInfo = HostRuntimeInfo(),
     private val okHttpClient: OkHttpClient = OkHttpClient(),
+    private val pluginId: String = "default",
+    private val cacheRootDir: File? = null,
+    private val pluginStrings: com.lonx.lyrico.plugin.i18n.PluginStrings? = null,
     private val json: Json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
         explicitNulls = false
     }
 ) {
+    private var stringsSnapshot: com.lonx.lyrico.plugin.i18n.PluginStrings.Snapshot? = null
+
+    fun beginInvocation() {
+        stringsSnapshot = pluginStrings?.snapshot(com.lonx.lyrico.plugin.i18n.PluginLocales.preferences.value)
+    }
+    private companion object {
+        const val CACHE_LOG_TAG = "PlatformPluginCache"
+    }
+
     fun call(name: String, payloadJson: String): String {
         val payload = runCatching {
             json.parseToJsonElement(payloadJson).jsonObject
         }.getOrDefault(JsonObject(emptyMap()))
 
         return when (name) {
+            "i18n.getLocale" -> text(stringsSnapshot?.locale ?: "und")
+
+            "i18n.t" -> text(requireNotNull(stringsSnapshot) { "Plugin has no string resources" }.format(
+                payload.string("key"),
+                (payload["args"] as? JsonArray).orEmpty().map { element ->
+                    val primitive = element as? JsonPrimitive
+                    if (primitive?.isString == true) primitive.content else primitive?.longOrNull
+                }
+            ))
+
             "app.info" -> value(appInfo.toJsonObject())
 
             "app.userAgent" -> text(buildDefaultUserAgent(appInfo))
 
             "runtime.info" -> value(runtimeInfo.toJsonObject())
+
+            "cache.get" -> text(cacheGet(payload.string("key")))
+
+            "cache.set" -> {
+                cacheSet(
+                    key = payload.string("key"),
+                    value = payload.string("value"),
+                    ttlMs = payload.longOrNull("ttlMs")
+                )
+                text("")
+            }
+
+            "cache.remove" -> {
+                cacheRemove(payload.string("key"))
+                text("")
+            }
+
+            "cache.clear" -> {
+                cacheClear()
+                text("")
+            }
 
             "crypto.md5" -> text(md5(payload.string("text")))
 
@@ -101,6 +146,39 @@ class QuickJsHostApi(
 
             "base64.encodeBytes" -> text(
                 Base64.encodeToString(payload.bytes("bytes"), Base64.NO_WRAP)
+            )
+
+            "base64.encodeUrlText" -> text(
+                Base64.encodeToString(
+                    payload.string("text").toByteArray(Charsets.UTF_8),
+                    Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+                )
+            )
+
+            "base64.decodeUrlText" -> text(
+                String(
+                    Base64.decode(fromBase64Url(payload.string("base64Url")), Base64.DEFAULT),
+                    Charsets.UTF_8
+                )
+            )
+
+            "base64.encodeUrlBytes" -> text(
+                Base64.encodeToString(
+                    payload.bytes("bytes"),
+                    Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+                )
+            )
+
+            "base64.decodeUrlBytes" -> bytes(
+                Base64.decode(fromBase64Url(payload.string("base64Url")), Base64.DEFAULT)
+            )
+
+            "base64.toUrl" -> text(
+                toBase64Url(payload.string("base64"))
+            )
+
+            "base64.fromUrl" -> text(
+                fromBase64Url(payload.string("base64Url"))
             )
 
             "bytes.xor" -> bytes(
@@ -204,7 +282,33 @@ class QuickJsHostApi(
                     binaryResponse = true
                 ).toJsonObject()
             )
+            "xml.getRootAttributes" -> value(
+                HostXmlApi.getRootAttributes(
+                    xml = payload.string("xml")
+                )
+            )
 
+            "xml.findElements" -> value(
+                HostXmlApi.findElements(
+                    xml = payload.string("xml"),
+                    query = payload.obj("query") ?: JsonObject(emptyMap()),
+                    json = json
+                )
+            )
+
+            "xml.replaceChildrenByAttr" -> text(
+                HostXmlApi.replaceChildrenByAttr(
+                    xml = payload.string("xml"),
+                    options = payload.obj("options") ?: JsonObject(emptyMap())
+                )
+            )
+
+            "xml.removeElements" -> text(
+                HostXmlApi.removeElements(
+                    xml = payload.string("xml"),
+                    query = payload.obj("query") ?: JsonObject(emptyMap())
+                )
+            )
             "log.debug" -> {
                 Log.d(payload.logTag(), payload.string("message"))
                 text("")
@@ -222,6 +326,92 @@ class QuickJsHostApi(
 
             else -> error("Unsupported host api: $name")
         }
+    }
+
+    private fun cacheGet(key: String): String {
+        val normalizedKey = key.trim()
+        val file = cacheFile(normalizedKey) ?: run {
+            logCache("get ignored blank key")
+            return ""
+        }
+        if (!file.isFile) {
+            logCache("miss plugin=$pluginId key=$normalizedKey")
+            return ""
+        }
+
+        val entry = runCatching {
+            json.parseToJsonElement(file.readText()).jsonObject
+        }.getOrNull() ?: run {
+            file.delete()
+            logCache("corrupt entry removed plugin=$pluginId key=$normalizedKey")
+            return ""
+        }
+
+        val expiresAt = entry.longOrNull("expiresAt") ?: 0L
+        if (expiresAt > 0L && expiresAt <= System.currentTimeMillis()) {
+            file.delete()
+            logCache("expired entry removed plugin=$pluginId key=$normalizedKey")
+            return ""
+        }
+
+        logCache(
+            "hit plugin=$pluginId key=$normalizedKey expiresAt=$expiresAt valueLength=${entry.string("value").length}"
+        )
+        return entry.string("value")
+    }
+
+    private fun cacheSet(key: String, value: String, ttlMs: Long?) {
+        val normalizedKey = key.trim()
+        val file = cacheFile(normalizedKey) ?: run {
+            logCache("set ignored blank key")
+            return
+        }
+        val normalizedTtlMs = ttlMs ?: 0L
+        val expiresAt = if (normalizedTtlMs > 0L) {
+            System.currentTimeMillis() + normalizedTtlMs
+        } else {
+            0L
+        }
+
+        file.parentFile?.mkdirs()
+        file.writeText(
+            json.encodeToString(
+                JsonObject.serializer(),
+                buildJsonObject {
+                    put("value", value)
+                    put("expiresAt", expiresAt)
+                }
+            )
+        )
+        logCache(
+            "set plugin=$pluginId key=$normalizedKey ttlMs=$normalizedTtlMs expiresAt=$expiresAt valueLength=${value.length}"
+        )
+    }
+
+    private fun cacheRemove(key: String) {
+        val normalizedKey = key.trim()
+        val removed = cacheFile(normalizedKey)?.delete() == true
+        logCache("remove plugin=$pluginId key=$normalizedKey removed=$removed")
+    }
+
+    private fun cacheClear() {
+        val cleared = pluginCacheDir()?.deleteRecursively() == true
+        logCache("clear plugin=$pluginId cleared=$cleared")
+    }
+
+    private fun cacheFile(key: String): File? {
+        val normalizedKey = key.trim()
+        if (normalizedKey.isEmpty()) return null
+        return File(pluginCacheDir() ?: return null, "${md5(normalizedKey)}.json")
+    }
+
+    private fun pluginCacheDir(): File? {
+        val root = cacheRootDir ?: return null
+        return File(root, md5(pluginId.ifBlank { "default" }))
+    }
+
+    private fun logCache(message: String) {
+        Log.d(CACHE_LOG_TAG, message)
     }
 
     private fun executeHttp(
@@ -350,6 +540,30 @@ class QuickJsHostApi(
         )
     }
 
+    private fun toBase64Url(base64: String): String {
+        return base64
+            .trim()
+            .replace('+', '-')
+            .replace('/', '_')
+            .trimEnd('=')
+    }
+
+    private fun fromBase64Url(base64Url: String): String {
+        val normalized = base64Url
+            .trim()
+            .replace('-', '+')
+            .replace('_', '/')
+
+        val padding = when (normalized.length % 4) {
+            0 -> ""
+            2 -> "=="
+            3 -> "="
+            else -> ""
+        }
+
+        return normalized + padding
+    }
+
     private fun xor(bytes: ByteArray, key: ByteArray): ByteArray {
         if (key.isEmpty()) return bytes
         return ByteArray(bytes.size) { index ->
@@ -458,8 +672,8 @@ data class HostAppInfo(
 }
 
 data class HostRuntimeInfo(
-    val pluginApiVersion: Int = HostApiRegistry.PLUGIN_API_VERSION,
-    val hostApiVersion: Int = HostApiRegistry.HOST_API_VERSION,
+    val pluginApiVersion: Int = HostApiRegistry.PLUGIN_PROTOCOL_VERSION,
+    val hostApiVersion: Int = HostApiRegistry.PLATFORM_API_VERSION,
     val engine: String = "quickjs",
     val engineVersion: String? = null,
     val supportedHostApis: Set<String> = HostApiRegistry.SUPPORTED_HOST_APIS
@@ -492,6 +706,10 @@ private fun JsonObject.string(key: String): String {
 
 private fun JsonObject.intOrNull(key: String): Int? {
     return this[key]?.jsonPrimitive?.int
+}
+
+private fun JsonObject.longOrNull(key: String): Long? {
+    return this[key]?.jsonPrimitive?.longOrNull
 }
 
 private fun JsonObject.booleanOrNull(key: String): Boolean? {

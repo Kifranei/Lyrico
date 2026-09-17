@@ -1,0 +1,36 @@
+package com.lonx.lyrico.utils.lyrics
+
+import com.lonx.lyrico.utils.LyricFormatter
+
+object LyricsTextCleanup {
+    fun process(
+        raw: String,
+        removeEmptyLines: Boolean,
+        tagLineKeywords: List<String>
+    ): String {
+        val keywords = tagLineKeywords.map { it.trim() }.filter { it.isNotEmpty() }
+        return raw.lines()
+            .filterNot { line ->
+                val visible = visibleLineText(line)
+                val trimmed = visible.trim()
+                val removeEmpty = removeEmptyLines && isBlankOrPlaceholder(trimmed)
+                val removeTag = keywords.any { keyword ->
+                    line.contains(keyword, ignoreCase = true) ||
+                            visible.contains(keyword, ignoreCase = true)
+                }
+                removeEmpty || removeTag
+            }
+            .joinToString("\n")
+            .trim()
+    }
+
+    private fun visibleLineText(line: String): String {
+        return line
+            .replace(LyricFormatter.LRC_TIME_PATTERN, "")
+            .replace(Regex("""<[^>]+>"""), "")
+    }
+
+    private fun isBlankOrPlaceholder(text: String): Boolean {
+        return text.isEmpty() || text.matches(Regex("^[\\s/\\\\|｜·・.。…_-]*$"))
+    }
+}

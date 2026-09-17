@@ -1,16 +1,22 @@
 package com.lonx.lyrico.utils
 
 import android.annotation.SuppressLint
-import com.github.houbb.opencc4j.util.ZhHkConverterUtil
+import com.github.houbb.opencc4j.util.ZhConverterUtil
 import com.lonx.lyrico.data.model.ConversionMode
-import com.lonx.lyrico.data.model.LyricFormat.*
-import com.lonx.lyrico.data.model.LyricRenderConfig
+import com.lonx.lyrico.data.model.lyrics.DefaultLyricLineOrder
+import com.lonx.lyrico.data.model.lyrics.LyricFormat
+import com.lonx.lyrico.data.model.lyrics.LyricFormat.*
+import com.lonx.lyrico.data.model.lyrics.LyricLineTrack
+import com.lonx.lyrico.data.model.lyrics.LyricRenderConfig
 import com.lonx.lyrico.data.model.lyrics.LyricsLine
 import com.lonx.lyrico.data.model.lyrics.LyricsResult
+import com.lonx.lyrico.data.model.lyrics.isRaw
+import com.lonx.lyrico.utils.lyrics.document.LyricsDocumentPipeline
 
 object LyricEncoder {
     // 匹配 TTML 格式: begin="00:01:23.456" 或 end="00:01:23.456"
     private val TTML_TIME_PATTERN = Regex("(begin=\"|end=\")(\\d{2,}):(\\d{2}):(\\d{2})\\.(\\d{2,3})(\")")
+
     
     /**
      * 计算应用偏移量，保证结果大于等于 0
@@ -53,7 +59,12 @@ object LyricEncoder {
         return lines.map { line ->
             line.copy(
                 words = line.words.map { word ->
-                    word.copy(text = convertText(word.text, conversionMode))
+                    word.copy(
+                        text = convertText(word.text, conversionMode),
+                        ruby = word.ruby.map { syllable ->
+                            syllable.copy(text = convertText(syllable.text, conversionMode))
+                        }
+                    )
                 }
             )
         }
@@ -76,8 +87,8 @@ object LyricEncoder {
      */
     private fun convertText(text: String, conversionMode: ConversionMode): String {
         return when (conversionMode) {
-            ConversionMode.TRADITIONAL_TO_SIMPLIFIED -> ZhHkConverterUtil.toSimple(text)
-            ConversionMode.SIMPLIFIED_TO_TRADITIONAL -> ZhHkConverterUtil.toTraditional(text)
+            ConversionMode.TRADITIONAL_TO_SIMPLIFIED -> ZhConverterUtil.toSimple(text)
+            ConversionMode.SIMPLIFIED_TO_TRADITIONAL -> ZhConverterUtil.toTraditional(text)
             else -> text
         }
     }
@@ -164,28 +175,16 @@ object LyricEncoder {
             } else null
     
             val skipOriginal = config.onlyTranslationIfAvailable && matchedTranslation != null
-    
-            // 添加原文
-            if (!skipOriginal) {
-                val originalText = line.words.joinToString("") { it.text }
-                if (originalText.isNotBlank()) {
-                    builder.append(originalText)
-                    builder.append("\n")
-                }
-            }
-    
-            // 添加音译
-            if (matchedRoman != null && !skipOriginal) {
-                val romanText = matchedRoman.words.joinToString(" ") { it.text }
-                if (romanText.isNotBlank()) {
-                    builder.append(romanText)
-                    builder.append("\n")
-                }
-            }
-    
-            // 添加翻译
-            if (matchedTranslation != null) {
-                val transText = matchedTranslation.words.joinToString("") { it.text }
+
+            config.normalizedLineOrder.forEach { track ->
+                val trackLine = when (track) {
+                    LyricLineTrack.ORIGINAL -> line.takeUnless { skipOriginal }
+                    LyricLineTrack.ROMANIZATION -> matchedRoman.takeUnless { skipOriginal }
+                    LyricLineTrack.TRANSLATION -> matchedTranslation
+                } ?: return@forEach
+
+                val separator = if (track == LyricLineTrack.ROMANIZATION) " " else ""
+                val transText = trackLine.words.joinToString(separator) { it.text }
                 if (transText.isNotBlank()) {
                     builder.append(transText)
                     builder.append("\n")
@@ -201,25 +200,58 @@ object LyricEncoder {
         config: LyricRenderConfig,
         offset: Long = 0L,
     ): String {
-        selectRawLyrics(result, config)?.let { raw ->
-            val converted = convertLyricsText(raw, config.conversionMode)
-            return shiftLyricsOffset(converted, offset).trim()
+        if (result.payloadType.isRaw()) {
+            if (shouldUseDocumentPipeline(result, config, offset)) {
+                LyricsDocumentPipeline.processRawResult(result, config, offset)?.let {
+                    return it
+                }
+            }
+
+            encodeRawWithRenderConfig(selectRawLyrics(result, config), config, offset)?.let {
+                return it
+            }
+
+            selectRawLyrics(result, config)?.let { raw ->
+                val converted = convertLyricsText(raw, config.conversionMode)
+                return shiftLyricsOffset(converted, offset).trim()
+            }
+
+            encodeFallbackRawLyrics(result, config, offset)?.let {
+                return it
+            }
         }
-        encodeFallbackRawLyrics(result, config, offset)?.let {
-            return it
+
+        if (result.original.isEmpty()) {
+            val selectedRaw = selectRawLyrics(result, config)
+
+            if (shouldUseDocumentPipeline(result, config, offset)) {
+                LyricsDocumentPipeline.processRawResult(result, config, offset)?.let {
+                    return it
+                }
+            }
+
+            encodeRawWithRenderConfig(selectedRaw, config, offset)?.let {
+                return it
+            }
+
+            selectedRaw?.let { raw ->
+                val converted = convertLyricsText(raw, config.conversionMode)
+                return shiftLyricsOffset(converted, offset).trim()
+            }
+
+            encodeFallbackRawLyrics(result, config, offset)?.let {
+                return it
+            }
+        }
+
+        if (config.format == TTML) {
+            LyricsDocumentPipeline.processStructuredResult(result, config, offset)?.let { return it }
         }
 
         val convertedResult = convertLyricsResult(result, config.conversionMode)
-        
+
         val builder = StringBuilder()
         val isWordLevel = convertedResult.isWordByWord
-        val isTtml = config.format == TTML
-        // 如果是 TTML，先追加 XML 头部和根节点
-        if (isTtml) {
-            builder.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
-            builder.append("<tt xmlns=\"http://www.w3.org/ns/ttml\" xmlns:ttm=\"http://www.w3.org/ns/ttml#metadata\" xmlns:itunes=\"http://music.apple.com/itunes/ttml\">\n")
-            builder.append("  <body>\n    <div>\n")
-        }
 
         val romanMap = if (config.showRomanization) {
             alignSubLines(convertedResult.original, convertedResult.romanization)
@@ -248,49 +280,76 @@ object LyricEncoder {
                 if (config.removeEmptyLines && match != null && isBlankOrPlaceholder(match)) null else match
             } else null
 
-            if (isTtml) {
-                appendTtmlCombinedLine(
-                    builder, line, matchedRoman, matchedTranslation, offset, config, isWordLevel
-                )
-                builder.append("\n")
-                return@forEach // TTML 处理完毕直接返回下一行
-            }
-
             val skipOriginal = config.onlyTranslationIfAvailable && matchedTranslation != null
 
-            if (!skipOriginal) {
+            config.normalizedLineOrder.forEach { track ->
+                val trackLine = when (track) {
+                    LyricLineTrack.ORIGINAL -> line.takeUnless { skipOriginal }
+                    LyricLineTrack.ROMANIZATION -> matchedRoman.takeUnless { skipOriginal }
+                    LyricLineTrack.TRANSLATION -> matchedTranslation
+                } ?: return@forEach
+
+                // 该轨是否为词级（逐字）数据：
+                // - 原文：用全局 isWordByWord（插件声明的逐字标志）；
+                // - 音译：单独按本行词数判断——插件给逐字词数组（words.size > 1）时按逐字编码，
+                //   旧协议/旧插件音译只有整行（words.size == 1）时降级整行，行为与原先一致；
+                // - 翻译：无词级语义，恒整行。
+                val trackWordLevel = when (track) {
+                    LyricLineTrack.ORIGINAL -> isWordLevel
+                    LyricLineTrack.ROMANIZATION -> trackLine.words.size > 1
+                    else -> false
+                }
+                // 音译（拉丁音节等拼音文本）词间补空格分词，汉字原文无分隔符
+                val wordSeparator = if (track == LyricLineTrack.ROMANIZATION) " " else ""
+
                 when (config.format) {
-                    PLAIN_LRC -> appendLineByLine(builder, line, offset)
+                    PLAIN_LRC -> appendLineByLine(builder, trackLine, offset)
                     ENHANCED_LRC -> {
-                        if (isWordLevel) appendEnhancedLine(builder, line, offset)
-                        else appendLineByLine(builder, line, offset) //  LRC 降级
+                        if (trackWordLevel) appendEnhancedLine(builder, trackLine, offset, wordSeparator)
+                        else appendLineByLine(builder, trackLine, offset) // 无词级数据 → LRC 整行降级
                     }
                     VERBATIM_LRC -> {
-                        if (isWordLevel) appendWordByWord(builder, line, offset)
-                        else appendLineByLine(builder, line, offset) // LRC 降级
+                        if (trackWordLevel) appendWordByWord(builder, trackLine, offset, wordSeparator)
+                        else appendLineByLine(builder, trackLine, offset) // 无词级数据 → LRC 整行降级
                     }
+                    TTML -> Unit
                 }
                 builder.append("\n")
             }
-
-            // 处理音译的非 TTML 输出
-            if (matchedRoman != null && !skipOriginal) {
-                appendLineByLine(builder, matchedRoman, offset)
-                builder.append("\n")
-            }
-
-            if (matchedTranslation != null) {
-                appendLineByLine(builder, matchedTranslation, offset)
-                builder.append("\n")
-            }
-        }
-
-        // 如果是 TTML，追加闭合标签
-        if (isTtml) {
-            builder.append("    </div>\n  </body>\n</tt>")
         }
 
         return builder.toString().trim()
+    }
+
+    private fun encodeRawWithRenderConfig(
+        raw: String?,
+        config: LyricRenderConfig,
+        offset: Long
+    ): String? {
+        if (raw.isNullOrBlank()) return null
+
+        val shouldApplyTrackVisibility =
+            !config.showTranslation ||
+                    !config.showRomanization ||
+                    config.onlyTranslationIfAvailable ||
+                    lineOrderAffectsLineOutput(config) ||
+                    config.removeEmptyLines
+
+        if (!shouldApplyTrackVisibility) return null
+
+        val sourceFormat = LyricDecoder.detectFormat(raw) ?: return null
+        return LyricsDocumentPipeline.process(
+            raw = raw,
+            sourceFormat = sourceFormat,
+            targetFormat = config.format,
+            conversionMode = config.conversionMode,
+            showTranslation = config.showTranslation,
+            showRomanization = config.showRomanization,
+            onlyTranslationIfAvailable = config.onlyTranslationIfAvailable,
+            lineOrder = config.normalizedLineOrder,
+            removeEmptyLines = config.removeEmptyLines,
+            offset = offset
+        )
     }
 
     private fun selectRawLyrics(
@@ -313,97 +372,87 @@ object LyricEncoder {
         offset: Long
     ): String? {
         val fallbackRaw = when (config.format) {
-            PLAIN_LRC -> listOf(result.rawVerbatimLrc, result.rawEnhancedLrc, result.rawTtml)
-            VERBATIM_LRC -> listOf(result.rawEnhancedLrc, result.rawPlainLrc, result.rawTtml)
-            ENHANCED_LRC -> listOf(result.rawVerbatimLrc, result.rawPlainLrc, result.rawTtml)
-            TTML -> listOf(result.rawEnhancedLrc, result.rawVerbatimLrc, result.rawPlainLrc)
+            PLAIN_LRC -> listOf(
+                LyricFormat.VERBATIM_LRC to result.rawVerbatimLrc,
+                LyricFormat.ENHANCED_LRC to result.rawEnhancedLrc,
+                LyricFormat.ENHANCED_LRC to result.rawMultiPersonEnhancedLrc,
+                LyricFormat.TTML to result.rawTtml
+            )
+            VERBATIM_LRC -> listOf(
+                LyricFormat.ENHANCED_LRC to result.rawEnhancedLrc,
+                LyricFormat.ENHANCED_LRC to result.rawMultiPersonEnhancedLrc,
+                LyricFormat.TTML to result.rawTtml,
+                LyricFormat.PLAIN_LRC to result.rawPlainLrc
+            )
+            ENHANCED_LRC -> listOf(
+                LyricFormat.VERBATIM_LRC to result.rawVerbatimLrc,
+                LyricFormat.ENHANCED_LRC to result.rawMultiPersonEnhancedLrc,
+                LyricFormat.TTML to result.rawTtml,
+                LyricFormat.PLAIN_LRC to result.rawPlainLrc
+            )
+            TTML -> listOf(
+                LyricFormat.ENHANCED_LRC to result.rawEnhancedLrc,
+                LyricFormat.VERBATIM_LRC to result.rawVerbatimLrc,
+                LyricFormat.PLAIN_LRC to result.rawPlainLrc
+            )
         }
 
         fallbackRaw
-            .firstOrNull { it.isNotBlank() }
-            ?.let { raw ->
-                LyricDecoder.decode(raw)?.let { decoded ->
-                    return encode(decoded, config, offset).takeIf { it.isNotBlank() }
-                }
+            .firstOrNull { (_, raw) -> raw.isNotBlank() }
+            ?.let { (sourceFormat, raw) ->
+                LyricsDocumentPipeline.process(
+                    raw = raw,
+                    sourceFormat = sourceFormat,
+                    targetFormat = config.format,
+                    conversionMode = config.conversionMode,
+                    showTranslation = config.showTranslation,
+                    showRomanization = config.showRomanization,
+                    onlyTranslationIfAvailable = config.onlyTranslationIfAvailable,
+                    lineOrder = config.normalizedLineOrder,
+                    removeEmptyLines = config.removeEmptyLines,
+                    offset = offset
+                )?.let { return it }
             }
 
 
         return null
     }
 
-
-    private fun appendTtmlCombinedLine(
-        builder: StringBuilder,
-        line: LyricsLine,
-        romanLine: LyricsLine?,
-        transLine: LyricsLine?,
-        offset: Long,
+    private fun shouldUseDocumentPipeline(
+        result: LyricsResult,
         config: LyricRenderConfig,
-        isWordLevel: Boolean // 歌词数据是否是逐字
-    ) {
-        if (line.words.isEmpty()) return
-
-        val start = applyOffset(line.start, offset)
-        // 确定该行的结束时间：以原文最后一个词的结束时间为准
-        val lastWord = line.words.last()
-        val end = when {
-            lastWord.end > 0 -> lastWord.end
-            lastWord.start > 0 -> lastWord.start + 300
-            else -> line.start + 2000
-        }
-
-        val startStr = LyricFormatter.formatTtmlTimestamp(start)
-        val endStr = LyricFormatter.formatTtmlTimestamp(LyricFormatter.applyOffset(end, offset))
-
-        builder.append("      <p begin=\"").append(startStr).append("\" end=\"").append(endStr).append("\">")
-
-        val showOriginal = !(config.onlyTranslationIfAvailable && transLine != null)
-        if (showOriginal) {
-            if (isWordLevel) {
-                // 如果支持逐字，输出详细的 <span>
-                line.words.forEach { word ->
-                    val wordStart = LyricFormatter.formatTtmlTimestamp(LyricFormatter.applyOffset(word.start, offset))
-                    val wordEnd = if (word.end > 0) word.end else word.start + 300
-                    val wordEndStr = LyricFormatter.formatTtmlTimestamp(LyricFormatter.applyOffset(wordEnd, offset))
-
-                    builder.append("<span begin=\"").append(wordStart).append("\" end=\"").append(wordEndStr).append("\">")
-                    builder.append(LyricFormatter.escapeXml(word.text))
-                    builder.append("</span>")
-                }
-            } else {
-                val fullText = line.words.joinToString("") { it.text }
-                builder.append(LyricFormatter.escapeXml(fullText))
-            }
-        }
-
-        if (romanLine != null && showOriginal) {
-            val romanText = romanLine.words.joinToString("") { it.text }
-            if (romanText.isNotEmpty()) {
-                builder.append("<span ttm:role=\"x-romanization\">")
-                builder.append(LyricFormatter.escapeXml(romanText))
-                builder.append("</span>")
-            }
-        }
-
-        if (transLine != null) {
-            val transText = transLine.words.joinToString("") { it.text }
-            if (transText.isNotEmpty()) {
-                builder.append("<span ttm:role=\"x-translation\">")
-                builder.append(LyricFormatter.escapeXml(transText))
-                builder.append("</span>")
-            }
-        }
-
-        builder.append("</p>")
+        offset: Long
+    ): Boolean {
+        return offset != 0L ||
+                config.conversionMode != ConversionMode.NONE ||
+                !config.showTranslation ||
+                !config.showRomanization ||
+                config.onlyTranslationIfAvailable ||
+                lineOrderAffectsLineOutput(config) ||
+                config.removeEmptyLines ||
+                selectRawLyrics(result, config).isNullOrBlank()
     }
 
-    private fun appendEnhancedLine(builder: StringBuilder, line: LyricsLine, offset: Long) {
+    private fun lineOrderAffectsLineOutput(config: LyricRenderConfig): Boolean {
+        return config.format != TTML &&
+                config.normalizedLineOrder != DefaultLyricLineOrder
+    }
+
+
+    private fun appendEnhancedLine(
+        builder: StringBuilder,
+        line: LyricsLine,
+        offset: Long,
+        wordSeparator: String = "" // 词间分隔符：音译传空格（拉丁音节分词），原文为空（汉字无需分隔）
+    ) {
         if (line.words.isEmpty()) return
 
         val start = LyricFormatter.applyOffset(line.start, offset)
         builder.append("[${LyricFormatter.formatTimestamp(start)}] ")
 
-        line.words.forEach { word ->
+        line.words.forEachIndexed { index, word ->
+            // 词间分隔符（非首词前补）：音译剥标签后为 "nung mou ce"，避免拉丁音节挤在一起
+            if (index > 0 && wordSeparator.isNotEmpty()) builder.append(wordSeparator)
             val wordStart = LyricFormatter.applyOffset(word.start, offset)
             builder.append("<${LyricFormatter.formatTimestamp(wordStart)}>")
             builder.append(word.text)
@@ -430,7 +479,12 @@ object LyricEncoder {
         builder.append("[$startTimeFormatted]$lineText")
     }
 
-    private fun appendWordByWord(builder: StringBuilder, line: LyricsLine, offset: Long) {
+    private fun appendWordByWord(
+        builder: StringBuilder,
+        line: LyricsLine,
+        offset: Long,
+        wordSeparator: String = "" // 词间分隔符：音译传空格（拉丁音节分词），原文为空（汉字无需分隔）
+    ) {
         line.words.forEachIndexed { index, word ->
 
             val startFormatted = LyricFormatter.formatTimestamp(LyricFormatter.applyOffset(word.start, offset))
@@ -444,6 +498,8 @@ object LyricEncoder {
 
             } else {
                 builder.append("[$startFormatted]${word.text}")
+                // 词间分隔符（非末词后补）：音译剥标签后为 "nung mou ce"，避免拉丁音节挤在一起
+                if (wordSeparator.isNotEmpty()) builder.append(wordSeparator)
             }
         }
     }
