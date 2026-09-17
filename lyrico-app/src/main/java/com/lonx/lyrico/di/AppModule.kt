@@ -97,6 +97,7 @@ import com.lonx.lyrico.viewmodel.EditFieldSettingsViewModel
 import com.lonx.lyrico.viewmodel.EditMetadataViewModel
 import com.lonx.lyrico.viewmodel.FolderManagerViewModel
 import com.lonx.lyrico.viewmodel.LocalSearchViewModel
+import com.lonx.lyrico.viewmodel.UpdateViewModel
 import com.lonx.lyrico.viewmodel.LyricsSearchViewModel
 import com.lonx.lyrico.viewmodel.PluginViewModel
 import com.lonx.lyrico.viewmodel.SearchViewModel
@@ -283,7 +284,8 @@ val appModule = module {
         BatchTaskType.EXPORT_COVER to get<BatchExportProcessor>()
     )) }
     // ViewModels
-    viewModel { AboutViewModel(get(),get(), get()) }
+    viewModel { AboutViewModel(get(), get()) }
+    viewModel { UpdateViewModel(get(), get()) }
     viewModel { AlbumActionsViewModel(get(), get(), get(), get(), get()) }
     viewModel { SongListViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { SongSelectionViewModel(get(), get(), get(), get()) }

@@ -3,6 +3,7 @@ package com.lonx.lyrico.data.repository
 import com.lonx.lyrico.data.model.BatchMatchConfig
 import com.lonx.lyrico.data.model.CharacterMappingConfig
 import com.lonx.lyrico.data.model.ConversionMode
+import com.lonx.lyrico.data.model.AboutBgEffect
 import com.lonx.lyrico.data.model.FloatingBarEffect
 import com.lonx.lyrico.data.model.lyrics.LyricFormat
 import com.lonx.lyrico.data.model.lyrics.LyricLineTrack
@@ -62,6 +63,7 @@ interface SettingsRepository {
     val floatingBottomBarEnabled: Flow<Boolean>
     val barBlurEnabled: Flow<Boolean>
     val floatingBarEffect: Flow<FloatingBarEffect>
+    val aboutBgEffect: Flow<AboutBgEffect>
     val onlyTranslationIfAvailable: Flow<Boolean>
     val removeEmptyLines: Flow<Boolean>
     val lyricsTagLineKeywords: Flow<List<String>>
@@ -104,6 +106,7 @@ interface SettingsRepository {
     suspend fun saveFloatingBottomBarEnabled(enabled: Boolean)
     suspend fun saveBarBlurEnabled(enabled: Boolean)
     suspend fun saveFloatingBarEffect(effect: FloatingBarEffect)
+    suspend fun saveAboutBgEffect(effect: AboutBgEffect)
     suspend fun saveOnlyTranslationIfAvailable(enabled: Boolean)
     suspend fun saveRemoveEmptyLines(enabled: Boolean)
     suspend fun saveLyricsTagLineKeywords(keywords: List<String>)

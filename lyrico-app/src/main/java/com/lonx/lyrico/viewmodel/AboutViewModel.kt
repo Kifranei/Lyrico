@@ -8,9 +8,10 @@ import androidx.lifecycle.viewModelScope
 import com.lonx.lyrico.App.Companion.OWNER_ID
 import com.lonx.lyrico.App.Companion.REPO_NAME
 import com.lonx.lyrico.data.dto.ContributorInfo
+import com.lonx.lyrico.data.model.AboutBgEffect
 import com.lonx.lyrico.data.repository.GhContributorRepository
 import com.lonx.lyrico.data.repository.SettingsRepository
-import com.lonx.lyrico.utils.UpdateManager
+import com.lonx.lyrico.utils.HyperOsDetector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,15 +25,18 @@ sealed interface UiError {
 }
 class AboutViewModel(
     private val settingsRepository: SettingsRepository,
-    private val updateManager: UpdateManager,
     private val contributorRepository: GhContributorRepository
 ) : ViewModel() {
 
-    val checkUpdateEnabled: StateFlow<Boolean> =
-        settingsRepository.checkUpdateEnabled
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    // 首帧就用设备默认值，免得流光先关后开闪一下
+    val aboutBgEffect: StateFlow<AboutBgEffect> =
+        settingsRepository.aboutBgEffect
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5000),
+                HyperOsDetector.defaultAboutBgEffect()
+            )
 
-    val updateEffect = updateManager.effect
     private val _contributors = MutableStateFlow<List<ContributorInfo>>(emptyList())
     val contributors: StateFlow<List<ContributorInfo>> = _contributors
 
@@ -44,23 +48,12 @@ class AboutViewModel(
     init {
         loadContributors()
     }
-    fun setCheckUpdateEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.saveCheckUpdateEnabled(enabled)
-        }
-    }
-
     fun openBrowser(context: Context, url: String) {
         val intent = Intent(Intent.ACTION_VIEW, url.toUri())
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
     }
 
-    fun checkUpdate() {
-        viewModelScope.launch {
-            updateManager.checkForUpdate()
-        }
-    }
     fun loadContributors() {
         viewModelScope.launch {
             _loadingContributors.value = true

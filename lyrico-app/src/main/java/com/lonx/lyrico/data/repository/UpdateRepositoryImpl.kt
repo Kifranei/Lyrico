@@ -3,8 +3,10 @@ package com.lonx.lyrico.data.repository
 import android.util.Log
 import com.lonx.lyrico.BuildConfig
 import com.lonx.lyrico.data.dto.GitHubReleaseDTO
+import com.lonx.lyrico.data.dto.ReleaseApkAsset
 import com.lonx.lyrico.data.dto.ReleaseInfo
 import com.lonx.lyrico.data.model.UpdateCheckResult
+import com.lonx.lyrico.utils.ReleaseAssetMatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -23,8 +25,18 @@ class UpdateRepositoryImpl(
 
     private val TAG = "UpdateRepositoryImpl"
 
-    @OptIn(ExperimentalSerializationApi::class)
     override suspend fun checkForUpdate(
+        owner: String,
+        repo: String
+    ): UpdateCheckResult = loadLatestRelease(owner, repo)
+
+    override suspend fun fetchLatestRelease(
+        owner: String,
+        repo: String
+    ): UpdateCheckResult = loadLatestRelease(owner, repo)
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private suspend fun loadLatestRelease(
         owner: String,
         repo: String
     ): UpdateCheckResult = withContext(Dispatchers.IO) {
@@ -51,29 +63,18 @@ class UpdateRepositoryImpl(
                 )
 
                 val latestVersionName = release.tag_name
-                val releaseNotes = release.body.orEmpty()
-                val releaseUrl = release.html_url
 
                 Log.d(
                     TAG,
                     "最新版本: $latestVersionName 当前版本: ${BuildConfig.VERSION_NAME}"
                 )
 
-                val hasUpdate = isNewerVersion(
-                    latestVersionName,
-                    BuildConfig.VERSION_NAME
-                )
+                val info = release.toReleaseInfo()
 
-                if (hasUpdate) {
-                    UpdateCheckResult.NewVersion(
-                        ReleaseInfo(
-                            versionName = latestVersionName,
-                            releaseNotes = releaseNotes,
-                            url = releaseUrl
-                        )
-                    )
+                if (isNewerVersion(latestVersionName, BuildConfig.VERSION_NAME)) {
+                    UpdateCheckResult.NewVersion(info)
                 } else {
-                    UpdateCheckResult.NoUpdateAvailable
+                    UpdateCheckResult.NoUpdateAvailable(info)
                 }
             }
 
@@ -89,6 +90,21 @@ class UpdateRepositoryImpl(
             Log.e(TAG, "JSON 解析错误", e)
             UpdateCheckResult.NetworkError(IOException("数据解析失败"))
         }
+    }
+
+    private fun GitHubReleaseDTO.toReleaseInfo(): ReleaseInfo {
+        val apkAssets = assets
+            .filter { it.name.endsWith(".apk", ignoreCase = true) && it.browser_download_url.isNotBlank() }
+            .map { ReleaseApkAsset(it.name, it.browser_download_url, it.size) }
+
+        return ReleaseInfo(
+            versionName = tag_name,
+            releaseNotes = body.orEmpty(),
+            url = html_url,
+            publishedAt = published_at?.take(10).orEmpty(),
+            apkAssets = apkAssets,
+            matchedAsset = ReleaseAssetMatcher.matchForDevice(apkAssets)
+        )
     }
 
     /**

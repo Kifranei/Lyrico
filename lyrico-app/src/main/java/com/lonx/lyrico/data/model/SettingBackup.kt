@@ -47,6 +47,7 @@ data class SettingsBackup(
     @SerialName("floating_bottom_bar_enabled") val floatingBottomBarEnabled: Boolean? = null,
     @SerialName("bar_blur_enabled") val barBlurEnabled: Boolean? = null,
     @SerialName("floating_bar_effect") val floatingBarEffect: String? = null,
+    @SerialName("about_bg_effect") val aboutBgEffect: String? = null,
     @SerialName("artist_split_config") val artistSplitConfig: ArtistSplitConfig? = null,
     /** 只用于导入旧备份；新备份使用 editFieldConfig。 */
     @SerialName("edit_field_visibility_overrides") val editFieldVisibilityOverrides: Map<String, Boolean>? = null,

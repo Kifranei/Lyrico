@@ -18,6 +18,8 @@ import com.lonx.lyrico.data.model.BatchMatchConfigDefaults
 import com.lonx.lyrico.data.model.CharacterMappingConfig
 import com.lonx.lyrico.data.model.CharacterMappingDefaults
 import com.lonx.lyrico.data.model.ConversionMode
+import com.lonx.lyrico.utils.HyperOsDetector
+import com.lonx.lyrico.data.model.AboutBgEffect
 import com.lonx.lyrico.data.model.FloatingBarEffect
 import com.lonx.lyrico.data.model.lyrics.DefaultLyricLineOrder
 import com.lonx.lyrico.data.model.lyrics.LyricFormat
@@ -66,6 +68,8 @@ object SettingsDefaults {
     const val FLOATING_BOTTOM_BAR_ENABLED: Boolean = true
     const val BAR_BLUR_ENABLED: Boolean = false
     val FLOATING_BAR_EFFECT = FloatingBarEffect.NONE
+    /** 关于页流光背景默认跟随设备系统版本，见 [HyperOsDetector.defaultAboutBgEffect]。 */
+    val ABOUT_BG_EFFECT: AboutBgEffect get() = HyperOsDetector.defaultAboutBgEffect()
     val KEY_THEME_COLOR = null
     val CONVERSION_MODE = ConversionMode.NONE
     const val RENAME_FORMAT = "@1 - @2"
@@ -168,6 +172,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         val FLOATING_BOTTOM_BAR_ENABLED = booleanPreferencesKey("floating_bottom_bar_enabled")
         val BAR_BLUR_ENABLED = booleanPreferencesKey("bar_blur_enabled")
         val FLOATING_BAR_EFFECT = stringPreferencesKey("floating_bar_effect")
+        val ABOUT_BG_EFFECT = stringPreferencesKey("about_bg_effect")
 
         /** 旧版把“毛玻璃”和“液态玻璃”存成两个互斥开关，仅用于读取旧值。 */
         val FLOATING_BAR_BLUR_ENABLED_LEGACY = booleanPreferencesKey("floating_bar_blur_enabled")
@@ -376,6 +381,14 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         }
     override val floatingBarEffect: Flow<FloatingBarEffect>
         get() = context.settingsDataStore.data.map { it.resolveFloatingBarEffect() }
+
+    override val aboutBgEffect: Flow<AboutBgEffect>
+        get() = context.settingsDataStore.data.map { preferences ->
+            AboutBgEffect.fromName(
+                preferences[PreferencesKeys.ABOUT_BG_EFFECT],
+                SettingsDefaults.ABOUT_BG_EFFECT
+            )
+        }
 
     /**
      * 读取悬浮导航栏效果。新键缺失时回退到旧版的两个互斥开关，
@@ -682,6 +695,12 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         }
     }
 
+    override suspend fun saveAboutBgEffect(effect: AboutBgEffect) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PreferencesKeys.ABOUT_BG_EFFECT] = effect.name
+        }
+    }
+
     override suspend fun saveKeyColor(selectedKeyColor: KeyColor) {
         context.settingsDataStore.edit { preferences ->
             if (selectedKeyColor.color == null) {
@@ -827,6 +846,10 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
             barBlurEnabled = prefs[PreferencesKeys.BAR_BLUR_ENABLED]
                 ?: SettingsDefaults.BAR_BLUR_ENABLED,
             floatingBarEffect = prefs.resolveFloatingBarEffect().name,
+            aboutBgEffect = AboutBgEffect.fromName(
+                prefs[PreferencesKeys.ABOUT_BG_EFFECT],
+                SettingsDefaults.ABOUT_BG_EFFECT
+            ).name,
             keyThemeColor = prefs[PreferencesKeys.KEY_THEME_COLOR] ?: SettingsDefaults.KEY_THEME_COLOR,
 
             onlyTranslationIfAvailable = prefs[PreferencesKeys.ONLY_TRANSLATION_IF_AVAILABLE]
@@ -919,6 +942,10 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                 backup.barBlurEnabled?.let { prefs[PreferencesKeys.BAR_BLUR_ENABLED] = it }
                 backup.floatingBarEffect?.let {
                     prefs[PreferencesKeys.FLOATING_BAR_EFFECT] = FloatingBarEffect.fromName(it).name
+                }
+                backup.aboutBgEffect?.let {
+                    prefs[PreferencesKeys.ABOUT_BG_EFFECT] =
+                        AboutBgEffect.fromName(it, SettingsDefaults.ABOUT_BG_EFFECT).name
                 }
                 backup.keyThemeColor?.let { prefs[PreferencesKeys.KEY_THEME_COLOR] = it }
                 backup.onlyTranslationIfAvailable?.let {

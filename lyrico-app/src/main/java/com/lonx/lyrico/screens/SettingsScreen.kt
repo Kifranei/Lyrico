@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lonx.lyrico.BuildConfig
 import com.lonx.lyrico.R
+import com.lonx.lyrico.data.model.AboutBgEffect
 import com.lonx.lyrico.data.model.ArtistSeparator
 import com.lonx.lyrico.data.model.AppLanguage
 import com.lonx.lyrico.data.model.ConversionMode
@@ -137,6 +138,7 @@ fun SettingsScreen(
     val floatingBottomBarEnabled = settingsUiState.floatingBottomBarEnabled
     val barBlurEnabled = settingsUiState.barBlurEnabled
     val floatingBarEffect = settingsUiState.floatingBarEffect
+    val aboutBgEffect = settingsUiState.aboutBgEffect
     val currentKeyColor = settingsUiState.keyColor
     val translationEnabled = settingsUiState.translationEnabled
     val onlyTranslationIfAvailable = settingsUiState.onlyTranslationIfAvailable
@@ -183,6 +185,7 @@ fun SettingsScreen(
         SearchSourceTabStyle.entries.indexOf(searchSourceTabStyle).coerceAtLeast(0)
 
     val floatingBarEffectItems = FloatingBarEffect.entries.map { stringResource(it.labelRes) }
+    val aboutBgEffectItems = AboutBgEffect.entries.map { stringResource(it.labelRes) }
 
     val context = LocalContext.current
 
@@ -440,6 +443,14 @@ fun SettingsScreen(
                             },
                         )
                     }
+                    WindowDropdownPreference(
+                        title = stringResource(R.string.about_bg_effect),
+                        items = aboutBgEffectItems,
+                        selectedIndex = aboutBgEffect.ordinal,
+                        onSelectedIndexChange = { index ->
+                            settingsViewModel.setAboutBgEffect(AboutBgEffect.entries[index])
+                        },
+                    )
                     SwitchPreference(
                         title = stringResource(R.string.monet),
                         checked = monetEnable,

@@ -7,8 +7,8 @@ sealed class UpdateCheckResult {
     /** 成功：发现了新版本 */
     data class NewVersion(val info: ReleaseInfo) : UpdateCheckResult()
 
-    /** 成功：当前已是最新版本 */
-    object NoUpdateAvailable : UpdateCheckResult()
+    /** 成功：当前已是最新版本。更新页需要展示当前版本的日志，所以也带上 Release 详情。 */
+    data class NoUpdateAvailable(val info: ReleaseInfo? = null) : UpdateCheckResult()
 
     /** 失败：网络连接问题 */
     data class NetworkError(val exception: IOException) : UpdateCheckResult()

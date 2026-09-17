@@ -11,6 +11,7 @@ import com.lonx.lyrico.data.model.log.AppLogType
 import com.lonx.lyrico.data.model.ArtistSeparator
 import com.lonx.lyrico.data.model.cache.CacheCategory
 import com.lonx.lyrico.data.model.ConversionMode
+import com.lonx.lyrico.data.model.AboutBgEffect
 import com.lonx.lyrico.data.model.FloatingBarEffect
 import com.lonx.lyrico.data.model.lyrics.LyricFormat
 import com.lonx.lyrico.data.model.lyrics.LyricLineTrack
@@ -56,6 +57,7 @@ data class SettingsUiState(
     val floatingBottomBarEnabled: Boolean = true,
     val barBlurEnabled: Boolean = false,
     val floatingBarEffect: FloatingBarEffect = FloatingBarEffect.NONE,
+    val aboutBgEffect: AboutBgEffect = AboutBgEffect.OS3,
     val keyColor: KeyColor = KeyColors[1],
     val onlyTranslationIfAvailable: Boolean = false,
     val removeEmptyLines: Boolean = true,
@@ -93,13 +95,15 @@ class SettingsViewModel(
         val replayGainTargetLoudness: Double,
         val floatingBottomBarEnabled: Boolean,
         val barBlurEnabled: Boolean,
-        val floatingBarEffect: FloatingBarEffect
+        val floatingBarEffect: FloatingBarEffect,
+        val aboutBgEffect: AboutBgEffect
     )
 
     private data class VisualSettingsState(
         val floatingBottomBarEnabled: Boolean,
         val barBlurEnabled: Boolean,
         val floatingBarEffect: FloatingBarEffect,
+        val aboutBgEffect: AboutBgEffect,
     )
 
     private data class SettingsTailState(
@@ -114,8 +118,9 @@ class SettingsViewModel(
         settingsRepository.floatingBottomBarEnabled,
         settingsRepository.barBlurEnabled,
         settingsRepository.floatingBarEffect,
-    ) { floatingBar, barBlur, floatingBarEffect ->
-        VisualSettingsState(floatingBar, barBlur, floatingBarEffect)
+        settingsRepository.aboutBgEffect,
+    ) { floatingBar, barBlur, floatingBarEffect, aboutBgEffect ->
+        VisualSettingsState(floatingBar, barBlur, floatingBarEffect, aboutBgEffect)
     }
 
     private val settingsTailState = combine(
@@ -145,6 +150,7 @@ class SettingsViewModel(
             tail.visual.floatingBottomBarEnabled,
             tail.visual.barBlurEnabled,
             tail.visual.floatingBarEffect,
+            tail.visual.aboutBgEffect,
         )
     }
 
@@ -172,6 +178,7 @@ class SettingsViewModel(
             floatingBottomBarEnabled = base.floatingBottomBarEnabled,
             barBlurEnabled = base.barBlurEnabled,
             floatingBarEffect = base.floatingBarEffect,
+            aboutBgEffect = base.aboutBgEffect,
             keyColor = base.theme.keyColor,
             categorizedCacheSize = cacheMap,
             onlyTranslationIfAvailable = base.lyric.onlyTranslationIfAvailable,
@@ -256,6 +263,12 @@ class SettingsViewModel(
     fun setFloatingBarEffect(effect: FloatingBarEffect) {
         viewModelScope.launch {
             settingsRepository.saveFloatingBarEffect(effect)
+        }
+    }
+
+    fun setAboutBgEffect(effect: AboutBgEffect) {
+        viewModelScope.launch {
+            settingsRepository.saveAboutBgEffect(effect)
         }
     }
 

@@ -805,4 +805,30 @@
     <string name="edit_field_component_hint">Long press to reorder fields; use switches to control visibility.</string>
     <string name="edit_field_component_short_tag">G</string>
     <string name="edit_field_custom_short_tag">C</string>
+
+    <!-- Update screen -->
+    <string name="update_settings">Update settings</string>
+    <string name="update_title">Update</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_check_failed">Update check failed</string>
+    <string name="update_check_button">Check for updates</string>
+    <string name="update_new_version_found">New version</string>
+    <string name="update_found_version">%1$s available</string>
+    <string name="update_download">Download</string>
+    <string name="update_download_retry">Retry download</string>
+    <string name="update_install">Install</string>
+    <string name="update_open_release_page">Open release page</string>
+    <string name="update_current_version_log">View current changelog</string>
+    <string name="update_collapse_changelog">Collapse changelog</string>
+    <string name="update_view_changelog">Release notes</string>
+    <string name="update_empty_changelog">No changelog provided for this release.</string>
+    <string name="update_asset_size">%1$s · %2$s</string>
+    <string name="about_update_entry">Software update</string>
+    <string name="about_update_entry_summary">Download and install the latest release</string>
+
+    <!-- About page background -->
+    <string name="about_bg_effect">About page background</string>
+    <string name="about_bg_effect_off">Solid color</string>
+    <string name="about_bg_effect_os2">Aurora (OS2)</string>
+    <string name="about_bg_effect_os3">Aurora (OS3)</string>
 </resources>
